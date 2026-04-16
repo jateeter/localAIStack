@@ -6,7 +6,7 @@ services:
 
   # ── Vector Database ──────────────────────────────────────────────────────────
   qdrant:
-    image: qdrant/qdrant:v1.9.2
+    image: qdrant/qdrant:v1.13.1
     container_name: localai_qdrant
     restart: unless-stopped
     ports:
@@ -53,7 +53,7 @@ services:
       QDRANT_HOST: "qdrant"
       QDRANT_PORT: "6333"
       REDIS_URL: "redis://redis:6379"
-      LLM_MODEL: "${LLM_MODEL:-llama3.2:3b}"
+      LLM_MODEL: "${LLM_MODEL:-llama3.1:8b}"
       EMBED_MODEL: "${EMBED_MODEL:-nomic-embed-text}"
       COLLECTION_NAME: "${COLLECTION_NAME:-localai_docs}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
