@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
-    redis_url: str = "redis://localhost:6379"
+    redis_url: str = "redis://localhost:4379"
 
     llm_model: str = "llama3.1:8b-q4_K_M"
     embed_model: str = "nomic-embed-text"

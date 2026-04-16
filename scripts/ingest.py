@@ -20,7 +20,7 @@ except ImportError:
     print("httpx not found. Run: pip install httpx")
     sys.exit(1)
 
-API_BASE = os.getenv("API_BASE", "http://localhost:8000")
+API_BASE = os.getenv("API_BASE", "http://localhost:4000")
 
 
 def ingest_file(path: Path, client: httpx.Client):

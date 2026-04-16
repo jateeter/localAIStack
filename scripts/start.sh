@@ -36,12 +36,12 @@ ok "Docker services up"
 info "Waiting for API..."
 for i in $(seq 1 30); do
     sleep 2
-    STATUS=$(curl -sf http://localhost:8000/health 2>/dev/null \
+    STATUS=$(curl -sf http://localhost:4000/health 2>/dev/null \
         | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null || echo "waiting")
     [[ "$STATUS" == "ok" ]] && break
 done
 
-HEALTH=$(curl -sf http://localhost:8000/health 2>/dev/null \
+HEALTH=$(curl -sf http://localhost:4000/health 2>/dev/null \
     | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
@@ -55,10 +55,10 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}  localAIStack running${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  API       http://localhost:8000"
-echo "  Docs      http://localhost:8000/docs"
-echo "  WebUI     http://localhost:3000"
-echo "  Qdrant    http://localhost:6333/dashboard"
+echo "  API       http://localhost:4000"
+echo "  Docs      http://localhost:4000/docs"
+echo "  WebUI     http://localhost:4080"
+echo "  Qdrant    http://localhost:4333/dashboard"
 echo "  Ollama    http://localhost:11434"
 echo ""
 echo "Service status:"

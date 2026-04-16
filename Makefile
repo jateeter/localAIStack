@@ -27,7 +27,7 @@ logs-api:
 	@docker compose logs -f api
 
 health:
-	@curl -s http://localhost:8000/health | python3 -m json.tool
+	@curl -s http://localhost:4000/health | python3 -m json.tool
 
 models:
 	@curl -s http://localhost:11434/api/tags | python3 -c \
@@ -40,13 +40,13 @@ ingest:
 
 # Usage: make query Q="What is the reality engine?"
 query:
-	@curl -s -X POST http://localhost:8000/graph/rag \
+	@curl -s -X POST http://localhost:4000/graph/rag \
 		-H "Content-Type: application/json" \
 		-d '{"question": "$(Q)"}' | python3 -m json.tool
 
 # Usage: make agent Q="Search the knowledge base for X"
 agent:
-	@curl -s -X POST http://localhost:8000/graph/agent \
+	@curl -s -X POST http://localhost:4000/graph/agent \
 		-H "Content-Type: application/json" \
 		-d '{"messages": [{"role": "user", "content": "$(Q)"}]}' | python3 -m json.tool
 

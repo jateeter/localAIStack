@@ -10,8 +10,8 @@ services:
     container_name: localai_qdrant
     restart: unless-stopped
     ports:
-      - "6333:6333"   # REST API
-      - "6334:6334"   # gRPC
+      - "4333:6333"   # REST API
+      - "4334:6334"   # gRPC
     volumes:
       - ./volumes/qdrant:/qdrant/storage
     environment:
@@ -28,7 +28,7 @@ services:
     container_name: localai_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "4379:6379"
     volumes:
       - ./volumes/redis:/data
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
@@ -46,7 +46,7 @@ services:
     container_name: localai_api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "4000:8000"
     environment:
       # Ollama running natively — reachable from Docker via host.docker.internal
       OLLAMA_BASE_URL: "http://host.docker.internal:11434"
@@ -68,7 +68,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]  # container-internal port
       interval: 15s
       timeout: 5s
       retries: 5
@@ -79,7 +79,7 @@ services:
     container_name: localai_webui
     restart: unless-stopped
     ports:
-      - "3000:8080"
+      - "4080:8080"
     environment:
       OLLAMA_BASE_URL: "http://host.docker.internal:11434"
       WEBUI_SECRET_KEY: "${WEBUI_SECRET_KEY:-changeme-local-dev}"

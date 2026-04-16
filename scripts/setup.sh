@@ -64,20 +64,20 @@ ok "Docker stack started"
 info "Waiting for API to become healthy..."
 for i in $(seq 1 30); do
     sleep 2
-    STATUS=$(curl -sf http://localhost:8000/health 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','?'))" 2>/dev/null || echo "waiting")
+    STATUS=$(curl -sf http://localhost:4000/health 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','?'))" 2>/dev/null || echo "waiting")
     [[ "$STATUS" == "ok" ]] && break
 done
 
-FINAL=$(curl -sf http://localhost:8000/health 2>/dev/null || echo '{"status":"unreachable"}')
+FINAL=$(curl -sf http://localhost:4000/health 2>/dev/null || echo '{"status":"unreachable"}')
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}  localAIStack ready${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  API:         http://localhost:8000"
-echo "  API docs:    http://localhost:8000/docs"
-echo "  Open WebUI:  http://localhost:3000"
-echo "  Qdrant UI:   http://localhost:6333/dashboard"
+echo "  API:         http://localhost:4000"
+echo "  API docs:    http://localhost:4000/docs"
+echo "  Open WebUI:  http://localhost:4080"
+echo "  Qdrant UI:   http://localhost:4333/dashboard"
 echo "  Ollama:      http://localhost:11434"
 echo ""
 echo "  Health:      $FINAL"
