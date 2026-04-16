@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+
+  release:
+    name: Create release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image (release tag)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/api
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            localaistack-api:${{ github.ref_name }}
+            localaistack-api:latest
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [[ -n "$PREV_TAG" ]]; then
+            LOG=$(git log --oneline "${PREV_TAG}..HEAD" --no-merges)
+          else
+            LOG=$(git log --oneline --no-merges)
+          fi
+          echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$LOG"           >> "$GITHUB_OUTPUT"
+          echo "EOF"            >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: |
+            ## What's changed
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Stack versions
+            | Component | Image |
+            |---|---|
+            | Qdrant | `qdrant/qdrant:v1.9.2` |
+            | Redis  | `redis:7.2-alpine` |
+            | Open WebUI | `ghcr.io/open-webui/open-webui:main` |
+
+            ## Quick start
+            ```bash
+            cp .env.example .env
+            make setup
+            ```
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Lint ────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint
+        run: ruff check services/api/ scripts/
+
+      - name: Format check
+        run: ruff format --check services/api/ scripts/
+
+  # ── Type check ──────────────────────────────────────────────────────────────
+  typecheck:
+    name: Type check (pyright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install pyright
+          pip install -r services/api/requirements.txt
+
+      - name: Pyright
+        run: pyright services/api/
+        continue-on-error: true   # informational until type coverage improves
+
+  # ── Docker build ────────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker build (API)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/api
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: localaistack-api:ci
+
+  # ── Compose validation ──────────────────────────────────────────────────────
+  compose-validate:
+    name: Compose config valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
