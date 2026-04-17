@@ -4,7 +4,13 @@
 
 services:
 
-  # ── Vector Database ──────────────────────────────────────────────────────────
+  # ── Vector Database (Unified) ────────────────────────────────────────────────
+  # This Qdrant instance is the unified vector store for both localAIStack and
+  # RealityEngine_AI.  Exposed on host ports 4333 (REST) / 4334 (gRPC).
+  # Collections:
+  #   localai_docs     — 768-dim document embeddings (nomic-embed-text)
+  #   reality-vectors  — 768-dim RE perceptual vectors (auto-created by RE on startup)
+  # RealityEngine_AI connects via host.docker.internal:4333 from its Docker network.
   qdrant:
     image: qdrant/qdrant:v1.13.1
     container_name: localai_qdrant
@@ -57,6 +63,9 @@ services:
       EMBED_MODEL: "${EMBED_MODEL:-nomic-embed-text}"
       COLLECTION_NAME: "${COLLECTION_NAME:-localai_docs}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
+      # Reality Engine stack (PE = Perception Engine port 3004, RE = Reality Engine port 3000)
+      PE_URL: "http://host.docker.internal:3004"
+      RE_URL: "http://host.docker.internal:3000"
     volumes:
       - ./data/documents:/app/data/documents
       - ./services/api:/app  # live-reload in dev

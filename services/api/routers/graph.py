@@ -35,7 +35,7 @@ class RAGResponse(BaseModel):
 async def run_rag_graph(req: RAGRequest):
     graph = get_rag_graph()
     result = graph.invoke(
-        {"question": req.question, "documents": [], "rewrite_count": 0}
+        {"question": req.question, "documents": [], "rewrite_count": 0, "re_routing": "rewrite"}
     )
     sources = list({
         d.metadata.get("source", "unknown")
@@ -97,7 +97,53 @@ async def run_agent_graph(req: AgentRequest):
 @router.get("/schema")
 async def graph_schema():
     """Return graph topology for langgraph.x.reality binding."""
+    from core.reality_bridge import get_topology_bindings
+    topology = get_topology_bindings()
+
+    def _topo(graph_name: str) -> dict:
+        b = topology.get(graph_name)
+        if not b:
+            return {}
+        return {
+            "input_region":  b["input_region"],
+            "output_region": b["output_region"],
+            "node_order":    b["node_order"],
+            "nodes": {
+                node: {
+                    "sensor_id": info["sensor_id"],
+                    "offset":    info["offset"],
+                    "length":    info["length"],
+                }
+                for node, info in b["nodes"].items()
+            },
+        }
+
     return {
+        "session_context": {
+            "rag": {
+                "machine":  "localai/session_rag_context",
+                "pattern":  "bistable-flip-flop",
+                "input_region":  [72, 76],
+                "output_region": [96, 100],
+                "carry_signals": {
+                    "last_generate": 96,
+                    "last_rewrite":  97,
+                    "last_abort":    98,
+                },
+                "hold_mechanism": "PE carry-forward — no sequence fires between RAG calls",
+            },
+            "agent": {
+                "machine":  "localai/session_agent_context",
+                "pattern":  "bistable-flip-flop",
+                "input_region":  [88, 104],
+                "output_region": [100, 104],
+                "carry_signals": {
+                    "agent_ever_engaged": 100,
+                    "tools_ever_used":    101,
+                },
+                "hold_mechanism": "PE carry-forward + carry-feedback elements [12:14] prevent regression",
+            },
+        },
         "graphs": {
             "rag": {
                 "entry": "retrieve",
@@ -107,6 +153,14 @@ async def graph_schema():
                     "documents": "List[Document]",
                     "generation": "str",
                     "rewrite_count": "int",
+                    "re_routing": "str",
+                },
+                "reality_engine": {
+                    "machine": "localai/rag_corrective_cycle",
+                    "input_region": [64, 72],
+                    "output_region": [72, 76],
+                    "routing_signals": {"generate": 72, "rewrite": 73, "abort": 74},
+                    "topology": _topo("rag"),
                 },
                 "endpoint": "/graph/rag",
             },
@@ -117,6 +171,9 @@ async def graph_schema():
                 "state_schema": {
                     "messages": "List[BaseMessage]",
                     "system_prompt": "str",
+                },
+                "reality_engine": {
+                    "topology": _topo("agent"),
                 },
                 "endpoint": "/graph/agent",
             },

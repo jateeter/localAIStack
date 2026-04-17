@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     # LangGraph
     graph_recursion_limit: int = 25
 
+    # Reality Engine stack URLs (PE = Perception Engine, RE = Reality Engine)
+    # Docker: set to http://host.docker.internal:<port>
+    # Local dev: http://localhost:<port>
+    pe_url: str = "http://localhost:3004"
+    re_url: str = "http://localhost:3000"
+
     log_level: str = "info"
 
     class Config:

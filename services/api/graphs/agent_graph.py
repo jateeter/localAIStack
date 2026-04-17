@@ -64,6 +64,9 @@ class AgentState(TypedDict):
 # ── Nodes ─────────────────────────────────────────────────────────────────────
 
 def agent_node(state: AgentState) -> dict:
+    from core.reality_bridge import push_node_signal
+    push_node_signal("agent", "agent", 1.0, trigger_push=True)
+
     s = get_settings()
     llm = ChatOllama(
         base_url=s.ollama_base_url,
@@ -79,7 +82,20 @@ def agent_node(state: AgentState) -> dict:
 
     messages = [SystemMessage(content=system)] + state["messages"]
     response = llm.invoke(messages)
+
+    push_node_signal("agent", "agent", 0.0, trigger_push=False)
     return {"messages": [response]}
+
+
+_tool_node_instance = ToolNode(TOOLS)
+
+
+def _tools_node(state: AgentState) -> dict:
+    from core.reality_bridge import push_node_signal
+    push_node_signal("agent", "tools", 1.0, trigger_push=True)
+    result = _tool_node_instance(state)
+    push_node_signal("agent", "tools", 0.0, trigger_push=False)
+    return result
 
 
 def should_continue(state: AgentState) -> str:
@@ -95,7 +111,7 @@ def build_agent_graph():
     graph = StateGraph(AgentState)
 
     graph.add_node("agent", agent_node)
-    graph.add_node("tools", ToolNode(TOOLS))
+    graph.add_node("tools", _tools_node)
 
     graph.set_entry_point("agent")
     graph.add_conditional_edges("agent", should_continue, {"tools": "tools", END: END})

@@ -23,6 +23,22 @@ async def lifespan(app: FastAPI):
         log.info("Qdrant vector store ready", collection=s.collection_name)
     except Exception as e:
         log.warning("Vector store not ready at startup", error=str(e))
+    # Register Reality Engine sensor sources (graceful — PE may not be running)
+    try:
+        from core.reality_bridge import (
+            register_sensors, import_machine_if_missing,
+            import_session_machines, bind_graph_topology,
+        )
+        register_sensors()
+        log.info("Reality Engine sensors registered", pe_url=s.pe_url)
+        import_machine_if_missing()
+        log.info("Reality Engine RAG machine ready", re_url=s.re_url)
+        import_session_machines()
+        log.info("Reality Engine session context machines ready")
+        bind_graph_topology()
+        log.info("Reality Engine topology bound")
+    except Exception as e:
+        log.warning("Reality Engine bridge not available", error=str(e))
     yield
     log.info("localAIStack API shutting down")
 

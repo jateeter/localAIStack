@@ -36,6 +36,7 @@ class RAGState(TypedDict):
     documents: Annotated[List[Document], operator.add]
     generation: str
     rewrite_count: int
+    re_routing: str  # "generate" | "rewrite" | "abort" — set by the RE machine each grading step
 
 
 # ── Node implementations ──────────────────────────────────────────────────────
@@ -43,24 +44,47 @@ class RAGState(TypedDict):
 def retrieve(state: RAGState) -> dict:
     s = get_settings()
     store = get_vector_store()
-    docs = store.similarity_search(
+    scored = store.similarity_search_with_relevance_scores(
         state["question"],
         k=s.retrieval_top_k,
         score_threshold=s.retrieval_score_threshold,
     )
+    docs = [doc for doc, _ in scored]
+    avg_score = sum(sc for _, sc in scored) / max(len(scored), 1)
+
+    from core.reality_bridge import push_retrieval_signal
+    push_retrieval_signal(doc_count=len(docs), avg_score=avg_score)
+
     return {"documents": docs}
 
 
 def grade_documents(state: RAGState) -> dict:
-    """Keep only documents relevant to the question (simple keyword overlap gate)."""
+    """
+    Filter retrieved documents by keyword overlap, then ask the Reality Engine
+    whether the pipeline should generate, rewrite, or abort.
+
+    The keyword overlap still determines which specific documents are forwarded
+    to the LLM for context. The routing decision (generate / rewrite / abort)
+    now comes from the rag_corrective_cycle CES machine running in the RE,
+    which reads doc_count + kept_ratio + rewrite_count from the perceptual space
+    and asserts [generate, rewrite, abort, _] to region [72:76].
+    """
     question_tokens = set(state["question"].lower().split())
-    relevant = []
+    kept = []
     for doc in state["documents"]:
         doc_tokens = set(doc.page_content.lower().split())
         overlap = len(question_tokens & doc_tokens) / max(len(question_tokens), 1)
         if overlap > 0.1 or len(doc.page_content) > 50:
-            relevant.append(doc)
-    return {"documents": relevant}
+            kept.append(doc)
+
+    from core.reality_bridge import push_grading_signal
+    routing = push_grading_signal(
+        retrieved_count=len(state["documents"]),
+        kept_count=len(kept),
+        rewrite_count=state.get("rewrite_count", 0),
+    )
+
+    return {"documents": kept, "re_routing": routing}
 
 
 def generate(state: RAGState) -> dict:
@@ -104,10 +128,17 @@ def rewrite_query(state: RAGState) -> dict:
 # ── Conditional routing ───────────────────────────────────────────────────────
 
 def route_after_grading(state: RAGState) -> Literal["generate", "rewrite_query"]:
-    if state["documents"]:
-        return "generate"
-    if state.get("rewrite_count", 0) >= 2:
-        # Give up rewriting — generate with empty context (LLM says "I don't know")
+    """
+    Route based on the RE machine's decision recorded in state["re_routing"].
+
+    "generate" — docs are good, proceed to answer.
+    "abort"    — max rewrites exhausted with poor docs; generate anyway so the
+                 LLM can acknowledge it lacks sufficient context.
+    "rewrite"  — first poor result; rephrase the query and retry.
+    Falls back to "rewrite_query" if re_routing is absent (bridge unavailable).
+    """
+    routing = state.get("re_routing", "rewrite")
+    if routing in ("generate", "abort"):
         return "generate"
     return "rewrite_query"
 

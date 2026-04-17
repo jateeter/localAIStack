@@ -1,0 +1,207 @@
+{
+  "version": "1.0.0",
+  "machine": {
+    "name": "localai/rag_corrective_cycle",
+    "description": "Corrective RAG routing machine. Reads retrieval + grading signals from the Perception Engine and asserts one of three routing decisions: generate, rewrite, or abort. Replaces the keyword-overlap heuristic in grade_documents() with observable CES logic.",
+    "metadata": {
+      "category": "ai-pipeline",
+      "author": "localAIStack bridge",
+      "created": "2026-04-16T00:00:00Z",
+      "eventSpace": "8D vector at [64:72]: [doc_count_norm, avg_score, _, _, kept_ratio, rewrite_count_norm, _, _]",
+      "outputSpace": "4D binary at [72:76]: [generate, rewrite, abort, _]",
+      "tags": ["rag", "routing", "corrective-rag", "localai"],
+      "normalization": {
+        "doc_count_norm": "min(retrieved_doc_count / 10, 1.0)  — 10 docs maps to 1.0",
+        "avg_score":      "Qdrant relevance score [0, 1]",
+        "kept_ratio":     "kept_count / max(retrieved_count, 1)  — 1.0 = all docs passed grading",
+        "rewrite_count_norm": "min(rewrite_count / 2, 1.0)  — 2 rewrites maps to 1.0, triggers abort"
+      },
+      "routingLogic": {
+        "generate": "doc_count_norm >= 0.1  AND  kept_ratio >= 0.5",
+        "abort":    "kept_ratio < 0.5  AND  rewrite_count_norm >= 0.5",
+        "rewrite":  "kept_ratio < 0.5  AND  rewrite_count_norm < 0.5",
+        "mutualExclusivity": "the three guards partition the state space; exactly one fires per step"
+      },
+      "sequenceCount": 3
+    },
+    "arbiterRule": "OR",
+    "matchAlgorithm": "gte",
+    "perceptualMapping": {
+      "input":  { "offset": 64, "length": 8 },
+      "output": { "offset": 72, "length": 4 }
+    },
+    "sequences": [
+      {
+        "id": "rag-generate-path",
+        "name": "Generate: doc_count >= 0.1 AND kept_ratio >= 0.5",
+        "metadata": {
+          "description": "Fires [1,0,0,0] when enough documents were retrieved AND the grader kept the majority. The doc_count guard (threshold 0.1) prevents firing on empty retrieval; the kept_ratio guard (threshold 0.5) ensures most retrieved docs survived grading.",
+          "output": "[1,0,0,0] — proceed to generate"
+        },
+        "vectors": [
+          {
+            "id": "rag-gen-check",
+            "isInitial": true,
+            "elements": [
+              { "value": 1.0, "threshold": 0.1 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "nextVectorIds": [],
+            "outputVectors": [
+              {
+                "id": "rag-gen-output",
+                "vector": [1.0, 0.0, 0.0, 0.0],
+                "metadata": {
+                  "description": "generate — graded documents are sufficient for answer generation",
+                  "routing": "generate"
+                }
+              }
+            ],
+            "metadata": {
+              "name": "GENERATE_CHECK",
+              "description": "element[0]: doc_count_norm HIGH (>= 0.1, GTE split at 0.1); element[4]: kept_ratio HIGH (>= 0.5, GTE split at 0.5); all others: wildcard (Threshold ±0.5 spans full [0,1] range)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "rag-abort-path",
+        "name": "Abort: kept_ratio < 0.5 AND rewrite_count >= 0.5",
+        "metadata": {
+          "description": "Fires [0,0,1,0] when the grader rejected most docs AND we have already rewritten the query at least once. Signals the graph to generate with whatever context exists rather than looping further.",
+          "output": "[0,0,1,0] — abort rewrite loop"
+        },
+        "vectors": [
+          {
+            "id": "rag-abort-check",
+            "isInitial": true,
+            "elements": [
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "nextVectorIds": [],
+            "outputVectors": [
+              {
+                "id": "rag-abort-output",
+                "vector": [0.0, 0.0, 1.0, 0.0],
+                "metadata": {
+                  "description": "abort — max rewrites exhausted with poor grading; fall through to generate",
+                  "routing": "abort"
+                }
+              }
+            ],
+            "metadata": {
+              "name": "ABORT_CHECK",
+              "description": "element[4]: kept_ratio LOW (< 0.5, GTE split at 0.5 with value=0); element[5]: rewrite_count_norm HIGH (>= 0.5, GTE split at 0.5); all others: wildcard"
+            }
+          }
+        ]
+      },
+      {
+        "id": "rag-rewrite-path",
+        "name": "Rewrite: kept_ratio < 0.5 AND rewrite_count < 0.5",
+        "metadata": {
+          "description": "Fires [0,1,0,0] when the grader rejected most docs and we have not yet rewritten the query. The query should be rephrased to improve retrieval on the next cycle.",
+          "output": "[0,1,0,0] — rewrite query"
+        },
+        "vectors": [
+          {
+            "id": "rag-rewrite-check",
+            "isInitial": true,
+            "elements": [
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "nextVectorIds": [],
+            "outputVectors": [
+              {
+                "id": "rag-rewrite-output",
+                "vector": [0.0, 1.0, 0.0, 0.0],
+                "metadata": {
+                  "description": "rewrite — poor grading on first attempt; rephrase the question",
+                  "routing": "rewrite"
+                }
+              }
+            ],
+            "metadata": {
+              "name": "REWRITE_CHECK",
+              "description": "element[4]: kept_ratio LOW (< 0.5); element[5]: rewrite_count_norm LOW (< 0.5); all others: wildcard. Mutually exclusive with abort-path because rewrite_count cannot be both HIGH and LOW."
+            }
+          }
+        ]
+      }
+    ],
+    "inputSequences": [
+      {
+        "name": "Happy Path — good retrieval, no rewrites",
+        "pattern": "doc_count=5, all_kept, rewrite=0 → generate",
+        "description": "5 docs retrieved (norm=0.5), all 5 kept (ratio=1.0), first attempt (rewrite_norm=0). Should assert generate [1,0,0,0].",
+        "vectors": [
+          [0.5, 0.7, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+        ],
+        "metadata": {
+          "expectedOutput": "[1,0,0,0]",
+          "activeSequence": "rag-generate-path",
+          "notes": "doc_count_norm=0.5 (≥0.1 HIGH), kept_ratio=1.0 (≥0.5 HIGH) → generate fires"
+        }
+      },
+      {
+        "name": "Rewrite Path — poor grading, first attempt",
+        "pattern": "doc_count=3, none_kept, rewrite=0 → rewrite",
+        "description": "3 docs retrieved (norm=0.3) but none passed keyword grading (ratio=0.0), first attempt (rewrite_norm=0). Should assert rewrite [0,1,0,0].",
+        "vectors": [
+          [0.3, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,1,0,0]",
+          "activeSequence": "rag-rewrite-path",
+          "notes": "kept_ratio=0.0 (<0.5 LOW), rewrite_norm=0.0 (<0.5 LOW) → rewrite fires"
+        }
+      },
+      {
+        "name": "Abort Path — poor grading, already rewritten",
+        "pattern": "doc_count=2, none_kept, rewrite=1 → abort",
+        "description": "2 docs retrieved (norm=0.2), none kept (ratio=0.0), already rewritten once (rewrite_norm=0.5). Should assert abort [0,0,1,0].",
+        "vectors": [
+          [0.2, 0.5, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,1,0]",
+          "activeSequence": "rag-abort-path",
+          "notes": "kept_ratio=0.0 (<0.5 LOW), rewrite_norm=0.5 (≥0.5 HIGH) → abort fires"
+        }
+      },
+      {
+        "name": "Generate After Rewrite — docs improved post-rephrase",
+        "pattern": "doc_count=4, 80%_kept, rewrite=1 → generate",
+        "description": "After one rewrite the revised query found 4 docs (norm=0.4) with 80% passing grading (ratio=0.8). Rewrite_norm=0.5 (1 rewrite done). Should still assert generate — good docs win over rewrite count.",
+        "vectors": [
+          [0.4, 0.75, 0.0, 0.0, 0.8, 0.5, 0.0, 0.0]
+        ],
+        "metadata": {
+          "expectedOutput": "[1,0,0,0]",
+          "activeSequence": "rag-generate-path",
+          "notes": "doc_count=0.4 (≥0.1 HIGH), kept_ratio=0.8 (≥0.5 HIGH) → generate fires even though 1 rewrite was done"
+        }
+      }
+    ]
+  }
+}
