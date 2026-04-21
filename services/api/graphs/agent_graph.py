@@ -90,11 +90,57 @@ def agent_node(state: AgentState) -> dict:
 _tool_node_instance = ToolNode(TOOLS)
 
 
+def _count_activity_metrics(
+    prior_messages: Sequence[BaseMessage],
+    new_messages:   Sequence[BaseMessage],
+) -> tuple[int, int, int]:
+    """
+    Return (tool_calls, tool_errors, reasoning_steps) describing the turn so far.
+
+    tool_calls:      total tool invocations requested by the agent across the turn.
+    tool_errors:     tool responses whose content looks like an exception/error string.
+                     This is a keyword heuristic — exact failure semantics depend on
+                     each tool's own error contract — but it's good enough to flag
+                     "something keeps blowing up" so the classifier can see it.
+    reasoning_steps: AIMessage count (one per agent LLM call).
+    """
+    all_messages = list(prior_messages) + list(new_messages)
+
+    tool_calls = sum(
+        len(getattr(m, "tool_calls", []) or [])
+        for m in all_messages
+    )
+    tool_errors = sum(
+        1 for m in new_messages
+        if isinstance(m, ToolMessage)
+        and any(
+            marker in (m.content or "").lower()
+            for marker in ("error", "exception", "traceback")
+        )
+    )
+    reasoning_steps = sum(1 for m in all_messages if isinstance(m, AIMessage))
+    return tool_calls, tool_errors, reasoning_steps
+
+
 def _tools_node(state: AgentState) -> dict:
-    from core.reality_bridge import push_node_signal
+    from core.reality_bridge import push_node_signal, push_agent_activity_signal
     push_node_signal("agent", "tools", 1.0, trigger_push=True)
     result = _tool_node_instance(state)
     push_node_signal("agent", "tools", 0.0, trigger_push=False)
+
+    # Emit the agent-activity signal so agent_activity_classifier can fire on
+    # this push cycle. Metrics reflect the turn's shape up through the tools we
+    # just executed. Safe to call even when the bridge is unreachable — it
+    # swallows all network failures internally.
+    calls, errors, depth = _count_activity_metrics(
+        state["messages"], result.get("messages", []),
+    )
+    push_agent_activity_signal(
+        tool_calls=calls,
+        tool_errors=errors,
+        reasoning_steps=depth,
+    )
+
     return result
 
 

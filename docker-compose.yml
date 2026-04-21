@@ -8,8 +8,8 @@ services:
   # This Qdrant instance is the unified vector store for both localAIStack and
   # RealityEngine_AI.  Exposed on host ports 4333 (REST) / 4334 (gRPC).
   # Collections:
-  #   localai_docs     — 768-dim document embeddings (nomic-embed-text)
-  #   reality-vectors  — 768-dim RE perceptual vectors (auto-created by RE on startup)
+  #   localai_docs     — document embeddings (dim = ${EMBED_DIM}, ternary-bonsai:4 by default)
+  #   reality-vectors  — RE perceptual vectors, same dim (auto-created by RE on startup)
   # RealityEngine_AI connects via host.docker.internal:4333 from its Docker network.
   qdrant:
     image: qdrant/qdrant:v1.13.1
@@ -60,14 +60,22 @@ services:
       QDRANT_PORT: "6333"
       REDIS_URL: "redis://redis:6379"
       LLM_MODEL: "${LLM_MODEL:-llama3.1:8b}"
-      EMBED_MODEL: "${EMBED_MODEL:-nomic-embed-text}"
+      EMBED_MODEL: "${EMBED_MODEL:-ternary-bonsai:4}"
+      EMBED_DIM: "${EMBED_DIM:-768}"
       COLLECTION_NAME: "${COLLECTION_NAME:-localai_docs}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
-      # Reality Engine stack (PE = Perception Engine port 3004, RE = Reality Engine port 3000)
-      PE_URL: "http://host.docker.internal:3004"
-      RE_URL: "http://host.docker.internal:3000"
+      # Reality Engine stack — HTTPS because the RE tls-proxy only accepts TLS.
+      # RE_SSL_VERIFY=false trusts the self-signed dev cert without CA bundle.
+      # MACHINES_DIR resolves the machine JSON path explicitly; the 4-parent
+      # __file__ heuristic in reality_bridge.py overshoots to / when services/api
+      # is mounted at /app (only 2 parents to root, not 4).
+      PE_URL: "https://host.docker.internal:3004"
+      RE_URL: "https://host.docker.internal:3000"
+      RE_SSL_VERIFY: "false"
+      MACHINES_DIR: "/app/data/machines"
     volumes:
       - ./data/documents:/app/data/documents
+      - ./data/machines:/app/data/machines:ro
       - ./services/api:/app  # live-reload in dev
     depends_on:
       qdrant:

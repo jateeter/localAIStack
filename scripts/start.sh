@@ -11,6 +11,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 [[ -f .env ]] || { warn ".env not found — copying from .env.example"; cp .env.example .env; }
+# shellcheck source=/dev/null
+set -a; source .env; set +a
 
 # ── Ollama (native) ───────────────────────────────────────────────────────────
 if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
@@ -61,9 +63,12 @@ echo "  WebUI     http://localhost:4080"
 echo "  Qdrant    http://localhost:4333/dashboard"
 echo "  Ollama    http://localhost:11434"
 echo ""
+# Resolve the actual configured embed model / dim (fall back to defaults) for the banner.
+EMBED_MODEL_DISPLAY="${EMBED_MODEL:-ternary-bonsai:4}"
+EMBED_DIM_DISPLAY="${EMBED_DIM:-768}"
 echo "  Unified Qdrant collections (localhost:4333):"
-echo "    localai_docs     — document embeddings (768-dim, nomic-embed-text)"
-echo "    reality-vectors  — RE perceptual vectors (768-dim, auto-created on RE startup)"
+echo "    localai_docs     — document embeddings (${EMBED_DIM_DISPLAY}-dim, ${EMBED_MODEL_DISPLAY})"
+echo "    reality-vectors  — RE perceptual vectors (${EMBED_DIM_DISPLAY}-dim, auto-created on RE startup)"
 echo ""
 echo "  To start RealityEngine_AI (uses this Qdrant):"
 echo "    cd ../RealityEngine_AI && ./scripts/start.sh"

@@ -29,7 +29,7 @@ fi
 
 source .env
 LLM_MODEL="${LLM_MODEL:-llama3.1:8b-q4_K_M}"
-EMBED_MODEL="${EMBED_MODEL:-nomic-embed-text}"
+EMBED_MODEL="${EMBED_MODEL:-ternary-bonsai:4}"
 
 # ── Start Ollama (native) ─────────────────────────────────────────────────────
 info "Starting Ollama service..."
@@ -50,9 +50,29 @@ info "Pulling LLM model: $LLM_MODEL"
 ollama pull "$LLM_MODEL"
 ok "LLM model ready: $LLM_MODEL"
 
-info "Pulling embedding model: $EMBED_MODEL"
-ollama pull "$EMBED_MODEL"
-ok "Embedding model ready: $EMBED_MODEL"
+# ── Register Ternary Bonsai 4B from local Modelfile ───────────────────────────
+# The `ternary-bonsai:4` tag isn't a public Ollama model — it's built from the
+# Modelfile in models/ternary-bonsai/, which sources the GGUF from HuggingFace
+# (prism-ml/Bonsai-4B-gguf).  Once created it shows up alongside other models
+# in Open WebUI's selector.
+BONSAI_MODELFILE="$ROOT_DIR/models/ternary-bonsai/Modelfile"
+if ollama list | awk '{print $1}' | grep -qx "ternary-bonsai:4"; then
+    ok "Ternary Bonsai already registered (ternary-bonsai:4)"
+else
+    [[ -f "$BONSAI_MODELFILE" ]] || die "Missing $BONSAI_MODELFILE"
+    info "Registering ternary-bonsai:4 from $BONSAI_MODELFILE"
+    info "  (first run pulls ~572 MB from huggingface.co/prism-ml/Bonsai-4B-gguf)"
+    ollama create ternary-bonsai:4 -f "$BONSAI_MODELFILE"
+    ok "Ternary Bonsai registered — selectable in Open WebUI at http://localhost:4080"
+fi
+
+# Optional embedding model — skip silently if it's the Bonsai LLM name (already
+# registered above) so setup doesn't try to `ollama pull` a non-existent tag.
+if [[ "$EMBED_MODEL" != "ternary-bonsai:4" ]]; then
+    info "Pulling embedding model: $EMBED_MODEL"
+    ollama pull "$EMBED_MODEL"
+    ok "Embedding model ready: $EMBED_MODEL"
+fi
 
 # ── Start Docker stack ────────────────────────────────────────────────────────
 info "Starting Docker services (Qdrant, Redis, API, Open WebUI)..."

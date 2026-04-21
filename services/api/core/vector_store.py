@@ -8,8 +8,6 @@ from core.embeddings import get_embeddings
 _client: QdrantClient | None = None
 _store: QdrantVectorStore | None = None
 
-EMBED_DIM = 768  # nomic-embed-text output dimension
-
 
 def get_qdrant_client() -> QdrantClient:
     global _client
@@ -22,9 +20,10 @@ def get_qdrant_client() -> QdrantClient:
 def ensure_collection(client: QdrantClient, name: str) -> None:
     collections = [c.name for c in client.get_collections().collections]
     if name not in collections:
+        s = get_settings()
         client.create_collection(
             collection_name=name,
-            vectors_config=VectorParams(size=EMBED_DIM, distance=Distance.COSINE),
+            vectors_config=VectorParams(size=s.embed_dim, distance=Distance.COSINE),
         )
 
 

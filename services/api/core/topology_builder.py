@@ -5,7 +5,7 @@ Reads the compiled node list from each LangGraph graph and produces:
   1. A binding dict  — perceptual space region assignments per node
   2. A CES machine JSON — one topology-tracking machine per graph
 
-Region layout  (packed contiguously, base offset 76):
+Region layout (per-graph base offsets in GRAPH_BASE_OFFSETS):
   Each node gets BYTES_PER_NODE bytes (default 2):
     [offset + 0]  node_active signal  (1.0 while node is executing)
     [offset + 1]  reserved
@@ -13,16 +13,29 @@ Region layout  (packed contiguously, base offset 76):
   Each graph's input region is immediately followed by its OUTPUT_LENGTH-byte
   output region where the topology machine writes which node is currently active.
 
-Example layout for default graphs (rag=4 nodes, agent=2 nodes):
-  [76:84]  rag node signals    (4 nodes × 2 bytes)
-  [84:88]  rag topology output (4 bytes: [retrieve, grade_documents, generate, rewrite_query])
-  [88:92]  agent node signals  (2 nodes × 2 bytes)
-  [92:96]  agent topology output (4 bytes: [agent, tools, 0, 0])
+Layout for default graphs (rag=4 nodes, agent=2 nodes):
+  [76:84]   rag node signals     (4 nodes × 2 bytes)
+  [84:88]   rag topology output  (4 bytes: [retrieve, grade_documents, generate, rewrite_query])
+  [104:108] agent node signals   (2 nodes × 2 bytes)
+  [108:112] agent topology output (4 bytes: [agent, tools, 0, 0])
+
+The gap between the rag region (ends at 88) and agent region (starts at 104) is
+required because DC machines occupy several bytes in [88:104]; the agent region
+sits immediately before the session_rag/session_agent outputs at [112:120] so
+session_agent_context can read its 16-byte input contiguously from [104:120].
 """
 
 from __future__ import annotations
 
-TOPOLOGY_BASE_OFFSET = 76  # first free byte after RAG routing signals [64:76]
+# Per-graph base offsets.  rag stays at 76 (no conflicts), agent starts at 104
+# where DC alert FF outputs used to live (now relocated to [144:150]).
+GRAPH_BASE_OFFSETS: dict[str, int] = {
+    "rag":   76,
+    "agent": 104,
+}
+# Legacy constant kept for any external consumers that still reference it;
+# equivalent to GRAPH_BASE_OFFSETS["rag"].
+TOPOLOGY_BASE_OFFSET = GRAPH_BASE_OFFSETS["rag"]
 BYTES_PER_NODE = 2
 OUTPUT_LENGTH = 4
 
@@ -58,11 +71,18 @@ def compute_bindings() -> dict:
         "agent": [n for n in get_agent_graph().nodes if n not in _LANGGRAPH_INTERNALS],
     }
 
-    current_offset = TOPOLOGY_BASE_OFFSET
     bindings: dict = {}
 
     for graph_name, nodes in raw_nodes.items():
-        graph_base = current_offset
+        try:
+            graph_base = GRAPH_BASE_OFFSETS[graph_name]
+        except KeyError as exc:
+            raise RuntimeError(
+                f"No GRAPH_BASE_OFFSETS entry for graph '{graph_name}'. "
+                f"Add it to topology_builder.py before registering new graphs."
+            ) from exc
+
+        current_offset = graph_base
         node_map: dict = {}
 
         for node in nodes:
@@ -74,9 +94,8 @@ def compute_bindings() -> dict:
             }
             current_offset += BYTES_PER_NODE
 
-        input_region  = {"offset": graph_base,       "length": len(nodes) * BYTES_PER_NODE}
-        output_region = {"offset": current_offset,   "length": OUTPUT_LENGTH}
-        current_offset += OUTPUT_LENGTH
+        input_region  = {"offset": graph_base,     "length": len(nodes) * BYTES_PER_NODE}
+        output_region = {"offset": current_offset, "length": OUTPUT_LENGTH}
 
         bindings[graph_name] = {
             "nodes":         node_map,

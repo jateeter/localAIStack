@@ -26,9 +26,13 @@ async def lifespan(app: FastAPI):
     # Register Reality Engine sensor sources (graceful — PE may not be running)
     try:
         from core.reality_bridge import (
+            verify_machine_offsets,
             register_sensors, import_machine_if_missing,
             import_session_machines, bind_graph_topology,
         )
+        # Pure local-file structural check; runs before any network call so
+        # drift surfaces even when the PE/RE are unreachable.
+        verify_machine_offsets()
         register_sensors()
         log.info("Reality Engine sensors registered", pe_url=s.pe_url)
         import_machine_if_missing()

@@ -7,8 +7,8 @@
       "category": "ai-pipeline",
       "author": "localAIStack bridge",
       "created": "2026-04-16T00:00:00Z",
-      "eventSpace": "8D vector at [64:72]: [doc_count_norm, avg_score, _, _, kept_ratio, rewrite_count_norm, _, _]",
-      "outputSpace": "4D binary at [72:76]: [generate, rewrite, abort, _]",
+      "eventSpace": "8D vector at [52:60]: [doc_count_norm, avg_score, _, _, kept_ratio, rewrite_count_norm, _, _]",
+      "outputSpace": "4D binary at [60:64]: [generate, rewrite, abort, _]",
       "tags": ["rag", "routing", "corrective-rag", "localai"],
       "normalization": {
         "doc_count_norm": "min(retrieved_doc_count / 10, 1.0)  — 10 docs maps to 1.0",
@@ -27,8 +27,8 @@
     "arbiterRule": "OR",
     "matchAlgorithm": "gte",
     "perceptualMapping": {
-      "input":  { "offset": 64, "length": 8 },
-      "output": { "offset": 72, "length": 4 }
+      "input":  { "offset": 52, "length": 8 },
+      "output": { "offset": 60, "length": 4 }
     },
     "sequences": [
       {

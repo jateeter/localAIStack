@@ -2,32 +2,32 @@
   "version": "1.0.0",
   "machine": {
     "name": "localai/session_agent_context",
-    "description": "Bistable flip-flop pair tracking whether the ReAct agent and its tools have been engaged in this session. Reads raw node-active signals from [88:92] and its own prior output (carry feedback) from [100:102] to produce a monotonically accumulating carry at [100:104]: once agent_ever_engaged or tools_ever_used is set HIGH it remains HIGH for the lifetime of the PE process. Four mutually exclusive sequences cover all combinations of (which node is active) × (which carries are already set).",
+    "description": "Bistable flip-flop pair tracking whether the ReAct agent and its tools have been engaged in this session. Reads raw node-active signals from [104:108] and its own prior output (carry feedback) from [116:118] to produce a monotonically accumulating carry at [116:120]: once agent_ever_engaged or tools_ever_used is set HIGH it remains HIGH for the lifetime of the PE process. Four mutually exclusive sequences cover all combinations of (which node is active) × (which carries are already set).",
     "metadata": {
       "category": "ai-pipeline",
       "author": "localAIStack session context builder",
       "created": "2026-04-17T00:00:00Z",
       "pattern": "bistable-flip-flop",
-      "eventSpace": "16D vector at [88:104]: [agent_active, _, tools_active, _, topo_out[0:4], rag_carry[0:4], agent_carry, tools_carry, _, _]",
-      "outputSpace": "4D carry vector at [100:104]: [agent_ever_engaged, tools_ever_used, _, _]",
-      "bistableNote": "SET: a sequence fires when a node-active signal is present, writing the correct combined carry to [100:104]. HOLD: when no node fires (no agent activity this cycle), no sequence fires and PE carry-forward preserves the output. Carries only increase — there is no CLEAR path, matching the semantic 'ever engaged in this session'.",
-      "carryFeedback": "Elements [12:14] of the input region mirror the machine's own output from the prior push cycle (ps[100:102]). This allows each sequence to read the existing agent/tools carry state and produce the correct non-regressive combined output.",
-      "mutualExclusivity": "Seq 1/2 require element[0] HIGH (agent_active); Seq 3/4 require element[2] HIGH (tools_active). Both cannot be HIGH in the same push because push_node_signal sets exactly one node signal at a time. Within each pair, sequences are exclusive on the tools_carry (Seq 1/3) vs agent_carry (Seq 2/4) feedback bit.",
+      "eventSpace": "16D vector at [104:120]: [agent_active, _, tools_active, _, topo_out[0:4], rag_carry[0:4], agent_carry, tools_carry, _, _]",
+      "outputSpace": "4D carry vector at [116:120]: [agent_ever_engaged, tools_ever_used, _, _]",
+      "bistableNote": "SET: a sequence fires when a node-active signal is present, writing the correct combined carry to [116:120]. HOLD: when no node fires (no agent activity this cycle), no sequence fires and PE carry-forward preserves the output. Carries only increase — there is no CLEAR path, matching the semantic 'ever engaged in this session'.",
+      "carryFeedback": "Elements [12:14] of the input region mirror the machine's own output from the prior push cycle (ps[116:118]). This allows each sequence to read the existing agent/tools carry state and produce the correct non-regressive combined output.",
+      "mutualExclusivity": "Seq 1/2 require element[0] HIGH (agent_active, ps[104]); Seq 3/4 require element[2] HIGH (tools_active, ps[106]). Both cannot be HIGH in the same push because push_node_signal sets exactly one node signal at a time. Within each pair, sequences are exclusive on the tools_carry (Seq 1/3) vs agent_carry (Seq 2/4) feedback bit.",
       "sequenceCount": 4
     },
     "arbiterRule": "OR",
     "matchAlgorithm": "gte",
     "perceptualMapping": {
-      "input":  { "offset": 88, "length": 16 },
-      "output": { "offset": 100, "length": 4 }
+      "input":  { "offset": 104, "length": 16 },
+      "output": { "offset": 116, "length": 4 }
     },
     "sequences": [
       {
         "id": "sess-agent-and-prior-tools",
         "name": "Agent active; tools already used this session",
         "metadata": {
-          "description": "Fires when the agent node is executing (ps[88] HIGH) and the tools_used carry is already set (ps[101] HIGH). Writes [1,1,0,0] — both carries remain HIGH.",
-          "trigger": "ps[88] HIGH AND ps[101] HIGH",
+          "description": "Fires when the agent node is executing (ps[104] HIGH) and the tools_used carry is already set (ps[117] HIGH). Writes [1,1,0,0] — both carries remain HIGH.",
+          "trigger": "ps[104] HIGH AND ps[117] HIGH",
           "carryOutput": "[1, 1, 0, 0]"
         },
         "vectors": [
@@ -65,7 +65,7 @@
             ],
             "metadata": {
               "name": "SESS_AGENT_PRIOR_TOOLS",
-              "description": "element[0]: ps[88] agent_active HIGH; element[13]: ps[101] tools_carry HIGH (feedback); all others: wildcards"
+              "description": "element[0]: ps[104] agent_active HIGH; element[13]: ps[117] tools_carry HIGH (feedback); all others: wildcards"
             }
           }
         ]
@@ -74,8 +74,8 @@
         "id": "sess-agent-first",
         "name": "Agent active; tools not yet used this session",
         "metadata": {
-          "description": "Fires when the agent node is executing (ps[88] HIGH) and the tools_used carry is not yet set (ps[101] LOW). Writes [1,0,0,0] — sets agent carry, preserves tools carry at 0.",
-          "trigger": "ps[88] HIGH AND ps[101] LOW",
+          "description": "Fires when the agent node is executing (ps[104] HIGH) and the tools_used carry is not yet set (ps[117] LOW). Writes [1,0,0,0] — sets agent carry, preserves tools carry at 0.",
+          "trigger": "ps[104] HIGH AND ps[117] LOW",
           "carryOutput": "[1, 0, 0, 0]"
         },
         "vectors": [
@@ -113,7 +113,7 @@
             ],
             "metadata": {
               "name": "SESS_AGENT_FIRST",
-              "description": "element[0]: ps[88] HIGH; element[13]: ps[101] tools_carry LOW; all others: wildcards"
+              "description": "element[0]: ps[104] HIGH; element[13]: ps[117] tools_carry LOW; all others: wildcards"
             }
           }
         ]
@@ -122,8 +122,8 @@
         "id": "sess-tools-after-agent",
         "name": "Tools active; agent already engaged this session",
         "metadata": {
-          "description": "Fires when the tools node is executing (ps[90] HIGH) and the agent_engaged carry is already set (ps[100] HIGH). Writes [1,1,0,0] — preserves agent carry and sets tools carry.",
-          "trigger": "ps[90] HIGH AND ps[100] HIGH",
+          "description": "Fires when the tools node is executing (ps[106] HIGH) and the agent_engaged carry is already set (ps[116] HIGH). Writes [1,1,0,0] — preserves agent carry and sets tools carry.",
+          "trigger": "ps[106] HIGH AND ps[116] HIGH",
           "carryOutput": "[1, 1, 0, 0]"
         },
         "vectors": [
@@ -161,7 +161,7 @@
             ],
             "metadata": {
               "name": "SESS_TOOLS_AFTER_AGENT",
-              "description": "element[2]: ps[90] tools_active HIGH; element[12]: ps[100] agent_carry HIGH (feedback); all others: wildcards"
+              "description": "element[2]: ps[106] tools_active HIGH; element[12]: ps[116] agent_carry HIGH (feedback); all others: wildcards"
             }
           }
         ]
@@ -170,8 +170,8 @@
         "id": "sess-tools-first",
         "name": "Tools active; agent not yet recorded (defensive)",
         "metadata": {
-          "description": "Defensive path: fires when tools node is executing but the agent_engaged carry is not yet set (ps[100] LOW). In normal ReAct flow the agent always runs before tools, so this path handles cold-start or carry-cleared edge cases.",
-          "trigger": "ps[90] HIGH AND ps[100] LOW",
+          "description": "Defensive path: fires when tools node is executing but the agent_engaged carry is not yet set (ps[116] LOW). In normal ReAct flow the agent always runs before tools, so this path handles cold-start or carry-cleared edge cases.",
+          "trigger": "ps[106] HIGH AND ps[116] LOW",
           "carryOutput": "[0, 1, 0, 0]"
         },
         "vectors": [
@@ -209,7 +209,7 @@
             ],
             "metadata": {
               "name": "SESS_TOOLS_FIRST",
-              "description": "element[2]: ps[90] HIGH; element[12]: ps[100] agent_carry LOW; all others: wildcards"
+              "description": "element[2]: ps[106] HIGH; element[12]: ps[116] agent_carry LOW; all others: wildcards"
             }
           }
         ]

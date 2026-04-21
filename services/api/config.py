@@ -9,7 +9,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:4379"
 
     llm_model: str = "llama3.1:8b-q4_K_M"
-    embed_model: str = "nomic-embed-text"
+    embed_model: str = "ternary-bonsai:4"
+    # Output dimension of embed_model. Must match the existing Qdrant collection;
+    # recreate the collection if you swap to a model with a different dim.
+    embed_dim: int = 768
     collection_name: str = "localai_docs"
 
     # RAG retrieval
