@@ -1,0 +1,128 @@
+{
+  "_comment": [
+    "Unified PE integration registry for localAIStack.",
+    "Covers the personal health domain (HealthKit + CareKit) and the",
+    "OpenClaw xACP agent dispatch contract.",
+    "",
+    "Load via: INTEGRATIONS_CONFIG=../localAIStack/config/integrations.json",
+    "",
+    "Sensor regions match Python constants in services/api/core/reality_bridge.py",
+    "and machine input windows in data/machines/. Update all three together.",
+    "",
+    "ACP completion lands at perceptual space [4210:4214] (4-element region).",
+    "Health sensors land at [186:197] (1-element each)."
+  ],
+  "version": "1.0",
+  "integrations": [
+    {
+      "id": "healthkit-localai",
+      "kind": "healthkit",
+      "enabled": true,
+      "_comment": "Receives POST /api/integrations/healthkit/ingest from localHealthkitBridge iOS module. Pre-normalised 0.0/1.0 band values."
+    },
+    {
+      "id": "carekit-localai",
+      "kind": "carekit",
+      "enabled": true,
+      "bridgeId": "carekit-localai",
+      "defaultSourceMappingId": "carekit-localai-med",
+      "_comment": "Receives POST /api/integrations/carekit/ingest from iOS CareKit sync. Pre-normalised ratio values [0.0, 1.0]."
+    },
+    {
+      "id": "openclaw-xacp",
+      "kind": "acp",
+      "enabled": true,
+      "platform": "OpenClaw",
+      "surface": "xACP",
+      "command": "openclaw acp",
+      "gatewayUrl": "ws://127.0.0.1:18789",
+      "sessionKey": "agent:main:main",
+      "targetAgent": "openclaw",
+      "completionSourceMappingId": "acp-openclaw-completion",
+      "dispatchMode": "accepted-no-wait",
+      "completionMode": "pe-source-mapping",
+      "_comment": "OpenClaw xACP gateway. Gateway URL / session key are overridden by ACP_GATEWAY_URL and ACP_SESSION_KEY env vars at PE startup."
+    }
+  ],
+  "sourceMappings": [
+    {
+      "id": "healthkit:HKQuantityTypeIdentifierHeartRate",
+      "sensorId": "localai_health_hr_ok",
+      "name": "localai/health/hr_ok",
+      "region": { "offset": 186, "length": 1 },
+      "ttlMs": 300000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "_comment": "HR in [60,100] bpm → 1.0, else 0.0 (iOS bridge pre-computes band)"
+    },
+    {
+      "id": "healthkit:HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+      "sensorId": "localai_health_hrv_ok",
+      "name": "localai/health/hrv_ok",
+      "region": { "offset": 187, "length": 1 },
+      "ttlMs": 900000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "_comment": "SDNN >= 30 ms → 1.0, else 0.0 (iOS bridge pre-computes band)"
+    },
+    {
+      "id": "healthkit:HKCategoryTypeIdentifierSleepAnalysis",
+      "sensorId": "localai_health_sleep_ok",
+      "name": "localai/health/sleep_ok",
+      "region": { "offset": 188, "length": 1 },
+      "ttlMs": 86400000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "_comment": "Total sleep >= 6.5 h → 1.0, else 0.0 (iOS bridge aggregates stages)"
+    },
+    {
+      "id": "carekit-localai-med",
+      "sensorId": "localai_carekit_med_adherence",
+      "name": "localai/carekit/med_adherence",
+      "region": { "offset": 194, "length": 1 },
+      "ttlMs": 3600000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "extract": { "type": "json", "pointer": "/adherence" }
+    },
+    {
+      "id": "carekit-localai-task",
+      "sensorId": "localai_carekit_task_completion",
+      "name": "localai/carekit/task_completion",
+      "region": { "offset": 195, "length": 1 },
+      "ttlMs": 86400000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "extract": { "type": "json", "pointer": "/completed" }
+    },
+    {
+      "id": "carekit-localai-symptom",
+      "sensorId": "localai_carekit_symptom_ok",
+      "name": "localai/carekit/symptom_ok",
+      "region": { "offset": 196, "length": 1 },
+      "ttlMs": 86400000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "extract": { "type": "json", "pointer": "/symptomOk" }
+    },
+    {
+      "id": "acp-openclaw-completion",
+      "sensorIdTemplate": "acp.openclaw.{agent}.completion",
+      "name": "openclaw/acp/completion",
+      "region": { "offset": 4210, "length": 4 },
+      "ttlMs": 300000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "pushMode": "debounced",
+      "debounceMs": 250,
+      "extract": {
+        "type": "json",
+        "pointers": ["/completed", "/failed", "/confidence", "/actionClass"]
+      },
+      "_comment": "ACP completion slot — [completed, failed, confidence, actionClass]. Template {agent} resolves to the dispatched agent name."
+    }
+  ],
+  "bandThresholds": {
+    "_comment": "Must match Python constants in services/api/core/reality_bridge.py.",
+    "hr_low_bpm":          60.0,
+    "hr_high_bpm":        100.0,
+    "hrv_ok_sdnn_ms":      30.0,
+    "sleep_ok_hours":       6.5,
+    "med_adherence_ok":     0.5,
+    "task_completion_ok":   0.5,
+    "symptom_ok_threshold": 0.5
+  }
+}
