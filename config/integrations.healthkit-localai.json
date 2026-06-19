@@ -1,0 +1,108 @@
+{
+  "_comment": [
+    "HealthKit → PE integration registry for the localAIStack personal health domain.",
+    "",
+    "Each entry in sourceMappings maps a HealthKit type identifier to a PE sensor source.",
+    "The PE uses this registry when it receives POST /api/integrations/healthkit/ingest",
+    "from the localHealthkitBridge iOS module.",
+    "",
+    "Normalize modes:",
+    "  'passthrough' — value is written as-is (expected range: 0.0 or 1.0).",
+    "    Use when the iOS bridge or a preprocessing step pre-computes the band value.",
+    "    Required for the TS PE runtime (no 'band' mode available in TypeScript PE).",
+    "  'band'        — CPP/LSP PE runtimes only. Writes 1.0 when value is in [low, high],",
+    "    0.0 otherwise. For TS PE, use 'passthrough' with pre-computed values instead.",
+    "  'minmax'      — scales linearly: out = (value - min) / (max - min), clamped [0,1].",
+    "    Available in all PE runtimes but does NOT produce a binary 0/1 output.",
+    "",
+    "Band offset layout (personal_health_baseline.json input window [186:190]):",
+    "  [186] hr.ok    — 1.0 if HR is in nominal range [60, 100] bpm, else 0.0",
+    "  [187] hrv.ok   — 1.0 if SDNN HRV >= 30 ms, else 0.0",
+    "  [188] sleep.ok — 1.0 if sleep duration >= 6.5 h, else 0.0",
+    "  [189] reserved — future use (stress index, activity level, …)",
+    "",
+    "For the TS PE runtime: the iOS bridge MUST pre-compute band values (0.0 or 1.0)",
+    "and send them with normalize.mode='passthrough'. The bridge logic is in:",
+    "  localHealthkitBridge/Sources/HealthKitBridge/BandNormalizer.swift",
+    "",
+    "Machine output window: personal_health_baseline.json at [190:194]",
+    "  [190] thriving  — all three metrics in nominal range",
+    "  [191] balanced  — HR+HRV ok, sleep below target",
+    "  [192] watch     — HR ok, HRV low (poor recovery)",
+    "  [193] attention — HR outside nominal range"
+  ],
+  "integrationId": "healthkit-localai-v1",
+  "description": "Apple HealthKit → localAIStack personal health domain",
+  "targetPerceptualRegion": {
+    "offset": 186,
+    "length": 4,
+    "note": "personal_health_baseline.json input window [186:190]"
+  },
+  "sourceMappings": [
+    {
+      "hkTypeIdentifier": "HKQuantityTypeIdentifierHeartRate",
+      "sensorId": "localai_health_hr_ok",
+      "description": "Resting heart rate — band [60, 100] bpm",
+      "region": { "offset": 186, "length": 1 },
+      "ttlMs": 300000,
+      "normalize": {
+        "mode": "passthrough",
+        "note": "TS PE runtime: iOS bridge must pre-compute band value (0.0 or 1.0). CPP/LSP runtimes: use mode='band', low=60, high=100."
+      }
+    },
+    {
+      "hkTypeIdentifier": "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+      "sensorId": "localai_health_hrv_ok",
+      "description": "HRV SDNN — threshold >= 30 ms",
+      "region": { "offset": 187, "length": 1 },
+      "ttlMs": 900000,
+      "normalize": {
+        "mode": "passthrough",
+        "note": "TS PE runtime: iOS bridge must pre-compute band value (0.0 or 1.0). CPP/LSP runtimes: use mode='band', low=30, high=999."
+      }
+    },
+    {
+      "hkTypeIdentifier": "HKCategoryTypeIdentifierSleepAnalysis",
+      "sensorId": "localai_health_sleep_ok",
+      "description": "Sleep duration — threshold >= 6.5 hours",
+      "region": { "offset": 188, "length": 1 },
+      "ttlMs": 86400000,
+      "normalize": {
+        "mode": "passthrough",
+        "note": "TS PE runtime: iOS bridge aggregates InBed/Asleep stages and sends 0.0 or 1.0. CPP/LSP runtimes: use mode='band', low=6.5, high=24."
+      }
+    }
+  ],
+  "bandThresholds": {
+    "hr_low_bpm": 60.0,
+    "hr_high_bpm": 100.0,
+    "hrv_ok_sdnn_ms": 30.0,
+    "sleep_ok_hours": 6.5,
+    "note": "These thresholds match reality_bridge.py _HR_LOW_BPM/_HR_HIGH_BPM/_HRV_OK_MS/_SLEEP_OK_HOURS. Update both files together."
+  },
+  "endpoints": {
+    "peIngest": "POST /api/integrations/healthkit/ingest",
+    "peStatus": "GET /api/integrations/healthkit/status",
+    "peEnvVar": "INTEGRATIONS_CONFIG=/path/to/integrations.healthkit-localai.json"
+  },
+  "cppLspRuntimeConfig": {
+    "_comment": "Use this block for CPP or LSP PE runtimes that natively support 'band' normalize mode.",
+    "sourceMappings": [
+      {
+        "hkTypeIdentifier": "HKQuantityTypeIdentifierHeartRate",
+        "sensorId": "localai_health_hr_ok",
+        "normalize": { "mode": "band", "low": 60.0, "high": 100.0 }
+      },
+      {
+        "hkTypeIdentifier": "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+        "sensorId": "localai_health_hrv_ok",
+        "normalize": { "mode": "band", "low": 30.0, "high": 999.0 }
+      },
+      {
+        "hkTypeIdentifier": "HKCategoryTypeIdentifierSleepAnalysis",
+        "sensorId": "localai_health_sleep_ok",
+        "normalize": { "mode": "band", "low": 6.5, "high": 24.0 }
+      }
+    ]
+  }
+}

@@ -28,10 +28,19 @@ class Settings(BaseSettings):
     pe_url: str = "http://localhost:3004"
     re_url: str = "http://localhost:3000"
 
+    # Personal health domain
+    # Separate Qdrant collection for health knowledge documents.
+    health_collection_name: str = "health_docs"
+    # Set HEALTH_CONTEXT_ENABLED=true to automatically inject the current health
+    # state into every chat system prompt. Can also be enabled per-request via
+    # ChatRequest.health_context=true or the X-Health-Context: enabled header.
+    health_context_enabled: bool = False
+
     log_level: str = "info"
 
     class Config:
         env_file = ".env"
+        extra = "ignore"  # tolerate env vars from other services (WEBUI_SECRET_KEY, etc.)
 
 
 @lru_cache

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
 from routers import health, chat, rag, graph
+from routers.graphql_endpoint import graphql_app, events_router as graphql_events_router
 
 log = structlog.get_logger()
 
@@ -28,7 +29,8 @@ async def lifespan(app: FastAPI):
         from core.reality_bridge import (
             verify_machine_offsets,
             register_sensors, import_machine_if_missing,
-            import_session_machines, bind_graph_topology,
+            import_session_machines, import_health_machines,
+            import_carekit_machine, bind_graph_topology,
         )
         # Pure local-file structural check; runs before any network call so
         # drift surfaces even when the PE/RE are unreachable.
@@ -39,6 +41,10 @@ async def lifespan(app: FastAPI):
         log.info("Reality Engine RAG machine ready", re_url=s.re_url)
         import_session_machines()
         log.info("Reality Engine session context machines ready")
+        import_health_machines()
+        log.info("Reality Engine personal health machine ready")
+        import_carekit_machine()
+        log.info("Reality Engine CareKit machine ready")
         bind_graph_topology()
         log.info("Reality Engine topology bound")
     except Exception as e:
@@ -65,6 +71,8 @@ app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(rag.router)
 app.include_router(graph.router)
+app.include_router(graphql_app, prefix="/graphql")
+app.include_router(graphql_events_router)
 
 
 @app.get("/")

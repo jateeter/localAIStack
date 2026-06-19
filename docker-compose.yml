@@ -1,8 +1,57 @@
 # localAIStack — Docker Compose
 # Ollama runs NATIVELY on macOS (M1 Metal acceleration via `ollama serve`)
-# This compose manages: Qdrant, Redis, FastAPI orchestration, Open WebUI
+# This compose manages: Qdrant, Redis, FastAPI orchestration, Open WebUI, Loki, Grafana
 
 services:
+
+  # ── Log Aggregation (Loki) ───────────────────────────────────────────────────
+  # Port 4100 kept bound to host: the Docker logging driver runs on the host
+  # daemon and needs localhost:4100 to push logs into this compose network.
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: localai_loki
+    restart: unless-stopped
+    ports:
+      - "4100:3100"
+    volumes:
+      - ./config/loki-config.yml:/etc/loki/local-config.yaml
+      - ./volumes/loki:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Dashboards (Grafana) ─────────────────────────────────────────────────────
+  # Pre-provisioned with the Loki datasource and the "localAIStack Overview"
+  # dashboard from config/dashboards/.  Browse at http://localhost:4002
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: localai_grafana
+    restart: unless-stopped
+    ports:
+      - "4002:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_INSTALL_PLUGINS: "grafana-clock-panel"
+      GF_SERVER_ROOT_URL: "http://localhost:4002"
+    volumes:
+      - ./volumes/grafana:/var/lib/grafana
+      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./config/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   # ── Vector Database (Unified) ────────────────────────────────────────────────
   # This Qdrant instance is the unified vector store for both localAIStack and
@@ -22,6 +71,17 @@ services:
       - ./volumes/qdrant:/qdrant/storage
     environment:
       QDRANT__SERVICE__GRPC_PORT: "6334"
+    depends_on:
+      loki:
+        condition: service_healthy
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:4100/loki/api/v1/push"
+        loki-batch-size: "400"
+        loki-retries: "2"
+        loki-max-backoff: "1000ms"
+        loki-external-labels: "service=qdrant,environment=production,app=localaistack"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'"]
       interval: 10s
@@ -38,6 +98,17 @@ services:
     volumes:
       - ./volumes/redis:/data
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    depends_on:
+      loki:
+        condition: service_healthy
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:4100/loki/api/v1/push"
+        loki-batch-size: "400"
+        loki-retries: "2"
+        loki-max-backoff: "1000ms"
+        loki-external-labels: "service=redis,environment=production,app=localaistack"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -69,8 +140,8 @@ services:
       # MACHINES_DIR resolves the machine JSON path explicitly; the 4-parent
       # __file__ heuristic in reality_bridge.py overshoots to / when services/api
       # is mounted at /app (only 2 parents to root, not 4).
-      PE_URL: "https://host.docker.internal:3004"
-      RE_URL: "https://host.docker.internal:3000"
+      PE_URL: "${PE_URL:-https://host.docker.internal:3004}"
+      RE_URL: "${RE_URL:-https://host.docker.internal:3000}"
       RE_SSL_VERIFY: "false"
       MACHINES_DIR: "/app/data/machines"
     volumes:
@@ -82,8 +153,18 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      loki:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:4100/loki/api/v1/push"
+        loki-batch-size: "400"
+        loki-retries: "2"
+        loki-max-backoff: "1000ms"
+        loki-external-labels: "service=api,environment=production,app=localaistack"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]  # container-internal port
       interval: 15s
@@ -105,7 +186,18 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:4100/loki/api/v1/push"
+        loki-batch-size: "400"
+        loki-retries: "2"
+        loki-max-backoff: "1000ms"
+        loki-external-labels: "service=open-webui,environment=production,app=localaistack"
 
 networks:
   default:

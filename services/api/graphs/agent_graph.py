@@ -23,7 +23,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
 from config import get_settings
-from core.vector_store import get_vector_store
+from core.vector_store import get_vector_store, get_health_vector_store
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
@@ -43,6 +43,22 @@ def rag_search(query: str) -> str:
 
 
 @tool
+def health_search(query: str) -> str:
+    """Search the personal health knowledge base for information about health metrics,
+    wellness indicators, sleep quality, HRV interpretation, heart rate, and recovery.
+    Use this tool when the user asks health-related questions such as what their HRV
+    or sleep metrics mean, how to improve recovery, or what health state changes signify."""
+    store = get_health_vector_store()
+    docs = store.similarity_search(query, k=4)
+    if not docs:
+        return "No relevant health information found in the knowledge base."
+    return "\n\n---\n\n".join(
+        f"[{d.metadata.get('category', 'health')}]\n{d.page_content}"
+        for d in docs
+    )
+
+
+@tool
 def list_collections(_: str = "") -> str:
     """List all document collections available in the vector store."""
     from core.vector_store import get_qdrant_client
@@ -51,7 +67,7 @@ def list_collections(_: str = "") -> str:
     return json.dumps(collections)
 
 
-TOOLS = [rag_search, list_collections]
+TOOLS = [rag_search, health_search, list_collections]
 
 
 # ── State ─────────────────────────────────────────────────────────────────────

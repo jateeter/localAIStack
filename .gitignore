@@ -19,3 +19,6 @@ volumes/
 data/documents/*
 !data/documents/.gitkeep
 /tmp/
+
+# Downloaded GGUF weights — fetched by scripts/setup.sh from HuggingFace
+models/*/gguf/

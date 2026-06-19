@@ -13,7 +13,7 @@ cd "$ROOT_DIR"
 # NOTE: This stops Qdrant, which is also the unified vector store for RealityEngine_AI.
 #       Stop the Reality Engine first if it is running:
 #         cd ../RealityEngine_AI && ./scripts/stop.sh
-info "Stopping Docker services (Qdrant, Redis, API, WebUI)..."
+info "Stopping Docker services (Qdrant, Redis, API, WebUI, Loki, Grafana)..."
 docker compose down
 ok "Docker services stopped"
 

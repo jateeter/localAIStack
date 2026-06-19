@@ -1,3 +1,17 @@
+[tool.pytest.ini_options]
+# Default test run: unit tests only (no network, no Docker)
+# Integration tests: pytest --integration  (compose stack must be up)
+# Live stack tests:  pytest --live         (PE + RE + localAI all running)
+#
+# Run from the repo root:
+#   pytest services/api/tests/ --ignore=services/api/tests/e2e
+# Or from services/api/:
+#   pytest tests/ --ignore=tests/e2e
+markers = [
+    "integration: compose stack integration tests — pass --integration to run",
+    "live: full live-stack tests (PE+RE+localAI) — pass --live to run",
+]
+
 [tool.ruff]
 src = ["services/api"]
 line-length = 100

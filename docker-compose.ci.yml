@@ -1,0 +1,63 @@
+# CI compose override — used by .github/workflows/e2e.yml
+#
+# Purpose: strip the loki logging driver (requires a Docker plugin not present
+# in GH Actions runners) and start only the services needed for API integration
+# tests (qdrant, redis, api). PE/RE are pointed at unreachable addresses so the
+# bridge degrades gracefully — this validates the "bridge is optional" contract.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d qdrant redis api
+#
+# Services NOT started in CI (leave their profile assignments to avoid them
+# being pulled in by depends_on chains):
+#   loki, grafana, open-webui — use profiles to opt out
+
+services:
+
+  loki:
+    # Disable in CI — other services are switched to json-file logging below
+    profiles: [monitoring]
+
+  grafana:
+    profiles: [monitoring]
+
+  open-webui:
+    profiles: [ui]
+
+  qdrant:
+    depends_on: {}          # remove loki healthcheck dependency
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    depends_on: {}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      # PE/RE pointed at unreachable addresses — tests bridge-optional behaviour.
+      # These override the values in docker-compose.yml for the CI environment.
+      PE_URL: "http://127.0.0.1:9999"
+      RE_URL: "http://127.0.0.1:9998"
+      RE_SSL_VERIFY: "false"
+      # Ollama may not be available in CI; the API starts and reports degraded.
+      OLLAMA_BASE_URL: "http://127.0.0.1:11434"
+      # Use in-memory SQLite for LangGraph checkpointer if Redis timing is tight
+      LOG_LEVEL: "warning"

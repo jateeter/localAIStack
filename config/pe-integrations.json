@@ -1,0 +1,108 @@
+{
+  "_comment": [
+    "Perception Engine integration registry for localAIStack personal health domain.",
+    "",
+    "Load via: INTEGRATIONS_CONFIG=/path/to/config/pe-integrations.json",
+    "Docker:   Add to perception-engine service environment in docker-compose.yml",
+    "",
+    "This file defines the PE source mappings that route iOS HealthKit and CareKit",
+    "payloads to the correct perceptual space regions for localAIStack machines.",
+    "",
+    "Wire format matches RealityEngine_AI TypeScript PE (server.ts integration registry).",
+    "Source mapping IDs follow PE conventions:",
+    "  HealthKit: 'healthkit:<HKTypeIdentifier>'",
+    "  CareKit:   'carekit-localai-<metric>'",
+    "",
+    "Sensor regions match Python constants in core/reality_bridge.py and",
+    "machine input windows in data/machines/. Update all three together.",
+    "",
+    "HEALTHKIT_BRIDGE_TOKEN / CAREKIT_BRIDGE_TOKEN env vars on the PE control",
+    "authentication. Unset = no-auth dev mode. Set = body bridgeToken required."
+  ],
+  "version": "1.0",
+  "integrations": [
+    {
+      "id": "healthkit-localai",
+      "kind": "healthkit",
+      "enabled": true,
+      "_comment": "Receives POST /api/integrations/healthkit/ingest from localHealthkitBridge iOS module. Pre-normalised 0.0/1.0 band values (iOS bridge computes band logic; PE writes passthrough)."
+    },
+    {
+      "id": "carekit-localai",
+      "kind": "carekit",
+      "enabled": true,
+      "bridgeId": "carekit-localai",
+      "defaultSourceMappingId": "carekit-localai-med",
+      "_comment": "Receives POST /api/integrations/carekit/ingest from iOS CareKit sync. Pre-normalised ratio values [0.0, 1.0] computed from OCKStore outcomes."
+    }
+  ],
+  "sourceMappings": [
+    {
+      "_comment": "HealthKit — heart rate. iOS bridge pre-computes band: 1.0 if HR in [60,100] bpm, else 0.0.",
+      "id": "healthkit:HKQuantityTypeIdentifierHeartRate",
+      "sensorId": "localai_health_hr_ok",
+      "name": "localai/health/hr_ok",
+      "region": { "offset": 186, "length": 1 },
+      "ttlMs": 300000,
+      "normalize": { "mode": "passthrough", "clamp": true }
+    },
+    {
+      "_comment": "HealthKit — HRV SDNN. iOS bridge pre-computes band: 1.0 if SDNN >= 30 ms, else 0.0.",
+      "id": "healthkit:HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+      "sensorId": "localai_health_hrv_ok",
+      "name": "localai/health/hrv_ok",
+      "region": { "offset": 187, "length": 1 },
+      "ttlMs": 900000,
+      "normalize": { "mode": "passthrough", "clamp": true }
+    },
+    {
+      "_comment": "HealthKit — sleep analysis. iOS bridge aggregates InBed/Asleep stages, sends 1.0 if total >= 6.5 h, else 0.0.",
+      "id": "healthkit:HKCategoryTypeIdentifierSleepAnalysis",
+      "sensorId": "localai_health_sleep_ok",
+      "name": "localai/health/sleep_ok",
+      "region": { "offset": 188, "length": 1 },
+      "ttlMs": 86400000,
+      "normalize": { "mode": "passthrough", "clamp": true }
+    },
+    {
+      "_comment": "CareKit — medication adherence ratio. Computed as: doses_taken / doses_scheduled in rolling 24 h window.",
+      "id": "carekit-localai-med",
+      "sensorId": "localai_carekit_med_adherence",
+      "name": "localai/carekit/med_adherence",
+      "region": { "offset": 194, "length": 1 },
+      "ttlMs": 3600000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "extract": { "type": "json", "pointer": "/adherence" }
+    },
+    {
+      "_comment": "CareKit — daily task completion ratio. tasks_completed / tasks_scheduled today.",
+      "id": "carekit-localai-task",
+      "sensorId": "localai_carekit_task_completion",
+      "name": "localai/carekit/task_completion",
+      "region": { "offset": 195, "length": 1 },
+      "ttlMs": 86400000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "extract": { "type": "json", "pointer": "/completed" }
+    },
+    {
+      "_comment": "CareKit — symptom sentinel. 1.0 = no symptoms or severity < moderate. Invert symptom severity: symptom_ok = max(0, 1 - severity_normalized).",
+      "id": "carekit-localai-symptom",
+      "sensorId": "localai_carekit_symptom_ok",
+      "name": "localai/carekit/symptom_ok",
+      "region": { "offset": 196, "length": 1 },
+      "ttlMs": 86400000,
+      "normalize": { "mode": "passthrough", "clamp": true },
+      "extract": { "type": "json", "pointer": "/symptomOk" }
+    }
+  ],
+  "bandThresholds": {
+    "_comment": "Must match Python constants in core/reality_bridge.py and bandThresholds in config/integrations.healthkit-localai.json.",
+    "hr_low_bpm":      60.0,
+    "hr_high_bpm":    100.0,
+    "hrv_ok_sdnn_ms":  30.0,
+    "sleep_ok_hours":   6.5,
+    "med_adherence_ok": 0.5,
+    "task_completion_ok": 0.5,
+    "symptom_ok_threshold": 0.5
+  }
+}

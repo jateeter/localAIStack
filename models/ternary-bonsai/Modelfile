@@ -3,9 +3,11 @@
 # Source:  https://huggingface.co/prism-ml/Bonsai-4B-gguf
 # License: Apache 2.0
 #
-# The HF repo ships two files; Q1_0 is explicit about the 1-bit quant.  Ollama
-# resolves `hf.co/<user>/<repo>:<quant>` to the matching GGUF.
-FROM hf.co/prism-ml/Bonsai-4B-gguf:Q1_0
+# NOTE: we reference a local GGUF (downloaded by setup.sh) rather than Ollama's
+# `FROM hf.co/<user>/<repo>:<quant>` syntax — the latter requires Ollama >= 0.4,
+# and users on 0.3.x fail with "unexpected status code 200" mid-pull.  Local
+# files work on every Ollama version.
+FROM ./gguf/Bonsai-4B-Q1_0.gguf
 
 # Qwen3 uses ChatML-style role tokens.  The GGUF ships its own chat template in
 # metadata; declaring it here keeps behaviour identical if Ollama ever falls

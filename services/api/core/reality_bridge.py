@@ -66,12 +66,15 @@ log = structlog.get_logger()
 _SSL_VERIFY: bool | str = os.getenv("RE_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
 
 # ── localAI sensor definitions ────────────────────────────────────────────────
-# Three PE sensors, one per observable stream the bridge drives:
+# RAG/agent PE sensors:
 #   - rag retrieval  (doc_count_norm, avg_score)        → [52:56]
 #   - rag grading    (kept_ratio,    rewrite_count_norm) → [56:60]
 #   - agent activity (tool_calls,    tool_errors,   reasoning_depth) → [64:68]
-# All three are "sensor" sources, so writes bypass auto-assembly ordering and
-# land directly in the named region.
+# Health PE sensors (band values — 1.0 = in nominal range, 0.0 = out):
+#   - health.hr.ok   → [186:187]
+#   - health.hrv.ok  → [187:188]
+#   - health.sleep.ok → [188:189]
+# All sensors bypass auto-assembly and land directly in the named region.
 
 _RAG_SENSORS = [
     {
@@ -91,6 +94,54 @@ _RAG_SENSORS = [
         "name": "localai/agent_activity",
         "region": {"offset": 64, "length": 4},
         "ttlMs": 30_000,
+    },
+]
+
+# Personal health band sensors — [186:189].  Each carries a 1-element region
+# (single byte) so the RE can read HR, HRV, and sleep independently.  All use
+# long TTLs matching the HealthKit delivery cadence for each data type.
+_HEALTH_SENSORS = [
+    {
+        "sensorId": "localai_health_hr_ok",
+        "name": "localai/health/hr_ok",
+        "region": {"offset": 186, "length": 1},
+        "ttlMs": 300_000,      # 5 min — heart rate can change quickly
+    },
+    {
+        "sensorId": "localai_health_hrv_ok",
+        "name": "localai/health/hrv_ok",
+        "region": {"offset": 187, "length": 1},
+        "ttlMs": 900_000,      # 15 min — HRV is a slower-moving metric
+    },
+    {
+        "sensorId": "localai_health_sleep_ok",
+        "name": "localai/health/sleep_ok",
+        "region": {"offset": 188, "length": 1},
+        "ttlMs": 86_400_000,   # 24 h — sleep updates once per day
+    },
+]
+
+# CareKit compliance sensors — [194:197].  Pre-normalised ratios [0.0, 1.0].
+# Unlike health sensors (binary band normalization), CareKit scalars carry
+# ratio values directly: the iOS bridge computes them from OCKStore outcomes.
+_CAREKIT_SENSORS = [
+    {
+        "sensorId": "localai_carekit_med_adherence",
+        "name": "localai/carekit/med_adherence",
+        "region": {"offset": 194, "length": 1},
+        "ttlMs": 3_600_000,    # 1 h — medication dose window
+    },
+    {
+        "sensorId": "localai_carekit_task_completion",
+        "name": "localai/carekit/task_completion",
+        "region": {"offset": 195, "length": 1},
+        "ttlMs": 86_400_000,   # 24 h — daily task schedule
+    },
+    {
+        "sensorId": "localai_carekit_symptom_ok",
+        "name": "localai/carekit/symptom_ok",
+        "region": {"offset": 196, "length": 1},
+        "ttlMs": 86_400_000,   # 24 h — symptom check-in cadence
     },
 ]
 
@@ -119,6 +170,29 @@ _AGENT_ACT_STRUGGLING = 70
 # A single 4-byte probe at the first window is enough to decode the tier.
 _AI_LOAD_TIER_OFFSET = 120
 
+# personal_health_baseline machine — [186:190] input, [190:194] output.
+# Free region: AI DC machine outputs end at 186; next allocation starts here.
+_HEALTH_MACHINE_PATH = _MACHINES_DIR / "personal_health_baseline.json"
+_HEALTH_MACHINE_NAME = "localai/personal_health_baseline"
+_HEALTH_OUTPUT_OFFSET = 190  # one-hot: [thriving, balanced, watch, attention]
+
+# Band thresholds for push_health_signal() normalization — must stay aligned
+# with the sensor region descriptions in personal_health_baseline.json.
+_HR_LOW_BPM    = 60.0
+_HR_HIGH_BPM   = 100.0
+_HRV_OK_MS     = 30.0   # SDNN ≥ 30 ms = healthy recovery
+_SLEEP_OK_HOURS = 6.5
+
+# medication_adherence machine — [194:198] input, [198:202] output.
+_CAREKIT_MACHINE_PATH = _MACHINES_DIR / "medication_adherence.json"
+_CAREKIT_MACHINE_NAME = "localai/medication_adherence"
+_CAREKIT_OUTPUT_OFFSET = 198  # one-hot: [adherent, partial, lapsed, concern]
+
+# session_health_context bistable carry — reads [190:194], writes [202:206].
+_HEALTH_CARRY_MACHINE_PATH = _MACHINES_DIR / "session_health_context.json"
+_HEALTH_CARRY_MACHINE_NAME = "localai/session_health_context"
+_HEALTH_CARRY_OFFSET = 202    # carry: [last_thriving, last_balanced, last_watch, last_attention]
+
 # ── Session context carry machine definitions ─────────────────────────────────
 
 _SESSION_MACHINE_DEFS = [
@@ -126,6 +200,8 @@ _SESSION_MACHINE_DEFS = [
     {"path": _MACHINES_DIR / "session_agent_context.json",      "name": "localai/session_agent_context"},
     {"path": _MACHINES_DIR / "ai_load_bridge.json",             "name": "localai/ai_load_bridge"},
     {"path": _MACHINES_DIR / "agent_activity_classifier.json",  "name": "localai/agent_activity_classifier"},
+    # Phase 4b: health carry — reads personal_health_baseline output [190:194], writes carry [202:206]
+    {"path": _HEALTH_CARRY_MACHINE_PATH,                         "name": _HEALTH_CARRY_MACHINE_NAME},
 ]
 
 # Perceptual space indices for session context carry read-back
@@ -165,15 +241,38 @@ _EXPECTED_MACHINE_OFFSETS = [
         "input":  {"offset": 64,  "length": 4},
         "output": {"offset": 68,  "length": 4},
     },
+    {
+        "path":   _HEALTH_MACHINE_PATH,  # personal_health_baseline.json
+        "input":  {"offset": 186, "length": 4},
+        "output": {"offset": 190, "length": 4},
+    },
+    # Phase 4a: CareKit medication adherence classifier
+    {
+        "path":   _CAREKIT_MACHINE_PATH,  # medication_adherence.json
+        "input":  {"offset": 194, "length": 4},
+        "output": {"offset": 198, "length": 4},
+    },
+    # Phase 4b: health session carry (reads health output, writes carry)
+    {
+        "path":   _HEALTH_CARRY_MACHINE_PATH,  # session_health_context.json
+        "input":  {"offset": 190, "length": 4},
+        "output": {"offset": 202, "length": 4},
+    },
 ]
 
 # Maps sensorId → the machine whose input window that sensor must live inside.
 # The drift guard uses this to confirm sensors and their consumer machines stay
 # wired together after any offset move.
 _SENSOR_TO_MACHINE = {
-    "localai_rag_retrieval":  "rag_corrective_cycle.json",
-    "localai_rag_grading":    "rag_corrective_cycle.json",
-    "localai_agent_activity": "agent_activity_classifier.json",
+    "localai_rag_retrieval":             "rag_corrective_cycle.json",
+    "localai_rag_grading":               "rag_corrective_cycle.json",
+    "localai_agent_activity":            "agent_activity_classifier.json",
+    "localai_health_hr_ok":              "personal_health_baseline.json",
+    "localai_health_hrv_ok":             "personal_health_baseline.json",
+    "localai_health_sleep_ok":           "personal_health_baseline.json",
+    "localai_carekit_med_adherence":     "medication_adherence.json",
+    "localai_carekit_task_completion":   "medication_adherence.json",
+    "localai_carekit_symptom_ok":        "medication_adherence.json",
 }
 
 # ── Topology bindings (populated by bind_graph_topology at startup) ───────────
@@ -234,8 +333,10 @@ def verify_machine_offsets() -> list[str]:
                 )
 
     # Each sensor must land inside the input window of the machine that consumes it.
+    # Check all sensor lists: RAG, health, and CareKit.
     machines_by_filename = {spec["path"].name: spec for spec in _EXPECTED_MACHINE_OFFSETS}
-    for sensor in _RAG_SENSORS:
+    all_sensors = _RAG_SENSORS + _HEALTH_SENSORS + _CAREKIT_SENSORS
+    for sensor in all_sensors:
         sid   = sensor["sensorId"]
         fname = _SENSOR_TO_MACHINE.get(sid)
         if fname is None:
@@ -288,32 +389,39 @@ def verify_machine_offsets() -> list[str]:
     return mismatches
 
 
-# ── Startup: RAG sensors + corrective-cycle machine ──────────────────────────
+# ── Startup: sensor registration (RAG + health) ──────────────────────────────
+
+def _register_sensor_list(client: "httpx.Client", sensors: list, existing_ids: set) -> None:
+    """Register a list of sensor defs; idempotent (skips existing sensorIds)."""
+    for sensor in sensors:
+        sid = sensor["sensorId"]
+        if sid in existing_ids:
+            log.info("reality_bridge.sensor_exists", sensor_id=sid)
+            continue
+        payload = {
+            "type": "sensor",
+            "name": sensor["name"],
+            "region": sensor["region"],
+            "active": True,
+            "sensorId": sid,
+            "lastValue": [],
+            "lastUpdated": None,
+            "ttlMs": sensor["ttlMs"],
+        }
+        r = client.post(f"{_pe_url()}/api/sources", json=payload)
+        r.raise_for_status()
+        log.info("reality_bridge.sensor_registered",
+                 sensor_id=sid, region=sensor["region"])
+
 
 def register_sensors() -> None:
-    """Create the two RAG sensor sources in the PE; skips existing sensorIds."""
+    """Create RAG, personal health, and CareKit sensor sources in the PE."""
     try:
         with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
             existing_ids = _get_existing_sensor_ids(client)
-            for sensor in _RAG_SENSORS:
-                sid = sensor["sensorId"]
-                if sid in existing_ids:
-                    log.info("reality_bridge.sensor_exists", sensor_id=sid)
-                    continue
-                payload = {
-                    "type": "sensor",
-                    "name": sensor["name"],
-                    "region": sensor["region"],
-                    "active": True,
-                    "sensorId": sid,
-                    "lastValue": [],
-                    "lastUpdated": None,
-                    "ttlMs": sensor["ttlMs"],
-                }
-                r = client.post(f"{_pe_url()}/api/sources", json=payload)
-                r.raise_for_status()
-                log.info("reality_bridge.sensor_registered",
-                         sensor_id=sid, region=sensor["region"])
+            _register_sensor_list(client, _RAG_SENSORS, existing_ids)
+            _register_sensor_list(client, _HEALTH_SENSORS, existing_ids)
+            _register_sensor_list(client, _CAREKIT_SENSORS, existing_ids)
     except Exception as exc:
         log.warning("reality_bridge.register_failed",
                     error=str(exc), pe_url=_pe_url(),
@@ -378,6 +486,58 @@ def import_session_machines() -> None:
                     error=str(exc), re_url=_re_url())
 
 
+def import_carekit_machine() -> None:
+    """Import medication_adherence into the RE if not already loaded."""
+    try:
+        machine_json = json.loads(_CAREKIT_MACHINE_PATH.read_text())
+    except Exception as exc:
+        log.warning("reality_bridge.carekit_machine_json_not_found",
+                    path=str(_CAREKIT_MACHINE_PATH), error=str(exc))
+        return
+
+    try:
+        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            existing = _get_existing_machine_names(client)
+            if _CAREKIT_MACHINE_NAME in existing:
+                log.info("reality_bridge.carekit_machine_exists",
+                         name=_CAREKIT_MACHINE_NAME)
+                return
+            r = client.post(f"{_re_url()}/api/machines", json=machine_json)
+            r.raise_for_status()
+            machine_id = r.json().get("machine", {}).get("id", "unknown")
+            log.info("reality_bridge.carekit_machine_imported",
+                     name=_CAREKIT_MACHINE_NAME, machine_id=machine_id)
+    except Exception as exc:
+        log.warning("reality_bridge.carekit_machine_import_failed",
+                    error=str(exc), re_url=_re_url())
+
+
+def import_health_machines() -> None:
+    """Import personal_health_baseline into the RE if not already loaded."""
+    try:
+        machine_json = json.loads(_HEALTH_MACHINE_PATH.read_text())
+    except Exception as exc:
+        log.warning("reality_bridge.health_machine_json_not_found",
+                    path=str(_HEALTH_MACHINE_PATH), error=str(exc))
+        return
+
+    try:
+        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            existing = _get_existing_machine_names(client)
+            if _HEALTH_MACHINE_NAME in existing:
+                log.info("reality_bridge.health_machine_exists",
+                         name=_HEALTH_MACHINE_NAME)
+                return
+            r = client.post(f"{_re_url()}/api/machines", json=machine_json)
+            r.raise_for_status()
+            machine_id = r.json().get("machine", {}).get("id", "unknown")
+            log.info("reality_bridge.health_machine_imported",
+                     name=_HEALTH_MACHINE_NAME, machine_id=machine_id)
+    except Exception as exc:
+        log.warning("reality_bridge.health_machine_import_failed",
+                    error=str(exc), re_url=_re_url())
+
+
 # ── Per-request: session context read-back ───────────────────────────────────
 
 def get_session_context(ps: list) -> dict:
@@ -392,6 +552,9 @@ def get_session_context(ps: list) -> dict:
                        (output of agent_activity_classifier at [68:72])
       ai_load_tier   — "nominal" | "elevated" | "critical" | None
                        (decoded from the ai_load_bridge projection at [120:124])
+      health_state   — "thriving" | "balanced" | "watch" | "attention" | None
+                       (from session_health_context carry at [202:206]; None
+                        until the first health push this RE session)
     """
     def _safe(idx: int) -> float:
         return ps[idx] if len(ps) > idx else 0.0
@@ -417,6 +580,7 @@ def get_session_context(ps: list) -> dict:
         },
         "agent_activity": _decode_agent_activity(ps),
         "ai_load_tier":   get_ai_load_tier(ps),
+        "health_state":   get_health_state_from_carry(ps),
     }
 
 
@@ -458,6 +622,200 @@ def get_ai_load_tier(ps: list) -> str | None:
     if v0 >= 0.10:
         return "nominal"
     return None
+
+
+def get_health_state(ps: list) -> str | None:
+    """
+    Decode the personal_health_baseline output from perceptualSpace[190:194].
+    The four states are one-hot and mutually exclusive; the first ≥ 0.5 wins.
+
+    Returns "thriving" | "balanced" | "watch" | "attention" | None.
+    None means the machine has not yet written (no health sensors pushed).
+    """
+    def _safe(idx: int) -> float:
+        return ps[idx] if len(ps) > idx else 0.0
+
+    if _safe(_HEALTH_OUTPUT_OFFSET)     >= 0.5:
+        return "thriving"
+    if _safe(_HEALTH_OUTPUT_OFFSET + 1) >= 0.5:
+        return "balanced"
+    if _safe(_HEALTH_OUTPUT_OFFSET + 2) >= 0.5:
+        return "watch"
+    if _safe(_HEALTH_OUTPUT_OFFSET + 3) >= 0.5:
+        return "attention"
+    return None
+
+
+def get_health_state_from_carry(ps: list) -> str | None:
+    """
+    Decode health state from the session carry at [202:206].
+
+    Differs from get_health_state() which reads the live classifier output at
+    [190:194]. The carry persists between health pushes via PE carry-forward
+    semantics, so this returns the last-seen health state even when no health
+    sensor has been pushed in the current RE session cycle.
+
+    Returns "thriving" | "balanced" | "watch" | "attention" | None.
+    None when the carry region is all-zero (no health push has occurred yet).
+    """
+    def _safe(idx: int) -> float:
+        return ps[idx] if len(ps) > idx else 0.0
+
+    if _safe(_HEALTH_CARRY_OFFSET)     >= 0.5:
+        return "thriving"
+    if _safe(_HEALTH_CARRY_OFFSET + 1) >= 0.5:
+        return "balanced"
+    if _safe(_HEALTH_CARRY_OFFSET + 2) >= 0.5:
+        return "watch"
+    if _safe(_HEALTH_CARRY_OFFSET + 3) >= 0.5:
+        return "attention"
+    return None
+
+
+def get_current_health_state() -> str | None:
+    """
+    Read the current health state from the RE perceptual space without
+    triggering a new PE push. Uses GET /api/perceptual-simulation/state on the
+    RE, reads the live classifier output at [190:194] first, then falls back
+    to the session carry at [202:206] (populated by session_health_context
+    bistable machine from prior pushes this RE session).
+
+    Returns "thriving" | "balanced" | "watch" | "attention" | None.
+    None when the RE is unreachable or no health push has occurred in this RE session.
+    """
+    try:
+        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
+            r = client.get(f"{_re_url()}/api/perceptual-simulation/state")
+            r.raise_for_status()
+            ps = r.json().get("state", {}).get("perceptualSpace", [])
+            # Prefer live output; fall back to carry when classifier is silent.
+            state = get_health_state(ps) or get_health_state_from_carry(ps)
+            log.debug("reality_bridge.health_state_current", state=state)
+            return state
+    except Exception as exc:
+        log.debug("reality_bridge.health_state_read_failed", error=str(exc))
+        return None
+
+
+def get_carekit_state(ps: list) -> str | None:
+    """
+    Decode the medication_adherence output from perceptualSpace[198:202].
+    The four states are one-hot and mutually exclusive; the first ≥ 0.5 wins.
+
+    Returns "adherent" | "partial" | "lapsed" | "concern" | None.
+    None means the machine has not yet written (no CareKit sensors pushed).
+    """
+    def _safe(idx: int) -> float:
+        return ps[idx] if len(ps) > idx else 0.0
+
+    if _safe(_CAREKIT_OUTPUT_OFFSET)     >= 0.5:
+        return "adherent"
+    if _safe(_CAREKIT_OUTPUT_OFFSET + 1) >= 0.5:
+        return "partial"
+    if _safe(_CAREKIT_OUTPUT_OFFSET + 2) >= 0.5:
+        return "lapsed"
+    if _safe(_CAREKIT_OUTPUT_OFFSET + 3) >= 0.5:
+        return "concern"
+    return None
+
+
+# ── Per-request: personal health signal write ─────────────────────────────────
+
+def push_health_signal(
+    hr_bpm:       float,
+    hrv_sdnn_ms:  float,
+    sleep_hours:  float,
+) -> str:
+    """
+    Write personal health band values to the PE, trigger a push so the
+    personal_health_baseline machine evaluates them, and return the
+    decoded health state.
+
+    Band normalization (mirrors personal_health_baseline.json sensorSources):
+      hr_bpm in [60, 100]   → hr.ok  = 1.0, else 0.0
+      hrv_sdnn_ms >= 30     → hrv.ok = 1.0, else 0.0
+      sleep_hours >= 6.5    → sleep.ok = 1.0, else 0.0
+
+    Returns: "thriving" | "balanced" | "watch" | "attention"
+    Falls back to "watch" when the PE/RE is unreachable (safe default —
+    watch prompts the AI to be mindful without assuming a crisis).
+    """
+    hr_ok    = 1.0 if _HR_LOW_BPM <= hr_bpm <= _HR_HIGH_BPM else 0.0
+    hrv_ok   = 1.0 if hrv_sdnn_ms >= _HRV_OK_MS             else 0.0
+    sleep_ok = 1.0 if sleep_hours  >= _SLEEP_OK_HOURS        else 0.0
+
+    _write_sensor("localai_health_hr_ok",    [hr_ok])
+    _write_sensor("localai_health_hrv_ok",   [hrv_ok])
+    _write_sensor("localai_health_sleep_ok", [sleep_ok])
+
+    return _trigger_push_and_read_health()
+
+
+def _trigger_push_and_read_health() -> str:
+    """POST /api/push, read personal_health_baseline output at [190:194]."""
+    try:
+        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            r = client.post(f"{_pe_url()}/api/push")
+            r.raise_for_status()
+            data  = r.json()
+            ps    = data.get("step", {}).get("perceptualSpace", [])
+            state = get_health_state(ps)
+            log.info("reality_bridge.health_state_read",
+                     state=state,
+                     global_step=data.get("globalStep"))
+            return state or "watch"
+    except Exception as exc:
+        log.debug("reality_bridge.health_push_skipped", error=str(exc))
+    return "watch"
+
+
+# ── Per-request: CareKit compliance signal write ─────────────────────────────
+
+def push_carekit_signal(
+    med_adherence_ratio:   float,  # doses taken / doses scheduled — [0.0, 1.0]
+    task_completion_ratio: float,  # CareKit tasks completed / scheduled — [0.0, 1.0]
+    symptom_ok:            float,  # 1.0 = no/low symptoms; 0.0 = moderate+ symptoms
+) -> str:
+    """
+    Write CareKit compliance scalars to PE, trigger a push so the
+    medication_adherence machine evaluates them, and return the decoded state.
+
+    Unlike push_health_signal() which performs band normalization (bpm → 0/1),
+    these values are already [0.0, 1.0] ratios — the iOS CareKit bridge or the
+    simulate script computes them from OCKStore outcomes before calling here.
+
+    Returns: "adherent" | "partial" | "lapsed" | "concern"
+    Falls back to "partial" when the PE/RE is unreachable (safe default —
+    partial prompts gentle re-engagement without assuming a crisis).
+    """
+    # Clamp to [0, 1] to guard against caller arithmetic errors
+    med   = max(0.0, min(1.0, med_adherence_ratio))
+    task  = max(0.0, min(1.0, task_completion_ratio))
+    symp  = max(0.0, min(1.0, symptom_ok))
+
+    _write_sensor("localai_carekit_med_adherence",   [med])
+    _write_sensor("localai_carekit_task_completion", [task])
+    _write_sensor("localai_carekit_symptom_ok",      [symp])
+
+    return _trigger_push_and_read_carekit()
+
+
+def _trigger_push_and_read_carekit() -> str:
+    """POST /api/push, read medication_adherence output at [198:202]."""
+    try:
+        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            r = client.post(f"{_pe_url()}/api/push")
+            r.raise_for_status()
+            data  = r.json()
+            ps    = data.get("step", {}).get("perceptualSpace", [])
+            state = get_carekit_state(ps)
+            log.info("reality_bridge.carekit_state_read",
+                     state=state,
+                     global_step=data.get("globalStep"))
+            return state or "partial"
+    except Exception as exc:
+        log.debug("reality_bridge.carekit_push_skipped", error=str(exc))
+    return "partial"
 
 
 # ── Startup: graph topology binding ──────────────────────────────────────────

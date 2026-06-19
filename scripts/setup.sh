@@ -51,19 +51,36 @@ ollama pull "$LLM_MODEL"
 ok "LLM model ready: $LLM_MODEL"
 
 # ── Register Ternary Bonsai 4B from local Modelfile ───────────────────────────
-# The `ternary-bonsai:4` tag isn't a public Ollama model — it's built from the
-# Modelfile in models/ternary-bonsai/, which sources the GGUF from HuggingFace
-# (prism-ml/Bonsai-4B-gguf).  Once created it shows up alongside other models
-# in Open WebUI's selector.
-BONSAI_MODELFILE="$ROOT_DIR/models/ternary-bonsai/Modelfile"
+# The `ternary-bonsai:4` tag isn't a public Ollama model — we download the GGUF
+# from huggingface.co/prism-ml/Bonsai-4B-gguf and register it via Modelfile.
+# Local-file registration works on every Ollama version, whereas the
+# `FROM hf.co/<user>/<repo>:<quant>` syntax requires Ollama >= 0.4.
+BONSAI_DIR="$ROOT_DIR/models/ternary-bonsai"
+BONSAI_MODELFILE="$BONSAI_DIR/Modelfile"
+BONSAI_GGUF="$BONSAI_DIR/gguf/Bonsai-4B-Q1_0.gguf"
+BONSAI_URL="https://huggingface.co/prism-ml/Bonsai-4B-gguf/resolve/main/Bonsai-4B-Q1_0.gguf"
+
 if ollama list | awk '{print $1}' | grep -qx "ternary-bonsai:4"; then
     ok "Ternary Bonsai already registered (ternary-bonsai:4)"
 else
     [[ -f "$BONSAI_MODELFILE" ]] || die "Missing $BONSAI_MODELFILE"
+    if [[ ! -f "$BONSAI_GGUF" ]]; then
+        info "Downloading Bonsai-4B-Q1_0.gguf (~546 MB) from HuggingFace..."
+        mkdir -p "$(dirname "$BONSAI_GGUF")"
+        curl -L --fail --progress-bar -o "$BONSAI_GGUF" "$BONSAI_URL" \
+            || die "GGUF download failed — check connectivity to huggingface.co"
+        ok "GGUF downloaded: $BONSAI_GGUF"
+    else
+        ok "GGUF already present: $BONSAI_GGUF"
+    fi
     info "Registering ternary-bonsai:4 from $BONSAI_MODELFILE"
-    info "  (first run pulls ~572 MB from huggingface.co/prism-ml/Bonsai-4B-gguf)"
-    ollama create ternary-bonsai:4 -f "$BONSAI_MODELFILE"
-    ok "Ternary Bonsai registered — selectable in Open WebUI at http://localhost:4080"
+    ollama create ternary-bonsai:4 -f "$BONSAI_MODELFILE" \
+        || die "ollama create failed — Ollama may need upgrading (>= 0.4 required for Q1_0 quant). Current: $(ollama --version 2>&1 | head -1)"
+    ok "Ternary Bonsai registered — visible in Open WebUI at http://localhost:4080"
+    warn "KNOWN ISSUE: prism-ml Bonsai ships only a Q1_0 (BitNet ternary) GGUF, which"
+    warn "Ollama's bundled GGML does not yet recognize (file_type=unknown → load fails)."
+    warn "Selecting ternary-bonsai:4 or using it for embeddings will 500 until upstream"
+    warn "Ollama ships GGML with TQ1_0/BitNet support. Track: github.com/ollama/ollama"
 fi
 
 # Optional embedding model — skip silently if it's the Bonsai LLM name (already
