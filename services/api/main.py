@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from routers import health, chat, rag, graph
+from routers import health, chat, patient_wellness, rag, graph
 from routers.graphql_endpoint import graphql_app, events_router as graphql_events_router
 
 log = structlog.get_logger()
@@ -82,6 +82,7 @@ app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(rag.router)
 app.include_router(graph.router)
+app.include_router(patient_wellness.router)
 app.include_router(graphql_app, prefix="/graphql")
 app.include_router(graphql_events_router)
 

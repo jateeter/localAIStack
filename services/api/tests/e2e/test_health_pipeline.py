@@ -28,6 +28,7 @@ Override default URLs:
 from __future__ import annotations
 
 import json
+import os
 import time
 
 import httpx
@@ -40,6 +41,15 @@ _HR_LOW_BPM     = 60.0
 _HR_HIGH_BPM    = 100.0
 _HRV_OK_MS      = 30.0
 _SLEEP_OK_HOURS = 6.5
+
+
+def _ssl_verify(url: str) -> bool:
+    configured = os.getenv("RE_SSL_VERIFY")
+    if configured is not None:
+        return configured.lower() not in ("false", "0", "no")
+    return not url.startswith(
+        ("https://localhost", "https://127.0.0.1", "https://host.docker.internal")
+    )
 
 _HEALTH_SENSORS = [
     {"sensorId": "localai_health_hr_ok",    "region": {"offset": 186, "length": 1}, "ttlMs": 300_000},
@@ -70,7 +80,7 @@ def _band(hr: float, hrv: float, sleep: float) -> tuple[float, float, float]:
 
 def _ensure_health_sensors(pe_url: str) -> None:
     """Idempotently register health sensors in the PE."""
-    r = httpx.get(f"{pe_url}/api/sources", timeout=5)
+    r = httpx.get(f"{pe_url}/api/sources", timeout=5, verify=_ssl_verify(pe_url))
     r.raise_for_status()
     existing = {s.get("sensorId") for s in r.json().get("sources", []) if s.get("type") == "sensor"}
     for sensor in _HEALTH_SENSORS:
@@ -89,6 +99,7 @@ def _ensure_health_sensors(pe_url: str) -> None:
                 "ttlMs": sensor["ttlMs"],
             },
             timeout=5,
+            verify=_ssl_verify(pe_url),
         ).raise_for_status()
 
 
@@ -101,9 +112,14 @@ def _push_health_scenario(pe_url: str, scenario: str) -> str | None:
         ("localai_health_hrv_ok",   hrv_ok),
         ("localai_health_sleep_ok", sleep_ok),
     ]:
-        httpx.post(f"{pe_url}/api/sensors/{sid}", json={"values": [val]}, timeout=5).raise_for_status()
+        httpx.post(
+            f"{pe_url}/api/sensors/{sid}",
+            json={"values": [val]},
+            timeout=5,
+            verify=_ssl_verify(pe_url),
+        ).raise_for_status()
 
-    push_r = httpx.post(f"{pe_url}/api/push", timeout=10)
+    push_r = httpx.post(f"{pe_url}/api/push", timeout=10, verify=_ssl_verify(pe_url))
     push_r.raise_for_status()
     ps = push_r.json().get("step", {}).get("perceptualSpace", [])
     return _decode_state(ps)
@@ -134,7 +150,7 @@ def _health_state_from_api(api_url: str) -> str | None:
 def test_health_sensors_register_in_pe(live_pe: str) -> None:
     """All three health sensors must be successfully registered in the PE."""
     _ensure_health_sensors(live_pe)
-    r = httpx.get(f"{live_pe}/api/sources", timeout=5)
+    r = httpx.get(f"{live_pe}/api/sources", timeout=5, verify=_ssl_verify(live_pe))
     r.raise_for_status()
     existing = {s.get("sensorId") for s in r.json().get("sources", []) if s.get("type") == "sensor"}
     for sensor in _HEALTH_SENSORS:
@@ -152,7 +168,7 @@ def test_health_machine_imported_in_re(live_api: str, live_re: str) -> None:
     The startup lifespan should have imported personal_health_baseline into the RE.
     Verify it's present by listing machines.
     """
-    r = httpx.get(f"{live_re}/api/machines", timeout=5)
+    r = httpx.get(f"{live_re}/api/machines", timeout=5, verify=_ssl_verify(live_re))
     r.raise_for_status()
     names = {m.get("name") for m in r.json().get("machines", [])}
     assert _HEALTH_MACHINE_NAME in names, (
@@ -399,7 +415,7 @@ _CAREKIT_SCENARIOS = {
 
 
 def _ensure_carekit_sensors(pe_url: str) -> None:
-    r = httpx.get(f"{pe_url}/api/sources", timeout=5)
+    r = httpx.get(f"{pe_url}/api/sources", timeout=5, verify=_ssl_verify(pe_url))
     r.raise_for_status()
     existing = {s.get("sensorId") for s in r.json().get("sources", []) if s.get("type") == "sensor"}
     for sensor in _CAREKIT_SENSORS:
@@ -418,6 +434,7 @@ def _ensure_carekit_sensors(pe_url: str) -> None:
                 "ttlMs": sensor["ttlMs"],
             },
             timeout=5,
+            verify=_ssl_verify(pe_url),
         ).raise_for_status()
 
 
@@ -428,9 +445,14 @@ def _push_carekit_scenario(pe_url: str, scenario: str) -> str | None:
         ("localai_carekit_task_completion", task),
         ("localai_carekit_symptom_ok",      symp),
     ]:
-        httpx.post(f"{pe_url}/api/sensors/{sid}", json={"values": [val]}, timeout=5).raise_for_status()
+        httpx.post(
+            f"{pe_url}/api/sensors/{sid}",
+            json={"values": [val]},
+            timeout=5,
+            verify=_ssl_verify(pe_url),
+        ).raise_for_status()
 
-    push_r = httpx.post(f"{pe_url}/api/push", timeout=10)
+    push_r = httpx.post(f"{pe_url}/api/push", timeout=10, verify=_ssl_verify(pe_url))
     push_r.raise_for_status()
     ps = push_r.json().get("step", {}).get("perceptualSpace", [])
     return _decode_carekit_state(ps)
@@ -458,7 +480,7 @@ def _decode_health_carry(ps: list) -> str | None:
 def test_carekit_sensors_register_in_pe(live_pe: str) -> None:
     """All three CareKit sensors must be successfully registered in the PE."""
     _ensure_carekit_sensors(live_pe)
-    r = httpx.get(f"{live_pe}/api/sources", timeout=5)
+    r = httpx.get(f"{live_pe}/api/sources", timeout=5, verify=_ssl_verify(live_pe))
     r.raise_for_status()
     existing = {s.get("sensorId") for s in r.json().get("sources", []) if s.get("type") == "sensor"}
     for sensor in _CAREKIT_SENSORS:
@@ -470,7 +492,7 @@ def test_carekit_sensors_register_in_pe(live_pe: str) -> None:
 @pytest.mark.live
 def test_carekit_machine_imported_in_re(live_api: str, live_re: str) -> None:
     """medication_adherence must be imported into the RE by the startup lifespan."""
-    r = httpx.get(f"{live_re}/api/machines", timeout=5)
+    r = httpx.get(f"{live_re}/api/machines", timeout=5, verify=_ssl_verify(live_re))
     r.raise_for_status()
     names = {m.get("name") for m in r.json().get("machines", [])}
     assert _CAREKIT_MACHINE_NAME in names, (
@@ -497,7 +519,7 @@ def test_carekit_push_fires_correct_re_state(live_pe: str, scenario: str) -> Non
 @pytest.mark.live
 def test_health_carry_machine_imported_in_re(live_api: str, live_re: str) -> None:
     """session_health_context must be imported into the RE by the startup lifespan."""
-    r = httpx.get(f"{live_re}/api/machines", timeout=5)
+    r = httpx.get(f"{live_re}/api/machines", timeout=5, verify=_ssl_verify(live_re))
     r.raise_for_status()
     names = {m.get("name") for m in r.json().get("machines", [])}
     assert _HEALTH_CARRY_MACHINE_NAME in names, (
@@ -520,7 +542,11 @@ def test_health_carry_persists_after_push(live_pe: str, live_re: str) -> None:
     _push_health_scenario(live_pe, "thriving")
 
     # Read carry from RE state (bypassing PE push)
-    r = httpx.get(f"{live_re}/api/perceptual-simulation/state", timeout=5)
+    r = httpx.get(
+        f"{live_re}/api/perceptual-simulation/state",
+        timeout=5,
+        verify=_ssl_verify(live_re),
+    )
     r.raise_for_status()
     ps = r.json().get("state", {}).get("perceptualSpace", [])
     carry_after_push = _decode_health_carry(ps)
@@ -530,7 +556,11 @@ def test_health_carry_persists_after_push(live_pe: str, live_re: str) -> None:
     )
 
     # Quiet push — no sensor updates; carry must hold
-    quiet_r = httpx.post(f"{live_pe}/api/push", timeout=10)
+    quiet_r = httpx.post(
+        f"{live_pe}/api/push",
+        timeout=10,
+        verify=_ssl_verify(live_pe),
+    )
     quiet_r.raise_for_status()
     ps_quiet = quiet_r.json().get("step", {}).get("perceptualSpace", [])
     carry_after_quiet = _decode_health_carry(ps_quiet)
