@@ -141,7 +141,7 @@ services:
       # __file__ heuristic in reality_bridge.py overshoots to / when services/api
       # is mounted at /app (only 2 parents to root, not 4).
       PE_URL: "${PE_URL:-https://host.docker.internal:3004}"
-      RE_URL: "${RE_URL:-https://host.docker.internal:3000}"
+      RE_URL: "${RE_URL:-https://host.docker.internal:5001}"
       RE_SSL_VERIFY: "false"
       MACHINES_DIR: "/app/data/machines"
     volumes:
