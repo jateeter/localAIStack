@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from routers import health, chat, rag, graph
+from routers import health, chat, patient_wellness, rag, graph
 from routers.graphql_endpoint import graphql_app, events_router as graphql_events_router
 
 log = structlog.get_logger()
@@ -34,19 +34,30 @@ async def lifespan(app: FastAPI):
         )
         # Pure local-file structural check; runs before any network call so
         # drift surfaces even when the PE/RE are unreachable.
-        verify_machine_offsets()
-        register_sensors()
-        log.info("Reality Engine sensors registered", pe_url=s.pe_url)
-        import_machine_if_missing()
-        log.info("Reality Engine RAG machine ready", re_url=s.re_url)
-        import_session_machines()
-        log.info("Reality Engine session context machines ready")
-        import_health_machines()
-        log.info("Reality Engine personal health machine ready")
-        import_carekit_machine()
-        log.info("Reality Engine CareKit machine ready")
-        bind_graph_topology()
-        log.info("Reality Engine topology bound")
+        offset_mismatches = verify_machine_offsets()
+        bridge_steps = {
+            "offsets": not offset_mismatches,
+            "sensors": register_sensors(),
+            "rag_machine": import_machine_if_missing(),
+            "session_machines": import_session_machines(),
+            "health_machine": import_health_machines(),
+            "carekit_machine": import_carekit_machine(),
+            "topology": bind_graph_topology(),
+        }
+        failed_steps = [name for name, ok in bridge_steps.items() if not ok]
+        if failed_steps:
+            log.warning(
+                "Reality Engine bridge degraded",
+                failed_steps=failed_steps,
+                pe_url=s.pe_url,
+                re_url=s.re_url,
+            )
+        else:
+            log.info(
+                "Reality Engine bridge ready",
+                pe_url=s.pe_url,
+                re_url=s.re_url,
+            )
     except Exception as e:
         log.warning("Reality Engine bridge not available", error=str(e))
     yield
@@ -71,6 +82,7 @@ app.include_router(health.router)
 app.include_router(chat.router)
 app.include_router(rag.router)
 app.include_router(graph.router)
+app.include_router(patient_wellness.router)
 app.include_router(graphql_app, prefix="/graphql")
 app.include_router(graphql_events_router)
 

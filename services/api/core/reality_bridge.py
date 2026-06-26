@@ -414,7 +414,7 @@ def _register_sensor_list(client: "httpx.Client", sensors: list, existing_ids: s
                  sensor_id=sid, region=sensor["region"])
 
 
-def register_sensors() -> None:
+def register_sensors() -> bool:
     """Create RAG, personal health, and CareKit sensor sources in the PE."""
     try:
         with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
@@ -422,38 +422,42 @@ def register_sensors() -> None:
             _register_sensor_list(client, _RAG_SENSORS, existing_ids)
             _register_sensor_list(client, _HEALTH_SENSORS, existing_ids)
             _register_sensor_list(client, _CAREKIT_SENSORS, existing_ids)
+            return True
     except Exception as exc:
         log.warning("reality_bridge.register_failed",
                     error=str(exc), pe_url=_pe_url(),
                     note="RAG pipeline runs normally without RE telemetry")
+        return False
 
 
-def import_machine_if_missing() -> None:
+def import_machine_if_missing() -> bool:
     """Import the rag_corrective_cycle machine into the RE if not already loaded."""
     try:
         machine_json = json.loads(_MACHINE_JSON_PATH.read_text())
     except Exception as exc:
         log.warning("reality_bridge.machine_json_not_found",
                     path=str(_MACHINE_JSON_PATH), error=str(exc))
-        return
+        return False
 
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
             existing = _get_existing_machine_names(client)
             if _MACHINE_NAME in existing:
                 log.info("reality_bridge.machine_exists", name=_MACHINE_NAME)
-                return
+                return True
             r = client.post(f"{_re_url()}/api/machines", json=machine_json)
             r.raise_for_status()
             machine_id = r.json().get("machine", {}).get("id", "unknown")
             log.info("reality_bridge.machine_imported",
                      name=_MACHINE_NAME, machine_id=machine_id)
+            return True
     except Exception as exc:
         log.warning("reality_bridge.machine_import_failed",
                     error=str(exc), re_url=_re_url())
+        return False
 
 
-def import_session_machines() -> None:
+def import_session_machines() -> bool:
     """
     Import the localAI session-side machines into the RE if not already loaded:
       - session_rag_context   (bistable carry: last RAG routing decision)
@@ -462,6 +466,7 @@ def import_session_machines() -> None:
                                at [120:144], fanning one of three PUE-tier
                                patterns across all six AI machine input windows)
     """
+    ok = True
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
             existing = _get_existing_machine_names(client)
@@ -475,25 +480,28 @@ def import_session_machines() -> None:
                 except Exception as exc:
                     log.warning("reality_bridge.session_machine_json_not_found",
                                 path=str(defn["path"]), error=str(exc))
+                    ok = False
                     continue
                 r = client.post(f"{_re_url()}/api/machines", json=machine_json)
                 r.raise_for_status()
                 machine_id = r.json().get("machine", {}).get("id", "unknown")
                 log.info("reality_bridge.session_machine_imported",
                          name=name, machine_id=machine_id)
+            return ok
     except Exception as exc:
         log.warning("reality_bridge.session_machine_import_failed",
                     error=str(exc), re_url=_re_url())
+        return False
 
 
-def import_carekit_machine() -> None:
+def import_carekit_machine() -> bool:
     """Import medication_adherence into the RE if not already loaded."""
     try:
         machine_json = json.loads(_CAREKIT_MACHINE_PATH.read_text())
     except Exception as exc:
         log.warning("reality_bridge.carekit_machine_json_not_found",
                     path=str(_CAREKIT_MACHINE_PATH), error=str(exc))
-        return
+        return False
 
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
@@ -501,25 +509,27 @@ def import_carekit_machine() -> None:
             if _CAREKIT_MACHINE_NAME in existing:
                 log.info("reality_bridge.carekit_machine_exists",
                          name=_CAREKIT_MACHINE_NAME)
-                return
+                return True
             r = client.post(f"{_re_url()}/api/machines", json=machine_json)
             r.raise_for_status()
             machine_id = r.json().get("machine", {}).get("id", "unknown")
             log.info("reality_bridge.carekit_machine_imported",
                      name=_CAREKIT_MACHINE_NAME, machine_id=machine_id)
+            return True
     except Exception as exc:
         log.warning("reality_bridge.carekit_machine_import_failed",
                     error=str(exc), re_url=_re_url())
+        return False
 
 
-def import_health_machines() -> None:
+def import_health_machines() -> bool:
     """Import personal_health_baseline into the RE if not already loaded."""
     try:
         machine_json = json.loads(_HEALTH_MACHINE_PATH.read_text())
     except Exception as exc:
         log.warning("reality_bridge.health_machine_json_not_found",
                     path=str(_HEALTH_MACHINE_PATH), error=str(exc))
-        return
+        return False
 
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
@@ -527,15 +537,17 @@ def import_health_machines() -> None:
             if _HEALTH_MACHINE_NAME in existing:
                 log.info("reality_bridge.health_machine_exists",
                          name=_HEALTH_MACHINE_NAME)
-                return
+                return True
             r = client.post(f"{_re_url()}/api/machines", json=machine_json)
             r.raise_for_status()
             machine_id = r.json().get("machine", {}).get("id", "unknown")
             log.info("reality_bridge.health_machine_imported",
                      name=_HEALTH_MACHINE_NAME, machine_id=machine_id)
+            return True
     except Exception as exc:
         log.warning("reality_bridge.health_machine_import_failed",
                     error=str(exc), re_url=_re_url())
+        return False
 
 
 # ── Per-request: session context read-back ───────────────────────────────────
@@ -820,7 +832,7 @@ def _trigger_push_and_read_carekit() -> str:
 
 # ── Startup: graph topology binding ──────────────────────────────────────────
 
-def bind_graph_topology() -> None:
+def bind_graph_topology() -> bool:
     """
     Read the node lists from the compiled LangGraph graphs, compute
     perceptual space region assignments, register PE sensors for each node,
@@ -835,9 +847,10 @@ def bind_graph_topology() -> None:
         bindings = compute_bindings()
     except Exception as exc:
         log.warning("reality_bridge.topology_bindings_failed", error=str(exc))
-        return
+        return False
 
     _TOPOLOGY_BINDINGS = bindings
+    ok = True
 
     # Register PE sensors for every node in every graph
     try:
@@ -871,6 +884,7 @@ def bind_graph_topology() -> None:
     except Exception as exc:
         log.warning("reality_bridge.topo_sensor_registration_failed",
                     error=str(exc))
+        ok = False
 
     # Import topology machines into the RE
     try:
@@ -894,10 +908,12 @@ def bind_graph_topology() -> None:
                          output_region=graph_binding["output_region"])
     except Exception as exc:
         log.warning("reality_bridge.topo_machine_import_failed", error=str(exc))
+        ok = False
 
     log.info("reality_bridge.topology_bound",
              graphs=list(bindings.keys()),
              total_sensors=sum(len(b["nodes"]) for b in bindings.values()))
+    return ok
 
 
 # ── Per-request: RAG signal writes ───────────────────────────────────────────

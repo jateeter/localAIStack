@@ -14,8 +14,8 @@ Two test tiers controlled by CLI flags:
 
 Environment variable overrides (all optional):
   LOCALAI_API_URL    default: http://localhost:4000
-  PE_URL             default: http://localhost:3004
-  RE_URL             default: http://localhost:3000
+  PE_URL             default: https://localhost:3004
+  RE_URL             default: https://localhost:5001
   E2E_TIMEOUT        seconds to wait for service readiness  default: 60
 """
 
@@ -83,12 +83,12 @@ def api_url() -> str:
 
 @pytest.fixture(scope="session")
 def pe_url() -> str:
-    return os.getenv("PE_URL", "http://localhost:3004")
+    return os.getenv("PE_URL", "https://localhost:3004")
 
 
 @pytest.fixture(scope="session")
 def re_url() -> str:
-    return os.getenv("RE_URL", "http://localhost:3000")
+    return os.getenv("RE_URL", "https://localhost:5001")
 
 
 @pytest.fixture(scope="session")
@@ -102,15 +102,25 @@ def e2e_timeout() -> int:
 def _wait_for_http(url: str, timeout: int, label: str) -> bool:
     """Poll url with GET until 200 or timeout. Returns True if reachable."""
     deadline = time.monotonic() + timeout
+    verify = _ssl_verify(url)
     while time.monotonic() < deadline:
         try:
-            r = httpx.get(url, timeout=3.0, follow_redirects=True)
+            r = httpx.get(url, timeout=3.0, follow_redirects=True, verify=verify)
             if r.status_code < 500:
                 return True
         except Exception:
             pass
         time.sleep(2)
     return False
+
+
+def _ssl_verify(url: str) -> bool:
+    configured = os.getenv("RE_SSL_VERIFY")
+    if configured is not None:
+        return configured.lower() not in ("false", "0", "no")
+    return not url.startswith(
+        ("https://localhost", "https://127.0.0.1", "https://host.docker.internal")
+    )
 
 
 @pytest.fixture(scope="session")
