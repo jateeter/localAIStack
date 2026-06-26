@@ -54,6 +54,7 @@ Perceptual space layout (256-element vector):
 import json
 import os
 import pathlib
+
 import httpx
 import structlog
 
@@ -843,7 +844,7 @@ def bind_graph_topology() -> bool:
     global _TOPOLOGY_BINDINGS
 
     try:
-        from core.topology_builder import compute_bindings, build_machine_json
+        from core.topology_builder import build_machine_json, compute_bindings
         bindings = compute_bindings()
     except Exception as exc:
         log.warning("reality_bridge.topology_bindings_failed", error=str(exc))
@@ -856,8 +857,8 @@ def bind_graph_topology() -> bool:
     try:
         with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as pe_client:
             existing_ids = _get_existing_sensor_ids(pe_client)
-            for graph_name, graph_binding in bindings.items():
-                for node, node_info in graph_binding["nodes"].items():
+            for _graph_name, graph_binding in bindings.items():
+                for _node, node_info in graph_binding["nodes"].items():
                     sid = node_info["sensor_id"]
                     if sid in existing_ids:
                         log.info("reality_bridge.topo_sensor_exists",

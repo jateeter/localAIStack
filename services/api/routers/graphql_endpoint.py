@@ -18,7 +18,6 @@ from __future__ import annotations
 import enum
 import time
 from collections import deque
-from typing import Deque, Optional
 
 import strawberry
 import structlog
@@ -60,11 +59,11 @@ class UpdateProcessStatePayload:
 class UpdateProcessStateInput:
     id: str
     rag_status_code: RagStatusCode
-    name: Optional[str] = None
-    status: Optional[str] = None
-    source_machine: Optional[str] = None
-    source_sequence: Optional[str] = None
-    context: Optional[str] = None
+    name: str | None = None
+    status: str | None = None
+    source_machine: str | None = None
+    source_sequence: str | None = None
+    context: str | None = None
 
 
 # Human-readable descriptions paired with each RAG code.  Kept here so callers
@@ -80,7 +79,7 @@ _RAG_DESCRIPTIONS = {
 # ── In-memory event log ──────────────────────────────────────────────────────
 # Small ring buffer so `/graphql/events` can show recent triggers without a
 # backing store.  Swap for Redis or Qdrant when persistence is needed.
-_EVENTS: Deque[dict] = deque(maxlen=128)
+_EVENTS: deque[dict] = deque(maxlen=128)
 
 
 def _record_event(payload: dict) -> None:

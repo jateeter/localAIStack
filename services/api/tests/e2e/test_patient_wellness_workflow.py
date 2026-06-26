@@ -34,7 +34,7 @@ def _ssl_verify(url: str) -> bool:
 
 def _close_enough(actual: list[float], expected: list[float]) -> bool:
     return len(actual) == len(expected) and all(
-        abs(float(a) - float(e)) < 0.001 for a, e in zip(actual, expected)
+        abs(float(a) - float(e)) < 0.001 for a, e in zip(actual, expected, strict=False)
     )
 
 

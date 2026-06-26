@@ -126,11 +126,15 @@ def _push_health_scenario(pe_url: str, scenario: str) -> str | None:
 
 
 def _decode_state(ps: list) -> str | None:
-    def s(i: int) -> float: return ps[i] if len(ps) > i else 0.0
-    if s(190) >= 0.5: return "thriving"
-    if s(191) >= 0.5: return "balanced"
-    if s(192) >= 0.5: return "watch"
-    if s(193) >= 0.5: return "attention"
+    def s(i: int) -> float: return ps[i] if len(ps) > i else 0.0  # noqa: E731
+    if s(190) >= 0.5:
+        return "thriving"
+    if s(191) >= 0.5:
+        return "balanced"
+    if s(192) >= 0.5:
+        return "watch"
+    if s(193) >= 0.5:
+        return "attention"
     return None
 
 
@@ -459,20 +463,28 @@ def _push_carekit_scenario(pe_url: str, scenario: str) -> str | None:
 
 
 def _decode_carekit_state(ps: list) -> str | None:
-    def s(i: int) -> float: return ps[i] if len(ps) > i else 0.0
-    if s(198) >= 0.5: return "adherent"
-    if s(199) >= 0.5: return "partial"
-    if s(200) >= 0.5: return "lapsed"
-    if s(201) >= 0.5: return "concern"
+    def s(i: int) -> float: return ps[i] if len(ps) > i else 0.0  # noqa: E731
+    if s(198) >= 0.5:
+        return "adherent"
+    if s(199) >= 0.5:
+        return "partial"
+    if s(200) >= 0.5:
+        return "lapsed"
+    if s(201) >= 0.5:
+        return "concern"
     return None
 
 
 def _decode_health_carry(ps: list) -> str | None:
-    def s(i: int) -> float: return ps[i] if len(ps) > i else 0.0
-    if s(202) >= 0.5: return "thriving"
-    if s(203) >= 0.5: return "balanced"
-    if s(204) >= 0.5: return "watch"
-    if s(205) >= 0.5: return "attention"
+    def s(i: int) -> float: return ps[i] if len(ps) > i else 0.0  # noqa: E731
+    if s(202) >= 0.5:
+        return "thriving"
+    if s(203) >= 0.5:
+        return "balanced"
+    if s(204) >= 0.5:
+        return "watch"
+    if s(205) >= 0.5:
+        return "attention"
     return None
 
 

@@ -1,10 +1,9 @@
-from typing import Optional, List
 
 from fastapi import APIRouter, Header
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from pydantic import BaseModel
 
 from config import get_settings
 
@@ -24,17 +23,17 @@ class Message(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    messages: List[Message]
-    model: Optional[str] = None
-    temperature: Optional[float] = 0.7
-    stream: Optional[bool] = False
+    messages: list[Message]
+    model: str | None = None
+    temperature: float | None = 0.7
+    stream: bool | None = False
     # Set to True to inject the current RE health state into the system prompt.
     # Overrides the global health_context_enabled setting for this request.
     # Set to False to explicitly disable even when health_context_enabled=True.
-    health_context: Optional[bool] = None
+    health_context: bool | None = None
 
 
-def _to_lc_messages(messages: List[Message]):
+def _to_lc_messages(messages: list[Message]):
     mapping = {"user": HumanMessage, "assistant": AIMessage, "system": SystemMessage}
     return [mapping.get(m.role, HumanMessage)(content=m.content) for m in messages]
 
@@ -64,7 +63,7 @@ def _inject_health_context(
 @router.post("")
 async def chat(
     req: ChatRequest,
-    x_health_context: Optional[str] = Header(None),
+    x_health_context: str | None = Header(None),
 ):
     s = get_settings()
     model = req.model or s.llm_model

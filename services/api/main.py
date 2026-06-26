@@ -1,11 +1,13 @@
-import structlog
 from contextlib import asynccontextmanager
+
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from routers import health, chat, patient_wellness, rag, graph
-from routers.graphql_endpoint import graphql_app, events_router as graphql_events_router
+from routers import chat, graph, health, patient_wellness, rag
+from routers.graphql_endpoint import events_router as graphql_events_router
+from routers.graphql_endpoint import graphql_app
 
 log = structlog.get_logger()
 
@@ -27,10 +29,13 @@ async def lifespan(app: FastAPI):
     # Register Reality Engine sensor sources (graceful — PE may not be running)
     try:
         from core.reality_bridge import (
+            bind_graph_topology,
+            import_carekit_machine,
+            import_health_machines,
+            import_machine_if_missing,
+            import_session_machines,
+            register_sensors,
             verify_machine_offsets,
-            register_sensors, import_machine_if_missing,
-            import_session_machines, import_health_machines,
-            import_carekit_machine, bind_graph_topology,
         )
         # Pure local-file structural check; runs before any network call so
         # drift surfaces even when the PE/RE are unreachable.

@@ -17,23 +17,22 @@ Edges:
 
 from __future__ import annotations
 
-from typing import Annotated, TypedDict, List, Literal
 import operator
+from typing import Annotated, Literal, TypedDict
 
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
 from config import get_settings
 from core.vector_store import get_vector_store
-
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
 class RAGState(TypedDict):
     question: str
-    documents: Annotated[List[Document], operator.add]
+    documents: Annotated[list[Document], operator.add]
     generation: str
     rewrite_count: int
     re_routing: str  # "generate" | "rewrite" | "abort" — set by the RE machine each grading step

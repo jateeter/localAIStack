@@ -2,9 +2,9 @@ import asyncio
 import os
 
 import httpx
+import redis as redis_lib
 from fastapi import APIRouter
 from qdrant_client import QdrantClient
-import redis as redis_lib
 
 from config import get_settings
 

@@ -18,7 +18,6 @@ from __future__ import annotations
 import httpx
 import pytest
 
-
 # ── /health endpoint ──────────────────────────────────────────────────────────
 
 

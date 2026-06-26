@@ -23,7 +23,6 @@ import pytest
 
 from core import reality_bridge
 
-
 # ── helpers shared across sections ───────────────────────────────────────────
 
 
@@ -159,7 +158,7 @@ def test_get_current_health_state_calls_re_not_pe(monkeypatch):
     assert any("/api/perceptual-simulation/state" in u for u in called_urls), (
         f"Expected RE state endpoint in calls: {called_urls}"
     )
-    assert not any("/api/state" == u.split("/")[-1] for u in called_urls), (
+    assert not any(u.split("/")[-1] == "/api/state" for u in called_urls), (
         f"Must not call PE /api/state: {called_urls}"
     )
 

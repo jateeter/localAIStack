@@ -22,12 +22,10 @@ perceptualSpace vector with the 'thriving' state asserted at [190].
 from __future__ import annotations
 
 import json
-import pathlib
 
 import pytest
 
 from core import reality_bridge
-
 
 # ── (1) Offset-drift guard ────────────────────────────────────────────────────
 
@@ -227,8 +225,8 @@ def test_push_health_signal_band_values_hr_in_range():
 
 def test_push_health_signal_band_values_hrv_threshold():
     """HRV ≥ 30ms → ok=1.0; below → 0.0."""
-    assert (1.0 if 30.0 >= reality_bridge._HRV_OK_MS else 0.0) == 1.0
-    assert (1.0 if 29.9 >= reality_bridge._HRV_OK_MS else 0.0) == 0.0
+    assert (1.0 if reality_bridge._HRV_OK_MS <= 30.0 else 0.0) == 1.0
+    assert (1.0 if reality_bridge._HRV_OK_MS <= 29.9 else 0.0) == 0.0
 
 
 def test_push_health_signal_attention_writes_hr_low(monkeypatch):

@@ -1,17 +1,16 @@
 import os
 import tempfile
-from typing import List, Optional
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from pydantic import BaseModel
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from langchain_community.document_loaders import (
+    Docx2txtLoader,
     PyPDFLoader,
     TextLoader,
-    Docx2txtLoader,
     UnstructuredMarkdownLoader,
 )
 from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pydantic import BaseModel
 
 from core.vector_store import get_vector_store
 from graphs.rag_graph import get_rag_graph
@@ -30,8 +29,8 @@ LOADERS = {
 
 class IngestTextRequest(BaseModel):
     text: str
-    source: Optional[str] = "manual"
-    metadata: Optional[dict] = {}
+    source: str | None = "manual"
+    metadata: dict | None = {}
 
 
 class QueryRequest(BaseModel):
@@ -40,7 +39,7 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     answer: str
-    sources: List[str]
+    sources: list[str]
     rewrite_count: int
 
 

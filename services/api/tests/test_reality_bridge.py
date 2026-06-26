@@ -28,7 +28,6 @@ import pytest
 
 from core import reality_bridge
 
-
 # ── (1) Offset-drift guard ────────────────────────────────────────────────────
 
 

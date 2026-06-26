@@ -12,26 +12,25 @@ bind to it directly.
 
 from __future__ import annotations
 
-from typing import Annotated, TypedDict, List, Sequence
-import operator
 import json
+import operator
+from collections.abc import Sequence
+from typing import Annotated, TypedDict
 
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from config import get_settings
-from core.vector_store import get_vector_store, get_health_vector_store
-
+from core.vector_store import get_health_vector_store, get_vector_store
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
 @tool
 def rag_search(query: str) -> str:
     """Search the local knowledge base for information relevant to the query."""
-    s = get_settings()
     store = get_vector_store()
     docs = store.similarity_search(query, k=4)
     if not docs:
@@ -73,7 +72,7 @@ TOOLS = [rag_search, health_search, list_collections]
 # ── State ─────────────────────────────────────────────────────────────────────
 
 class AgentState(TypedDict):
-    messages: Annotated[List[BaseMessage], operator.add]
+    messages: Annotated[list[BaseMessage], operator.add]
     system_prompt: str
 
 
@@ -139,7 +138,7 @@ def _count_activity_metrics(
 
 
 def _tools_node(state: AgentState) -> dict:
-    from core.reality_bridge import push_node_signal, push_agent_activity_signal
+    from core.reality_bridge import push_agent_activity_signal, push_node_signal
     push_node_signal("agent", "tools", 1.0, trigger_push=True)
     result = _tool_node_instance(state)
     push_node_signal("agent", "tools", 0.0, trigger_push=False)

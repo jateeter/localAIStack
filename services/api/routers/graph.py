@@ -7,13 +7,13 @@ POST /graph/agent    → run the ReAct agent graph
 GET  /graph/schema   → return input/output schemas for both graphs
 """
 
-from typing import Optional, List
-from fastapi import APIRouter
-from pydantic import BaseModel
-from langchain_core.messages import HumanMessage
 
-from graphs.rag_graph import get_rag_graph
+from fastapi import APIRouter
+from langchain_core.messages import HumanMessage
+from pydantic import BaseModel
+
 from graphs.agent_graph import get_agent_graph
+from graphs.rag_graph import get_rag_graph
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -27,7 +27,7 @@ class RAGRequest(BaseModel):
 class RAGResponse(BaseModel):
     question: str
     answer: str
-    sources: List[str]
+    sources: list[str]
     rewrite_count: int
 
 
@@ -57,8 +57,8 @@ class AgentMessage(BaseModel):
 
 
 class AgentRequest(BaseModel):
-    messages: List[AgentMessage]
-    system_prompt: Optional[str] = None
+    messages: list[AgentMessage]
+    system_prompt: str | None = None
 
 
 class AgentResponse(BaseModel):

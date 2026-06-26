@@ -63,8 +63,8 @@ def compute_bindings() -> dict:
       }
     """
     # Lazy imports avoid circular dependencies at module load time
-    from graphs.rag_graph import get_rag_graph
     from graphs.agent_graph import get_agent_graph
+    from graphs.rag_graph import get_rag_graph
 
     raw_nodes = {
         "rag":   [n for n in get_rag_graph().nodes   if n not in _LANGGRAPH_INTERNALS],
