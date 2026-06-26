@@ -71,9 +71,6 @@ services:
       - ./volumes/qdrant:/qdrant/storage
     environment:
       QDRANT__SERVICE__GRPC_PORT: "6334"
-    depends_on:
-      loki:
-        condition: service_healthy
     logging:
       driver: loki
       options:
@@ -98,9 +95,6 @@ services:
     volumes:
       - ./volumes/redis:/data
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
-    depends_on:
-      loki:
-        condition: service_healthy
     logging:
       driver: loki
       options:
@@ -154,8 +148,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      loki:
-        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     logging:
@@ -188,8 +180,6 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       api:
-        condition: service_healthy
-      loki:
         condition: service_healthy
     logging:
       driver: loki

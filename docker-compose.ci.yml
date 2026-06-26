@@ -8,9 +8,8 @@
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d qdrant redis api
 #
-# Services NOT started in CI (leave their profile assignments to avoid them
-# being pulled in by depends_on chains):
-#   loki, grafana, open-webui — use profiles to opt out
+# Services NOT started in CI:
+#   loki, grafana, open-webui — assigned profiles so they are skipped by default
 
 services:
 
@@ -25,7 +24,6 @@ services:
     profiles: [ui]
 
   qdrant:
-    depends_on: {}          # remove loki healthcheck dependency
     logging:
       driver: json-file
       options:
@@ -33,7 +31,6 @@ services:
         max-file: "3"
 
   redis:
-    depends_on: {}
     logging:
       driver: json-file
       options:
