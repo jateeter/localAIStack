@@ -137,6 +137,11 @@ services:
       PE_URL: "${PE_URL:-https://host.docker.internal:3004}"
       # RE is published on host :5001 (host :3000 is Grafana, not RE).
       RE_URL: "${RE_URL:-https://host.docker.internal:5001}"
+      # Native multi-engine mode: when the PE_URL/RE_URL targets are dead
+      # (engines run natively on registry-assigned ports, not the Docker
+      # defaults above), the bridge re-targets to a live instance from this
+      # registry instead of silently degrading (RealityEngine_CI#44).
+      RE_REGISTRY_URL: "${RE_REGISTRY_URL:-http://host.docker.internal:5999/re-registry.json}"
       RE_SSL_VERIFY: "false"
       MACHINES_DIR: "/app/data/machines"
     volumes:
