@@ -15,7 +15,6 @@ import pytest
 
 from core import registry_resolver
 
-
 REGISTRY = {
     "host": "192.168.1.16",
     "instances": [
