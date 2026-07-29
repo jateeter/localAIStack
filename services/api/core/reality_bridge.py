@@ -58,7 +58,7 @@ import pathlib
 import httpx
 import structlog
 
-from config import get_settings
+from core.registry_resolver import resolve_bridge_targets
 
 log = structlog.get_logger()
 
@@ -288,13 +288,15 @@ def get_topology_bindings() -> dict:
 
 
 # ── URL helpers ───────────────────────────────────────────────────────────────
+# Registry-aware: dead env defaults are re-targeted to a live registry
+# instance (native multi-engine mode) instead of silently degrading.
 
 def _pe_url() -> str:
-    return get_settings().pe_url
+    return resolve_bridge_targets()["pe_url"]
 
 
 def _re_url() -> str:
-    return get_settings().re_url
+    return resolve_bridge_targets()["re_url"]
 
 
 # ── Startup: offset-drift guard ──────────────────────────────────────────────

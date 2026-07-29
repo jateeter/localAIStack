@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from qdrant_client import QdrantClient
 
 from config import get_settings
+from core.registry_resolver import resolve_bridge_targets
 
 router = APIRouter()
 
@@ -107,11 +108,15 @@ async def health():
 
     # Run sync probes in a thread pool so they don't block the event loop
     loop = asyncio.get_event_loop()
+    # Registry-aware target resolution (blocking urllib probes → executor)
+    bridge_targets = await loop.run_in_executor(None, resolve_bridge_targets)
     await asyncio.gather(
         _check_ollama(),
         loop.run_in_executor(None, _check_qdrant),
         loop.run_in_executor(None, _check_redis),
-        _attach_pe_re(services, s.pe_url, s.re_url, ssl_verify),
+        _attach_pe_re(
+            services, bridge_targets["pe_url"], bridge_targets["re_url"], ssl_verify
+        ),
     )
 
     # ── Status rollup ──────────────────────────────────────────────────────────
@@ -129,6 +134,7 @@ async def health():
     return {
         "status":  "ok" if core_ok else "degraded",
         "bridge":  "ok" if bridge_ok else "degraded",
+        "bridge_target": bridge_targets,
         "services": services,
     }
 
