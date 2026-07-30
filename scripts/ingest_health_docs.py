@@ -36,7 +36,7 @@ import sys
 # ── Allow running from repo root or scripts/ ─────────────────────────────────
 
 _SCRIPT_DIR = pathlib.Path(__file__).parent
-_REPO_ROOT   = _SCRIPT_DIR.parent
+_REPO_ROOT = _SCRIPT_DIR.parent
 _SERVICES_API = _REPO_ROOT / "services" / "api"
 
 if str(_SERVICES_API) not in sys.path:
@@ -61,9 +61,11 @@ SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
 def get_embeddings(model_name: str):
     try:
         from langchain_ollama import OllamaEmbeddings
+
         return OllamaEmbeddings(model=model_name)
     except ImportError:
         from langchain_community.embeddings import OllamaEmbeddings  # type: ignore
+
         return OllamaEmbeddings(model=model_name)
 
 
@@ -96,14 +98,18 @@ def main() -> None:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--docs-dir",     default=str(_REPO_ROOT / "data" / "documents" / "health"))
-    parser.add_argument("--qdrant-host",  default="localhost")
-    parser.add_argument("--qdrant-port",  type=int, default=4333)
-    parser.add_argument("--collection",   default="health_docs")
-    parser.add_argument("--embed-model",  default=None,
-                        help="Ollama embedding model (default: read from config.py / .env)")
-    parser.add_argument("--clear",        action="store_true",
-                        help="Drop and recreate the collection before ingesting")
+    parser.add_argument("--docs-dir", default=str(_REPO_ROOT / "data" / "documents" / "health"))
+    parser.add_argument("--qdrant-host", default="localhost")
+    parser.add_argument("--qdrant-port", type=int, default=4333)
+    parser.add_argument("--collection", default="health_docs")
+    parser.add_argument(
+        "--embed-model",
+        default=None,
+        help="Ollama embedding model (default: read from config.py / .env)",
+    )
+    parser.add_argument(
+        "--clear", action="store_true", help="Drop and recreate the collection before ingesting"
+    )
     args = parser.parse_args()
 
     # Resolve embed model — prefer CLI arg, then settings, then fallback default
@@ -112,6 +118,7 @@ def main() -> None:
     else:
         try:
             from config import get_settings
+
             embed_model = get_settings().embed_model
         except Exception:
             embed_model = "ternary-bonsai:4"
@@ -179,7 +186,7 @@ def main() -> None:
     print(f"  curl http://{args.qdrant_host}:{args.qdrant_port}/collections/{args.collection}")
     print()
     print("Test health_search tool (agent endpoint):")
-    print('  curl -s http://localhost:4000/graph/agent \\')
+    print("  curl -s http://localhost:4000/graph/agent \\")
     print('    -H "Content-Type: application/json" \\')
     print('    -d \'{"messages": [{"role":"user","content":"What does low HRV mean?"}]}\'')
     print()

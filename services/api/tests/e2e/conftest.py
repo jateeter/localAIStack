@@ -61,10 +61,10 @@ def pytest_collection_modifyitems(
     items: list[pytest.Item],
 ) -> None:
     run_integration = config.getoption("--integration")
-    run_live        = config.getoption("--live")
+    run_live = config.getoption("--live")
 
     skip_integration = pytest.mark.skip(reason="pass --integration to run")
-    skip_live        = pytest.mark.skip(reason="pass --live to run")
+    skip_live = pytest.mark.skip(reason="pass --live to run")
 
     for item in items:
         if "integration" in item.keywords and not run_integration:
@@ -127,7 +127,9 @@ def _ssl_verify(url: str) -> bool:
 def live_api(api_url: str, e2e_timeout: int) -> str:
     """Skip the test if the localAI API is not reachable."""
     if not _wait_for_http(f"{api_url}/health", e2e_timeout, "localAI API"):
-        pytest.skip(f"localAI API not reachable at {api_url} (set LOCALAI_API_URL or start the stack)")
+        pytest.skip(
+            f"localAI API not reachable at {api_url} (set LOCALAI_API_URL or start the stack)"
+        )
     return api_url
 
 

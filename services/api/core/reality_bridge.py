@@ -106,19 +106,19 @@ _HEALTH_SENSORS = [
         "sensorId": "localai_health_hr_ok",
         "name": "localai/health/hr_ok",
         "region": {"offset": 186, "length": 1},
-        "ttlMs": 300_000,      # 5 min — heart rate can change quickly
+        "ttlMs": 300_000,  # 5 min — heart rate can change quickly
     },
     {
         "sensorId": "localai_health_hrv_ok",
         "name": "localai/health/hrv_ok",
         "region": {"offset": 187, "length": 1},
-        "ttlMs": 900_000,      # 15 min — HRV is a slower-moving metric
+        "ttlMs": 900_000,  # 15 min — HRV is a slower-moving metric
     },
     {
         "sensorId": "localai_health_sleep_ok",
         "name": "localai/health/sleep_ok",
         "region": {"offset": 188, "length": 1},
-        "ttlMs": 86_400_000,   # 24 h — sleep updates once per day
+        "ttlMs": 86_400_000,  # 24 h — sleep updates once per day
     },
 ]
 
@@ -130,19 +130,19 @@ _CAREKIT_SENSORS = [
         "sensorId": "localai_carekit_med_adherence",
         "name": "localai/carekit/med_adherence",
         "region": {"offset": 194, "length": 1},
-        "ttlMs": 3_600_000,    # 1 h — medication dose window
+        "ttlMs": 3_600_000,  # 1 h — medication dose window
     },
     {
         "sensorId": "localai_carekit_task_completion",
         "name": "localai/carekit/task_completion",
         "region": {"offset": 195, "length": 1},
-        "ttlMs": 86_400_000,   # 24 h — daily task schedule
+        "ttlMs": 86_400_000,  # 24 h — daily task schedule
     },
     {
         "sensorId": "localai_carekit_symptom_ok",
         "name": "localai/carekit/symptom_ok",
         "region": {"offset": 196, "length": 1},
-        "ttlMs": 86_400_000,   # 24 h — symptom check-in cadence
+        "ttlMs": 86_400_000,  # 24 h — symptom check-in cadence
     },
 ]
 
@@ -159,12 +159,12 @@ _MACHINE_JSON_PATH = _MACHINES_DIR / "rag_corrective_cycle.json"
 _MACHINE_NAME = "localai/rag_corrective_cycle"
 
 _OUTPUT_GENERATE = 60
-_OUTPUT_REWRITE  = 61
-_OUTPUT_ABORT    = 62
+_OUTPUT_REWRITE = 61
+_OUTPUT_ABORT = 62
 
 # agent_activity_classifier output, one-hot at [68:72]
 _AGENT_ACT_PRODUCTIVE = 68
-_AGENT_ACT_NORMAL     = 69
+_AGENT_ACT_NORMAL = 69
 _AGENT_ACT_STRUGGLING = 70
 
 # ai_load_bridge writes the same 4-byte tier vector six times starting at 120.
@@ -179,9 +179,9 @@ _HEALTH_OUTPUT_OFFSET = 190  # one-hot: [thriving, balanced, watch, attention]
 
 # Band thresholds for push_health_signal() normalization — must stay aligned
 # with the sensor region descriptions in personal_health_baseline.json.
-_HR_LOW_BPM    = 60.0
-_HR_HIGH_BPM   = 100.0
-_HRV_OK_MS     = 30.0   # SDNN ≥ 30 ms = healthy recovery
+_HR_LOW_BPM = 60.0
+_HR_HIGH_BPM = 100.0
+_HRV_OK_MS = 30.0  # SDNN ≥ 30 ms = healthy recovery
 _SLEEP_OK_HOURS = 6.5
 
 # medication_adherence machine — [194:198] input, [198:202] output.
@@ -192,25 +192,28 @@ _CAREKIT_OUTPUT_OFFSET = 198  # one-hot: [adherent, partial, lapsed, concern]
 # session_health_context bistable carry — reads [190:194], writes [202:206].
 _HEALTH_CARRY_MACHINE_PATH = _MACHINES_DIR / "session_health_context.json"
 _HEALTH_CARRY_MACHINE_NAME = "localai/session_health_context"
-_HEALTH_CARRY_OFFSET = 202    # carry: [last_thriving, last_balanced, last_watch, last_attention]
+_HEALTH_CARRY_OFFSET = 202  # carry: [last_thriving, last_balanced, last_watch, last_attention]
 
 # ── Session context carry machine definitions ─────────────────────────────────
 
 _SESSION_MACHINE_DEFS = [
-    {"path": _MACHINES_DIR / "session_rag_context.json",        "name": "localai/session_rag_context"},
-    {"path": _MACHINES_DIR / "session_agent_context.json",      "name": "localai/session_agent_context"},
-    {"path": _MACHINES_DIR / "ai_load_bridge.json",             "name": "localai/ai_load_bridge"},
-    {"path": _MACHINES_DIR / "agent_activity_classifier.json",  "name": "localai/agent_activity_classifier"},
+    {"path": _MACHINES_DIR / "session_rag_context.json", "name": "localai/session_rag_context"},
+    {"path": _MACHINES_DIR / "session_agent_context.json", "name": "localai/session_agent_context"},
+    {"path": _MACHINES_DIR / "ai_load_bridge.json", "name": "localai/ai_load_bridge"},
+    {
+        "path": _MACHINES_DIR / "agent_activity_classifier.json",
+        "name": "localai/agent_activity_classifier",
+    },
     # Phase 4b: health carry — reads personal_health_baseline output [190:194], writes carry [202:206]
-    {"path": _HEALTH_CARRY_MACHINE_PATH,                         "name": _HEALTH_CARRY_MACHINE_NAME},
+    {"path": _HEALTH_CARRY_MACHINE_PATH, "name": _HEALTH_CARRY_MACHINE_NAME},
 ]
 
 # Perceptual space indices for session context carry read-back
-_SESSION_RAG_OFFSET   = 112  # [last_generate, last_rewrite, last_abort, _]
+_SESSION_RAG_OFFSET = 112  # [last_generate, last_rewrite, last_abort, _]
 _SESSION_AGENT_OFFSET = 116  # [agent_ever_engaged, tools_ever_used, _, _]
 
 _SENSOR_TIMEOUT = httpx.Timeout(1.0)
-_PUSH_TIMEOUT   = httpx.Timeout(2.0)
+_PUSH_TIMEOUT = httpx.Timeout(2.0)
 
 # ── Offset-drift guard ────────────────────────────────────────────────────────
 # Expected perceptualMapping offsets for every machine JSON this bridge owns.
@@ -218,45 +221,45 @@ _PUSH_TIMEOUT   = httpx.Timeout(2.0)
 # in exactly one place; verify_machine_offsets() checks the JSON files agree.
 _EXPECTED_MACHINE_OFFSETS = [
     {
-        "path":   _MACHINE_JSON_PATH,  # rag_corrective_cycle.json
-        "input":  {"offset": 52,  "length": 8},
-        "output": {"offset": 60,  "length": 4},
+        "path": _MACHINE_JSON_PATH,  # rag_corrective_cycle.json
+        "input": {"offset": 52, "length": 8},
+        "output": {"offset": 60, "length": 4},
     },
     {
-        "path":   _MACHINES_DIR / "session_rag_context.json",
-        "input":  {"offset": 60,  "length": 4},
+        "path": _MACHINES_DIR / "session_rag_context.json",
+        "input": {"offset": 60, "length": 4},
         "output": {"offset": 112, "length": 4},
     },
     {
-        "path":   _MACHINES_DIR / "session_agent_context.json",
-        "input":  {"offset": 104, "length": 16},
+        "path": _MACHINES_DIR / "session_agent_context.json",
+        "input": {"offset": 104, "length": 16},
         "output": {"offset": 116, "length": 4},
     },
     {
-        "path":   _MACHINES_DIR / "ai_load_bridge.json",
-        "input":  {"offset": 112, "length": 8},
+        "path": _MACHINES_DIR / "ai_load_bridge.json",
+        "input": {"offset": 112, "length": 8},
         "output": {"offset": 120, "length": 24},
     },
     {
-        "path":   _MACHINES_DIR / "agent_activity_classifier.json",
-        "input":  {"offset": 64,  "length": 4},
-        "output": {"offset": 68,  "length": 4},
+        "path": _MACHINES_DIR / "agent_activity_classifier.json",
+        "input": {"offset": 64, "length": 4},
+        "output": {"offset": 68, "length": 4},
     },
     {
-        "path":   _HEALTH_MACHINE_PATH,  # personal_health_baseline.json
-        "input":  {"offset": 186, "length": 4},
+        "path": _HEALTH_MACHINE_PATH,  # personal_health_baseline.json
+        "input": {"offset": 186, "length": 4},
         "output": {"offset": 190, "length": 4},
     },
     # Phase 4a: CareKit medication adherence classifier
     {
-        "path":   _CAREKIT_MACHINE_PATH,  # medication_adherence.json
-        "input":  {"offset": 194, "length": 4},
+        "path": _CAREKIT_MACHINE_PATH,  # medication_adherence.json
+        "input": {"offset": 194, "length": 4},
         "output": {"offset": 198, "length": 4},
     },
     # Phase 4b: health session carry (reads health output, writes carry)
     {
-        "path":   _HEALTH_CARRY_MACHINE_PATH,  # session_health_context.json
-        "input":  {"offset": 190, "length": 4},
+        "path": _HEALTH_CARRY_MACHINE_PATH,  # session_health_context.json
+        "input": {"offset": 190, "length": 4},
         "output": {"offset": 202, "length": 4},
     },
 ]
@@ -265,15 +268,15 @@ _EXPECTED_MACHINE_OFFSETS = [
 # The drift guard uses this to confirm sensors and their consumer machines stay
 # wired together after any offset move.
 _SENSOR_TO_MACHINE = {
-    "localai_rag_retrieval":             "rag_corrective_cycle.json",
-    "localai_rag_grading":               "rag_corrective_cycle.json",
-    "localai_agent_activity":            "agent_activity_classifier.json",
-    "localai_health_hr_ok":              "personal_health_baseline.json",
-    "localai_health_hrv_ok":             "personal_health_baseline.json",
-    "localai_health_sleep_ok":           "personal_health_baseline.json",
-    "localai_carekit_med_adherence":     "medication_adherence.json",
-    "localai_carekit_task_completion":   "medication_adherence.json",
-    "localai_carekit_symptom_ok":        "medication_adherence.json",
+    "localai_rag_retrieval": "rag_corrective_cycle.json",
+    "localai_rag_grading": "rag_corrective_cycle.json",
+    "localai_agent_activity": "agent_activity_classifier.json",
+    "localai_health_hr_ok": "personal_health_baseline.json",
+    "localai_health_hrv_ok": "personal_health_baseline.json",
+    "localai_health_sleep_ok": "personal_health_baseline.json",
+    "localai_carekit_med_adherence": "medication_adherence.json",
+    "localai_carekit_task_completion": "medication_adherence.json",
+    "localai_carekit_symptom_ok": "medication_adherence.json",
 }
 
 # ── Topology bindings (populated by bind_graph_topology at startup) ───────────
@@ -291,6 +294,7 @@ def get_topology_bindings() -> dict:
 # Registry-aware: dead env defaults are re-targeted to a live registry
 # instance (native multi-engine mode) instead of silently degrading.
 
+
 def _pe_url() -> str:
     return resolve_bridge_targets()["pe_url"]
 
@@ -300,6 +304,7 @@ def _re_url() -> str:
 
 
 # ── Startup: offset-drift guard ──────────────────────────────────────────────
+
 
 def verify_machine_offsets() -> list[str]:
     """
@@ -325,10 +330,12 @@ def verify_machine_offsets() -> list[str]:
             continue
         pm = data.get("machine", {}).get("perceptualMapping") or {}
         for side in ("input", "output"):
-            actual   = pm.get(side) or {}
+            actual = pm.get(side) or {}
             expected = spec[side]
-            if (actual.get("offset") != expected["offset"]
-                    or actual.get("length") != expected["length"]):
+            if (
+                actual.get("offset") != expected["offset"]
+                or actual.get("length") != expected["length"]
+            ):
                 mismatches.append(
                     f"{path.name}.{side}: expected "
                     f"offset={expected['offset']} length={expected['length']}; "
@@ -340,7 +347,7 @@ def verify_machine_offsets() -> list[str]:
     machines_by_filename = {spec["path"].name: spec for spec in _EXPECTED_MACHINE_OFFSETS}
     all_sensors = _RAG_SENSORS + _HEALTH_SENSORS + _CAREKIT_SENSORS
     for sensor in all_sensors:
-        sid   = sensor["sensorId"]
+        sid = sensor["sensorId"]
         fname = _SENSOR_TO_MACHINE.get(sid)
         if fname is None:
             mismatches.append(f"sensor {sid}: no consumer machine mapped in _SENSOR_TO_MACHINE")
@@ -352,13 +359,12 @@ def verify_machine_offsets() -> list[str]:
                 f"but no such machine in _EXPECTED_MACHINE_OFFSETS"
             )
             continue
-        sr      = sensor["region"]
+        sr = sensor["region"]
         m_start = spec["input"]["offset"]
-        m_end   = m_start + spec["input"]["length"]
+        m_end = m_start + spec["input"]["length"]
         if sr["offset"] < m_start or sr["offset"] + sr["length"] > m_end:
             mismatches.append(
-                f"sensor {sid}: region {sr} outside {fname} input "
-                f"[{m_start}:{m_end}]"
+                f"sensor {sid}: region {sr} outside {fname} input [{m_start}:{m_end}]"
             )
 
     # Python readback constants must match the rag_corrective_cycle output region
@@ -370,8 +376,7 @@ def verify_machine_offsets() -> list[str]:
         )
     if _SESSION_RAG_OFFSET != 112:
         mismatches.append(
-            f"_SESSION_RAG_OFFSET={_SESSION_RAG_OFFSET} "
-            f"!= 112 (session_rag_context output offset)"
+            f"_SESSION_RAG_OFFSET={_SESSION_RAG_OFFSET} != 112 (session_rag_context output offset)"
         )
     if _SESSION_AGENT_OFFSET != 116:
         mismatches.append(
@@ -380,19 +385,24 @@ def verify_machine_offsets() -> list[str]:
         )
 
     if mismatches:
-        log.error("reality_bridge.offset_drift_detected",
-                  count=len(mismatches),
-                  mismatches=mismatches,
-                  note="machine JSONs are out of sync with Python constants — "
-                       "RE routing will be silently incorrect")
+        log.error(
+            "reality_bridge.offset_drift_detected",
+            count=len(mismatches),
+            mismatches=mismatches,
+            note="machine JSONs are out of sync with Python constants — "
+            "RE routing will be silently incorrect",
+        )
     else:
-        log.info("reality_bridge.offset_verification_ok",
-                 machines=[spec["path"].name for spec in _EXPECTED_MACHINE_OFFSETS])
+        log.info(
+            "reality_bridge.offset_verification_ok",
+            machines=[spec["path"].name for spec in _EXPECTED_MACHINE_OFFSETS],
+        )
 
     return mismatches
 
 
 # ── Startup: sensor registration (RAG + health) ──────────────────────────────
+
 
 def _register_sensor_list(client: "httpx.Client", sensors: list, existing_ids: set) -> None:
     """Register a list of sensor defs; idempotent (skips existing sensorIds)."""
@@ -413,8 +423,7 @@ def _register_sensor_list(client: "httpx.Client", sensors: list, existing_ids: s
         }
         r = client.post(f"{_pe_url()}/api/sources", json=payload)
         r.raise_for_status()
-        log.info("reality_bridge.sensor_registered",
-                 sensor_id=sid, region=sensor["region"])
+        log.info("reality_bridge.sensor_registered", sensor_id=sid, region=sensor["region"])
 
 
 def register_sensors() -> bool:
@@ -427,9 +436,12 @@ def register_sensors() -> bool:
             _register_sensor_list(client, _CAREKIT_SENSORS, existing_ids)
             return True
     except Exception as exc:
-        log.warning("reality_bridge.register_failed",
-                    error=str(exc), pe_url=_pe_url(),
-                    note="RAG pipeline runs normally without RE telemetry")
+        log.warning(
+            "reality_bridge.register_failed",
+            error=str(exc),
+            pe_url=_pe_url(),
+            note="RAG pipeline runs normally without RE telemetry",
+        )
         return False
 
 
@@ -438,8 +450,9 @@ def import_machine_if_missing() -> bool:
     try:
         machine_json = json.loads(_MACHINE_JSON_PATH.read_text())
     except Exception as exc:
-        log.warning("reality_bridge.machine_json_not_found",
-                    path=str(_MACHINE_JSON_PATH), error=str(exc))
+        log.warning(
+            "reality_bridge.machine_json_not_found", path=str(_MACHINE_JSON_PATH), error=str(exc)
+        )
         return False
 
     try:
@@ -451,12 +464,10 @@ def import_machine_if_missing() -> bool:
             r = client.post(f"{_re_url()}/api/machines", json=machine_json)
             r.raise_for_status()
             machine_id = r.json().get("machine", {}).get("id", "unknown")
-            log.info("reality_bridge.machine_imported",
-                     name=_MACHINE_NAME, machine_id=machine_id)
+            log.info("reality_bridge.machine_imported", name=_MACHINE_NAME, machine_id=machine_id)
             return True
     except Exception as exc:
-        log.warning("reality_bridge.machine_import_failed",
-                    error=str(exc), re_url=_re_url())
+        log.warning("reality_bridge.machine_import_failed", error=str(exc), re_url=_re_url())
         return False
 
 
@@ -481,19 +492,24 @@ def import_session_machines() -> bool:
                 try:
                     machine_json = json.loads(defn["path"].read_text())
                 except Exception as exc:
-                    log.warning("reality_bridge.session_machine_json_not_found",
-                                path=str(defn["path"]), error=str(exc))
+                    log.warning(
+                        "reality_bridge.session_machine_json_not_found",
+                        path=str(defn["path"]),
+                        error=str(exc),
+                    )
                     ok = False
                     continue
                 r = client.post(f"{_re_url()}/api/machines", json=machine_json)
                 r.raise_for_status()
                 machine_id = r.json().get("machine", {}).get("id", "unknown")
-                log.info("reality_bridge.session_machine_imported",
-                         name=name, machine_id=machine_id)
+                log.info(
+                    "reality_bridge.session_machine_imported", name=name, machine_id=machine_id
+                )
             return ok
     except Exception as exc:
-        log.warning("reality_bridge.session_machine_import_failed",
-                    error=str(exc), re_url=_re_url())
+        log.warning(
+            "reality_bridge.session_machine_import_failed", error=str(exc), re_url=_re_url()
+        )
         return False
 
 
@@ -502,26 +518,32 @@ def import_carekit_machine() -> bool:
     try:
         machine_json = json.loads(_CAREKIT_MACHINE_PATH.read_text())
     except Exception as exc:
-        log.warning("reality_bridge.carekit_machine_json_not_found",
-                    path=str(_CAREKIT_MACHINE_PATH), error=str(exc))
+        log.warning(
+            "reality_bridge.carekit_machine_json_not_found",
+            path=str(_CAREKIT_MACHINE_PATH),
+            error=str(exc),
+        )
         return False
 
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
             existing = _get_existing_machine_names(client)
             if _CAREKIT_MACHINE_NAME in existing:
-                log.info("reality_bridge.carekit_machine_exists",
-                         name=_CAREKIT_MACHINE_NAME)
+                log.info("reality_bridge.carekit_machine_exists", name=_CAREKIT_MACHINE_NAME)
                 return True
             r = client.post(f"{_re_url()}/api/machines", json=machine_json)
             r.raise_for_status()
             machine_id = r.json().get("machine", {}).get("id", "unknown")
-            log.info("reality_bridge.carekit_machine_imported",
-                     name=_CAREKIT_MACHINE_NAME, machine_id=machine_id)
+            log.info(
+                "reality_bridge.carekit_machine_imported",
+                name=_CAREKIT_MACHINE_NAME,
+                machine_id=machine_id,
+            )
             return True
     except Exception as exc:
-        log.warning("reality_bridge.carekit_machine_import_failed",
-                    error=str(exc), re_url=_re_url())
+        log.warning(
+            "reality_bridge.carekit_machine_import_failed", error=str(exc), re_url=_re_url()
+        )
         return False
 
 
@@ -530,30 +552,35 @@ def import_health_machines() -> bool:
     try:
         machine_json = json.loads(_HEALTH_MACHINE_PATH.read_text())
     except Exception as exc:
-        log.warning("reality_bridge.health_machine_json_not_found",
-                    path=str(_HEALTH_MACHINE_PATH), error=str(exc))
+        log.warning(
+            "reality_bridge.health_machine_json_not_found",
+            path=str(_HEALTH_MACHINE_PATH),
+            error=str(exc),
+        )
         return False
 
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
             existing = _get_existing_machine_names(client)
             if _HEALTH_MACHINE_NAME in existing:
-                log.info("reality_bridge.health_machine_exists",
-                         name=_HEALTH_MACHINE_NAME)
+                log.info("reality_bridge.health_machine_exists", name=_HEALTH_MACHINE_NAME)
                 return True
             r = client.post(f"{_re_url()}/api/machines", json=machine_json)
             r.raise_for_status()
             machine_id = r.json().get("machine", {}).get("id", "unknown")
-            log.info("reality_bridge.health_machine_imported",
-                     name=_HEALTH_MACHINE_NAME, machine_id=machine_id)
+            log.info(
+                "reality_bridge.health_machine_imported",
+                name=_HEALTH_MACHINE_NAME,
+                machine_id=machine_id,
+            )
             return True
     except Exception as exc:
-        log.warning("reality_bridge.health_machine_import_failed",
-                    error=str(exc), re_url=_re_url())
+        log.warning("reality_bridge.health_machine_import_failed", error=str(exc), re_url=_re_url())
         return False
 
 
 # ── Per-request: session context read-back ───────────────────────────────────
+
 
 def get_session_context(ps: list) -> dict:
     """
@@ -571,12 +598,13 @@ def get_session_context(ps: list) -> dict:
                        (from session_health_context carry at [202:206]; None
                         until the first health push this RE session)
     """
+
     def _safe(idx: int) -> float:
         return ps[idx] if len(ps) > idx else 0.0
 
-    gen   = _safe(_SESSION_RAG_OFFSET)
-    rew   = _safe(_SESSION_RAG_OFFSET + 1)
-    abt   = _safe(_SESSION_RAG_OFFSET + 2)
+    gen = _safe(_SESSION_RAG_OFFSET)
+    rew = _safe(_SESSION_RAG_OFFSET + 1)
+    abt = _safe(_SESSION_RAG_OFFSET + 2)
 
     if gen >= 0.5:
         last_rag = "generate"
@@ -590,22 +618,24 @@ def get_session_context(ps: list) -> dict:
     return {
         "rag": last_rag,
         "agent": {
-            "ever_engaged":   _safe(_SESSION_AGENT_OFFSET)     >= 0.5,
+            "ever_engaged": _safe(_SESSION_AGENT_OFFSET) >= 0.5,
             "tools_ever_used": _safe(_SESSION_AGENT_OFFSET + 1) >= 0.5,
         },
         "agent_activity": _decode_agent_activity(ps),
-        "ai_load_tier":   get_ai_load_tier(ps),
-        "health_state":   get_health_state_from_carry(ps),
+        "ai_load_tier": get_ai_load_tier(ps),
+        "health_state": get_health_state_from_carry(ps),
     }
 
 
 def _decode_agent_activity(ps: list) -> str | None:
     """One-hot decode of agent_activity_classifier output at [68:72]."""
+
     def _safe(idx: int) -> float:
         return ps[idx] if len(ps) > idx else 0.0
-    prod   = _safe(_AGENT_ACT_PRODUCTIVE)
+
+    prod = _safe(_AGENT_ACT_PRODUCTIVE)
     normal = _safe(_AGENT_ACT_NORMAL)
-    strug  = _safe(_AGENT_ACT_STRUGGLING)
+    strug = _safe(_AGENT_ACT_STRUGGLING)
     if prod >= 0.5:
         return "productive"
     if strug >= 0.5:
@@ -647,10 +677,11 @@ def get_health_state(ps: list) -> str | None:
     Returns "thriving" | "balanced" | "watch" | "attention" | None.
     None means the machine has not yet written (no health sensors pushed).
     """
+
     def _safe(idx: int) -> float:
         return ps[idx] if len(ps) > idx else 0.0
 
-    if _safe(_HEALTH_OUTPUT_OFFSET)     >= 0.5:
+    if _safe(_HEALTH_OUTPUT_OFFSET) >= 0.5:
         return "thriving"
     if _safe(_HEALTH_OUTPUT_OFFSET + 1) >= 0.5:
         return "balanced"
@@ -673,10 +704,11 @@ def get_health_state_from_carry(ps: list) -> str | None:
     Returns "thriving" | "balanced" | "watch" | "attention" | None.
     None when the carry region is all-zero (no health push has occurred yet).
     """
+
     def _safe(idx: int) -> float:
         return ps[idx] if len(ps) > idx else 0.0
 
-    if _safe(_HEALTH_CARRY_OFFSET)     >= 0.5:
+    if _safe(_HEALTH_CARRY_OFFSET) >= 0.5:
         return "thriving"
     if _safe(_HEALTH_CARRY_OFFSET + 1) >= 0.5:
         return "balanced"
@@ -720,10 +752,11 @@ def get_carekit_state(ps: list) -> str | None:
     Returns "adherent" | "partial" | "lapsed" | "concern" | None.
     None means the machine has not yet written (no CareKit sensors pushed).
     """
+
     def _safe(idx: int) -> float:
         return ps[idx] if len(ps) > idx else 0.0
 
-    if _safe(_CAREKIT_OUTPUT_OFFSET)     >= 0.5:
+    if _safe(_CAREKIT_OUTPUT_OFFSET) >= 0.5:
         return "adherent"
     if _safe(_CAREKIT_OUTPUT_OFFSET + 1) >= 0.5:
         return "partial"
@@ -736,10 +769,11 @@ def get_carekit_state(ps: list) -> str | None:
 
 # ── Per-request: personal health signal write ─────────────────────────────────
 
+
 def push_health_signal(
-    hr_bpm:       float,
-    hrv_sdnn_ms:  float,
-    sleep_hours:  float,
+    hr_bpm: float,
+    hrv_sdnn_ms: float,
+    sleep_hours: float,
 ) -> str:
     """
     Write personal health band values to the PE, trigger a push so the
@@ -755,12 +789,12 @@ def push_health_signal(
     Falls back to "watch" when the PE/RE is unreachable (safe default —
     watch prompts the AI to be mindful without assuming a crisis).
     """
-    hr_ok    = 1.0 if _HR_LOW_BPM <= hr_bpm <= _HR_HIGH_BPM else 0.0
-    hrv_ok   = 1.0 if hrv_sdnn_ms >= _HRV_OK_MS             else 0.0
-    sleep_ok = 1.0 if sleep_hours  >= _SLEEP_OK_HOURS        else 0.0
+    hr_ok = 1.0 if _HR_LOW_BPM <= hr_bpm <= _HR_HIGH_BPM else 0.0
+    hrv_ok = 1.0 if hrv_sdnn_ms >= _HRV_OK_MS else 0.0
+    sleep_ok = 1.0 if sleep_hours >= _SLEEP_OK_HOURS else 0.0
 
-    _write_sensor("localai_health_hr_ok",    [hr_ok])
-    _write_sensor("localai_health_hrv_ok",   [hrv_ok])
+    _write_sensor("localai_health_hr_ok", [hr_ok])
+    _write_sensor("localai_health_hrv_ok", [hrv_ok])
     _write_sensor("localai_health_sleep_ok", [sleep_ok])
 
     return _trigger_push_and_read_health()
@@ -772,12 +806,12 @@ def _trigger_push_and_read_health() -> str:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
             r = client.post(f"{_pe_url()}/api/push")
             r.raise_for_status()
-            data  = r.json()
-            ps    = data.get("step", {}).get("perceptualSpace", [])
+            data = r.json()
+            ps = data.get("step", {}).get("perceptualSpace", [])
             state = get_health_state(ps)
-            log.info("reality_bridge.health_state_read",
-                     state=state,
-                     global_step=data.get("globalStep"))
+            log.info(
+                "reality_bridge.health_state_read", state=state, global_step=data.get("globalStep")
+            )
             return state or "watch"
     except Exception as exc:
         log.debug("reality_bridge.health_push_skipped", error=str(exc))
@@ -786,10 +820,11 @@ def _trigger_push_and_read_health() -> str:
 
 # ── Per-request: CareKit compliance signal write ─────────────────────────────
 
+
 def push_carekit_signal(
-    med_adherence_ratio:   float,  # doses taken / doses scheduled — [0.0, 1.0]
+    med_adherence_ratio: float,  # doses taken / doses scheduled — [0.0, 1.0]
     task_completion_ratio: float,  # CareKit tasks completed / scheduled — [0.0, 1.0]
-    symptom_ok:            float,  # 1.0 = no/low symptoms; 0.0 = moderate+ symptoms
+    symptom_ok: float,  # 1.0 = no/low symptoms; 0.0 = moderate+ symptoms
 ) -> str:
     """
     Write CareKit compliance scalars to PE, trigger a push so the
@@ -804,13 +839,13 @@ def push_carekit_signal(
     partial prompts gentle re-engagement without assuming a crisis).
     """
     # Clamp to [0, 1] to guard against caller arithmetic errors
-    med   = max(0.0, min(1.0, med_adherence_ratio))
-    task  = max(0.0, min(1.0, task_completion_ratio))
-    symp  = max(0.0, min(1.0, symptom_ok))
+    med = max(0.0, min(1.0, med_adherence_ratio))
+    task = max(0.0, min(1.0, task_completion_ratio))
+    symp = max(0.0, min(1.0, symptom_ok))
 
-    _write_sensor("localai_carekit_med_adherence",   [med])
+    _write_sensor("localai_carekit_med_adherence", [med])
     _write_sensor("localai_carekit_task_completion", [task])
-    _write_sensor("localai_carekit_symptom_ok",      [symp])
+    _write_sensor("localai_carekit_symptom_ok", [symp])
 
     return _trigger_push_and_read_carekit()
 
@@ -821,12 +856,12 @@ def _trigger_push_and_read_carekit() -> str:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
             r = client.post(f"{_pe_url()}/api/push")
             r.raise_for_status()
-            data  = r.json()
-            ps    = data.get("step", {}).get("perceptualSpace", [])
+            data = r.json()
+            ps = data.get("step", {}).get("perceptualSpace", [])
             state = get_carekit_state(ps)
-            log.info("reality_bridge.carekit_state_read",
-                     state=state,
-                     global_step=data.get("globalStep"))
+            log.info(
+                "reality_bridge.carekit_state_read", state=state, global_step=data.get("globalStep")
+            )
             return state or "partial"
     except Exception as exc:
         log.debug("reality_bridge.carekit_push_skipped", error=str(exc))
@@ -834,6 +869,7 @@ def _trigger_push_and_read_carekit() -> str:
 
 
 # ── Startup: graph topology binding ──────────────────────────────────────────
+
 
 def bind_graph_topology() -> bool:
     """
@@ -847,6 +883,7 @@ def bind_graph_topology() -> bool:
 
     try:
         from core.topology_builder import build_machine_json, compute_bindings
+
         bindings = compute_bindings()
     except Exception as exc:
         log.warning("reality_bridge.topology_bindings_failed", error=str(exc))
@@ -863,8 +900,7 @@ def bind_graph_topology() -> bool:
                 for _node, node_info in graph_binding["nodes"].items():
                     sid = node_info["sensor_id"]
                     if sid in existing_ids:
-                        log.info("reality_bridge.topo_sensor_exists",
-                                 sensor_id=sid)
+                        log.info("reality_bridge.topo_sensor_exists", sensor_id=sid)
                         continue
                     payload = {
                         "type": "sensor",
@@ -877,16 +913,17 @@ def bind_graph_topology() -> bool:
                         "sensorId": sid,
                         "lastValue": [],
                         "lastUpdated": None,
-                        "ttlMs": 10_000,   # short TTL — nodes complete in seconds
+                        "ttlMs": 10_000,  # short TTL — nodes complete in seconds
                     }
                     r = pe_client.post(f"{_pe_url()}/api/sources", json=payload)
                     r.raise_for_status()
-                    log.info("reality_bridge.topo_sensor_registered",
-                             sensor_id=sid,
-                             offset=node_info["offset"])
+                    log.info(
+                        "reality_bridge.topo_sensor_registered",
+                        sensor_id=sid,
+                        offset=node_info["offset"],
+                    )
     except Exception as exc:
-        log.warning("reality_bridge.topo_sensor_registration_failed",
-                    error=str(exc))
+        log.warning("reality_bridge.topo_sensor_registration_failed", error=str(exc))
         ok = False
 
     # Import topology machines into the RE
@@ -896,30 +933,36 @@ def bind_graph_topology() -> bool:
             for graph_name, graph_binding in bindings.items():
                 machine_name = f"localai/{graph_name}_topology"
                 if machine_name in existing_machine_names:
-                    log.info("reality_bridge.topo_machine_exists",
-                             name=machine_name)
+                    log.info("reality_bridge.topo_machine_exists", name=machine_name)
                     continue
                 from core.topology_builder import build_machine_json
+
                 machine_json = build_machine_json(graph_name, graph_binding)
                 r = re_client.post(f"{_re_url()}/api/machines", json=machine_json)
                 r.raise_for_status()
                 machine_id = r.json().get("machine", {}).get("id", "unknown")
-                log.info("reality_bridge.topo_machine_imported",
-                         name=machine_name, machine_id=machine_id,
-                         nodes=graph_binding["node_order"],
-                         input_region=graph_binding["input_region"],
-                         output_region=graph_binding["output_region"])
+                log.info(
+                    "reality_bridge.topo_machine_imported",
+                    name=machine_name,
+                    machine_id=machine_id,
+                    nodes=graph_binding["node_order"],
+                    input_region=graph_binding["input_region"],
+                    output_region=graph_binding["output_region"],
+                )
     except Exception as exc:
         log.warning("reality_bridge.topo_machine_import_failed", error=str(exc))
         ok = False
 
-    log.info("reality_bridge.topology_bound",
-             graphs=list(bindings.keys()),
-             total_sensors=sum(len(b["nodes"]) for b in bindings.values()))
+    log.info(
+        "reality_bridge.topology_bound",
+        graphs=list(bindings.keys()),
+        total_sensors=sum(len(b["nodes"]) for b in bindings.values()),
+    )
     return ok
 
 
 # ── Per-request: RAG signal writes ───────────────────────────────────────────
+
 
 def push_retrieval_signal(doc_count: int, avg_score: float) -> None:
     """
@@ -965,8 +1008,8 @@ def push_grading_signal(
 
 
 def push_agent_activity_signal(
-    tool_calls:      int,
-    tool_errors:     int,
+    tool_calls: int,
+    tool_errors: int,
     reasoning_steps: int,
 ) -> dict:
     """
@@ -985,8 +1028,8 @@ def push_agent_activity_signal(
     dict of all-None values when the PE/RE is unreachable (graceful degrade).
     """
     values = [
-        min(tool_calls      / 5.0,  1.0),
-        min(tool_errors     / 3.0,  1.0),
+        min(tool_calls / 5.0, 1.0),
+        min(tool_errors / 3.0, 1.0),
         min(reasoning_steps / 10.0, 1.0),
         0.0,
     ]
@@ -995,6 +1038,7 @@ def push_agent_activity_signal(
 
 
 # ── Per-request: node activity signals ───────────────────────────────────────
+
 
 def push_node_signal(
     graph_name: str,
@@ -1021,14 +1065,13 @@ def push_node_signal(
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
+
 def _get_existing_sensor_ids(client: httpx.Client) -> set:
     try:
         resp = client.get(f"{_pe_url()}/api/sources")
         resp.raise_for_status()
         return {
-            s.get("sensorId")
-            for s in resp.json().get("sources", [])
-            if s.get("type") == "sensor"
+            s.get("sensorId") for s in resp.json().get("sources", []) if s.get("type") == "sensor"
         }
     except Exception:
         return set()
@@ -1051,15 +1094,12 @@ def _write_sensor(sensor_id: str, values: list[float]) -> None:
                 json={"values": values},
             )
             if r.status_code == 404:
-                log.warning("reality_bridge.sensor_not_found",
-                            sensor_id=sensor_id)
+                log.warning("reality_bridge.sensor_not_found", sensor_id=sensor_id)
                 return
             r.raise_for_status()
-            log.debug("reality_bridge.sensor_written",
-                      sensor_id=sensor_id, values=values)
+            log.debug("reality_bridge.sensor_written", sensor_id=sensor_id, values=values)
     except Exception as exc:
-        log.debug("reality_bridge.write_skipped",
-                  sensor_id=sensor_id, error=str(exc))
+        log.debug("reality_bridge.write_skipped", sensor_id=sensor_id, error=str(exc))
 
 
 def _trigger_push_and_read_routing() -> str:
@@ -1072,30 +1112,33 @@ def _trigger_push_and_read_routing() -> str:
             r = client.post(f"{_pe_url()}/api/push")
             r.raise_for_status()
             data = r.json()
-            ps   = data.get("step", {}).get("perceptualSpace", [])
+            ps = data.get("step", {}).get("perceptualSpace", [])
 
             if len(ps) > _OUTPUT_ABORT:
                 generate = ps[_OUTPUT_GENERATE]
-                rewrite  = ps[_OUTPUT_REWRITE]
-                abort    = ps[_OUTPUT_ABORT]
-                session  = get_session_context(ps)
-                log.info("reality_bridge.routing_read",
-                         generate=round(generate, 3),
-                         rewrite=round(rewrite,  3),
-                         abort=round(abort,    3),
-                         session_rag=session["rag"],
-                         session_agent=session["agent"],
-                         agent_activity=session["agent_activity"],
-                         ai_load_tier=session["ai_load_tier"],
-                         global_step=data.get("globalStep"))
+                rewrite = ps[_OUTPUT_REWRITE]
+                abort = ps[_OUTPUT_ABORT]
+                session = get_session_context(ps)
+                log.info(
+                    "reality_bridge.routing_read",
+                    generate=round(generate, 3),
+                    rewrite=round(rewrite, 3),
+                    abort=round(abort, 3),
+                    session_rag=session["rag"],
+                    session_agent=session["agent"],
+                    agent_activity=session["agent_activity"],
+                    ai_load_tier=session["ai_load_tier"],
+                    global_step=data.get("globalStep"),
+                )
                 if generate >= 0.5:
                     return "generate"
                 if abort >= 0.5:
                     return "abort"
                 return "rewrite"
 
-            log.warning("reality_bridge.perceptual_space_short",
-                        length=len(ps), needed=_OUTPUT_ABORT + 1)
+            log.warning(
+                "reality_bridge.perceptual_space_short", length=len(ps), needed=_OUTPUT_ABORT + 1
+            )
     except Exception as exc:
         log.debug("reality_bridge.push_skipped", error=str(exc))
 
@@ -1113,13 +1156,15 @@ def _trigger_push_and_read_session() -> dict:
             r = client.post(f"{_pe_url()}/api/push")
             r.raise_for_status()
             data = r.json()
-            ps   = data.get("step", {}).get("perceptualSpace", [])
+            ps = data.get("step", {}).get("perceptualSpace", [])
             session = get_session_context(ps)
-            log.info("reality_bridge.agent_activity_read",
-                     agent_activity=session["agent_activity"],
-                     ai_load_tier=session["ai_load_tier"],
-                     session_rag=session["rag"],
-                     global_step=data.get("globalStep"))
+            log.info(
+                "reality_bridge.agent_activity_read",
+                agent_activity=session["agent_activity"],
+                ai_load_tier=session["ai_load_tier"],
+                session_rag=session["rag"],
+                global_step=data.get("globalStep"),
+            )
             return session
     except Exception as exc:
         log.debug("reality_bridge.agent_push_skipped", error=str(exc))
@@ -1127,7 +1172,7 @@ def _trigger_push_and_read_session() -> dict:
         "rag": None,
         "agent": {"ever_engaged": False, "tools_ever_used": False},
         "agent_activity": None,
-        "ai_load_tier":   None,
+        "ai_load_tier": None,
     }
 
 
@@ -1137,7 +1182,6 @@ def _trigger_push_fire_and_forget() -> None:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
             r = client.post(f"{_pe_url()}/api/push")
             r.raise_for_status()
-            log.debug("reality_bridge.node_push_ok",
-                      global_step=r.json().get("globalStep"))
+            log.debug("reality_bridge.node_push_ok", global_step=r.json().get("globalStep"))
     except Exception as exc:
         log.debug("reality_bridge.node_push_skipped", error=str(exc))

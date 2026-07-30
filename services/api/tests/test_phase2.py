@@ -72,12 +72,14 @@ _HEALTHKIT_CONFIG_PATH = (
 
 def test_config_health_collection_name_default():
     from config import Settings
+
     s = Settings()
     assert s.health_collection_name == "health_docs"
 
 
 def test_config_health_context_enabled_default_off():
     from config import Settings
+
     s = Settings()
     assert s.health_context_enabled is False
 
@@ -85,6 +87,7 @@ def test_config_health_context_enabled_default_off():
 def test_config_health_context_enabled_via_env(monkeypatch):
     monkeypatch.setenv("HEALTH_CONTEXT_ENABLED", "true")
     from config import Settings
+
     s = Settings()
     assert s.health_context_enabled is True
 
@@ -121,9 +124,14 @@ def test_get_current_health_state_returns_none_when_machine_silent(monkeypatch):
 
 def test_get_current_health_state_returns_none_on_re_failure(monkeypatch):
     class _Raising:
-        def __enter__(self): return self
-        def __exit__(self, *_): return False
-        def get(self, *a, **kw): raise RuntimeError("RE unreachable")
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def get(self, *a, **kw):
+            raise RuntimeError("RE unreachable")
 
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: _Raising())
     assert reality_bridge.get_current_health_state() is None
@@ -131,8 +139,12 @@ def test_get_current_health_state_returns_none_on_re_failure(monkeypatch):
 
 def test_get_current_health_state_returns_none_on_re_404(monkeypatch):
     class _NotFound:
-        def __enter__(self): return self
-        def __exit__(self, *_): return False
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
         def get(self, *a, **kw):
             return _FakeREResponse(404, {})
 
@@ -145,8 +157,12 @@ def test_get_current_health_state_calls_re_not_pe(monkeypatch):
     called_urls: list[str] = []
 
     class _Tracker:
-        def __enter__(self): return self
-        def __exit__(self, *_): return False
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
         def get(self, url, **_):
             called_urls.append(url)
             ps = [0.0] * 256
@@ -170,9 +186,9 @@ def test_get_current_health_state_calls_re_not_pe(monkeypatch):
 
 
 _EXPECTED_HINTS = {
-    "thriving":  "nominal range",        # substring expected in hint
-    "balanced":  "sleep",
-    "watch":     "HRV",
+    "thriving": "nominal range",  # substring expected in hint
+    "balanced": "sleep",
+    "watch": "HRV",
     "attention": "heart rate",
 }
 
@@ -182,6 +198,7 @@ def test_health_hints_constant_defined():
     # Import deferred to inside function — fastapi is not available in the test env
     try:
         from routers.chat import _HEALTH_HINTS
+
         for state in ("thriving", "balanced", "watch", "attention"):
             assert state in _HEALTH_HINTS
             assert len(_HEALTH_HINTS[state]) > 20
@@ -240,6 +257,7 @@ def test_chat_endpoint_checks_header_and_body_and_settings():
 
 def test_inject_logic_body_false_overrides_global_true():
     """Per-request health_context=False wins over settings=True."""
+
     # Logic extracted for pure Python testing (no fastapi needed)
     class _Req:
         health_context = False
@@ -261,6 +279,7 @@ def test_inject_logic_body_false_overrides_global_true():
 
 def test_inject_logic_header_enabled_activates_injection():
     """X-Health-Context: enabled must activate injection when body is None and settings off."""
+
     class _Req:
         health_context = None
 
@@ -281,6 +300,7 @@ def test_inject_logic_header_enabled_activates_injection():
 
 def test_inject_logic_body_true_overrides_settings_false():
     """Per-request health_context=True wins even when settings is off."""
+
     class _Req:
         health_context = True
 
@@ -360,7 +380,7 @@ def test_health_search_has_health_focused_description():
     content = ag_path.read_text()
     # Find the health_search function block
     start = content.find("def health_search")
-    snippet = content[start:start + 600]
+    snippet = content[start : start + 600]
     health_terms = ("health", "HRV", "wellness", "sleep", "heart rate", "recovery")
     assert any(t.lower() in snippet.lower() for t in health_terms), (
         f"health_search docstring missing health-related terms. Snippet:\n{snippet}"
@@ -399,17 +419,14 @@ def test_healthkit_config_maps_three_hk_types(healthkit_config):
 
 def test_healthkit_config_sensor_ids_match_python_constants(healthkit_config):
     expected_ids = {s["sensorId"] for s in reality_bridge._HEALTH_SENSORS}
-    config_ids   = {m["sensorId"]  for m in healthkit_config["sourceMappings"]}
+    config_ids = {m["sensorId"] for m in healthkit_config["sourceMappings"]}
     assert config_ids == expected_ids, (
         f"Config sensorIds {config_ids} do not match bridge constants {expected_ids}"
     )
 
 
 def test_healthkit_config_regions_match_health_sensors(healthkit_config):
-    sensor_regions = {
-        s["sensorId"]: s["region"]
-        for s in reality_bridge._HEALTH_SENSORS
-    }
+    sensor_regions = {s["sensorId"]: s["region"] for s in reality_bridge._HEALTH_SENSORS}
     for mapping in healthkit_config["sourceMappings"]:
         sid = mapping["sensorId"]
         assert sid in sensor_regions, f"{sid} not in _HEALTH_SENSORS"
@@ -426,10 +443,10 @@ def test_healthkit_config_target_region_is_health_input_window(healthkit_config)
 
 def test_healthkit_config_band_thresholds_match_python_constants(healthkit_config):
     bt = healthkit_config["bandThresholds"]
-    assert bt["hr_low_bpm"]      == reality_bridge._HR_LOW_BPM
-    assert bt["hr_high_bpm"]     == reality_bridge._HR_HIGH_BPM
-    assert bt["hrv_ok_sdnn_ms"]  == reality_bridge._HRV_OK_MS
-    assert bt["sleep_ok_hours"]  == reality_bridge._SLEEP_OK_HOURS
+    assert bt["hr_low_bpm"] == reality_bridge._HR_LOW_BPM
+    assert bt["hr_high_bpm"] == reality_bridge._HR_HIGH_BPM
+    assert bt["hrv_ok_sdnn_ms"] == reality_bridge._HRV_OK_MS
+    assert bt["sleep_ok_hours"] == reality_bridge._SLEEP_OK_HOURS
 
 
 def test_healthkit_config_passthrough_normalize_for_ts_pe(healthkit_config):

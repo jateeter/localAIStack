@@ -56,8 +56,9 @@ def test_verify_machine_offsets_catches_drift(tmp_path, monkeypatch):
     monkeypatch.setattr(reality_bridge, "_EXPECTED_MACHINE_OFFSETS", patched)
 
     mismatches = reality_bridge.verify_machine_offsets()
-    assert any("ai_load_bridge.json" in m and "input" in m for m in mismatches), \
+    assert any("ai_load_bridge.json" in m and "input" in m for m in mismatches), (
         f"expected ai_load_bridge input mismatch in: {mismatches}"
+    )
 
 
 def test_ai_load_bridge_output_window_covers_all_ai_machine_inputs():
@@ -67,33 +68,38 @@ def test_ai_load_bridge_output_window_covers_all_ai_machine_inputs():
     input drifts outside that window, ai_load_bridge cannot drive it.
     """
     ai_dir = (
-        pathlib.Path(__file__).resolve().parents[4]
-        / "RealityEngine_AI" / "examples" / "machines"
+        pathlib.Path(__file__).resolve().parents[4] / "RealityEngine_AI" / "examples" / "machines"
     )
     if not ai_dir.exists():
         pytest.skip(f"AI example machines not present at {ai_dir}")
 
     ai_files = [
-        "AIPowerEfficiency.json", "AICoolingRegulator.json",
-        "AICapacityThrottler.json", "AISecurityMonitor.json",
-        "AIModelWellness.json", "AIHardwareResilience.json",
+        "AIPowerEfficiency.json",
+        "AICoolingRegulator.json",
+        "AICapacityThrottler.json",
+        "AISecurityMonitor.json",
+        "AIModelWellness.json",
+        "AIHardwareResilience.json",
     ]
     bridge_spec = next(
-        s for s in reality_bridge._EXPECTED_MACHINE_OFFSETS
+        s
+        for s in reality_bridge._EXPECTED_MACHINE_OFFSETS
         if s["path"].name == "ai_load_bridge.json"
     )
     out_start = bridge_spec["output"]["offset"]
-    out_end   = out_start + bridge_spec["output"]["length"]
+    out_end = out_start + bridge_spec["output"]["length"]
 
     for fname in ai_files:
         p = ai_dir / fname
         if not p.exists():
             pytest.skip(f"{fname} missing from this checkout")
         inp = json.loads(p.read_text())["machine"]["perceptualMapping"]["input"]
-        assert out_start <= inp["offset"], \
+        assert out_start <= inp["offset"], (
             f"{fname} input offset {inp['offset']} < ai_load_bridge output start {out_start}"
-        assert inp["offset"] + inp["length"] <= out_end, \
+        )
+        assert inp["offset"] + inp["length"] <= out_end, (
             f"{fname} input extends past ai_load_bridge output window [{out_start}:{out_end}]"
+        )
 
 
 # ── (2) End-to-end push cycle (fake PE/RE) ────────────────────────────────────
@@ -140,19 +146,22 @@ class _FakePEREClient:
             #   agent_activity_classifier asserted 'productive',
             #   ai_load_bridge projected the nominal tier.
             ps = [0.0] * 256
-            ps[60] = 1.0    # rag_corrective_cycle.generate
-            ps[68] = 1.0    # agent_activity_classifier.productive
-            ps[112] = 1.0   # session_rag.last_generate carry
+            ps[60] = 1.0  # rag_corrective_cycle.generate
+            ps[68] = 1.0  # agent_activity_classifier.productive
+            ps[112] = 1.0  # session_rag.last_generate carry
             for i in range(6):
                 base = 120 + i * 4
                 ps[base + 0] = 0.15
                 ps[base + 1] = 0.30
                 ps[base + 2] = 0.20
                 ps[base + 3] = 0.10
-            return _FakeResponse(200, {
-                "step":       {"perceptualSpace": ps},
-                "globalStep": 1,
-            })
+            return _FakeResponse(
+                200,
+                {
+                    "step": {"perceptualSpace": ps},
+                    "globalStep": 1,
+                },
+            )
         if "/api/sources" in url or "/api/sensors/" in url:
             return _FakeResponse(200, {"ok": True})
         if "/api/machines" in url:
@@ -189,7 +198,7 @@ def test_get_session_context_decodes_agent_flags():
     ps[116] = 1.0  # agent_ever_engaged
     ps[117] = 0.0  # tools_ever_used
     ctx = reality_bridge.get_session_context(ps)
-    assert ctx["agent"]["ever_engaged"]    is True
+    assert ctx["agent"]["ever_engaged"] is True
     assert ctx["agent"]["tools_ever_used"] is False
 
     ps[117] = 1.0
@@ -207,21 +216,25 @@ def test_end_to_end_grading_drives_generate_routing(fake_client):
     """
     reality_bridge.push_retrieval_signal(doc_count=5, avg_score=0.8)
     route = reality_bridge.push_grading_signal(
-        retrieved_count=5, kept_count=5, rewrite_count=0,
+        retrieved_count=5,
+        kept_count=5,
+        rewrite_count=0,
     )
     assert route == "generate"
 
     urls = [p["url"] for p in fake_client.posts]
-    assert any("/api/sensors/localai_rag_retrieval" in u for u in urls), \
+    assert any("/api/sensors/localai_rag_retrieval" in u for u in urls), (
         "expected retrieval sensor write"
-    assert any("/api/sensors/localai_rag_grading"   in u for u in urls), \
+    )
+    assert any("/api/sensors/localai_rag_grading" in u for u in urls), (
         "expected grading sensor write"
-    assert any("/api/push" in u for u in urls), \
-        "expected /api/push trigger after grading"
+    )
+    assert any("/api/push" in u for u in urls), "expected /api/push trigger after grading"
 
 
 def test_end_to_end_push_response_short_falls_back_to_rewrite(monkeypatch):
     """When the PE returns a truncated perceptualSpace, the bridge degrades to 'rewrite'."""
+
     class _ShortClient(_FakePEREClient):
         def post(self, url, json=None, **_):
             self.posts.append({"url": url, "json": json})
@@ -243,23 +256,17 @@ def test_grading_sensor_values_are_normalized(fake_client):
     rag_corrective_cycle expects at elements [4] and [5] of its input window.
     """
     reality_bridge.push_grading_signal(retrieved_count=4, kept_count=1, rewrite_count=1)
-    grading = next(
-        p for p in fake_client.posts
-        if "/api/sensors/localai_rag_grading" in p["url"]
-    )
+    grading = next(p for p in fake_client.posts if "/api/sensors/localai_rag_grading" in p["url"])
     values = grading["json"]["values"]
     assert values[0] == pytest.approx(0.25)  # 1/4 kept_ratio
-    assert values[1] == pytest.approx(0.5)   # 1/2 rewrite_count_norm
+    assert values[1] == pytest.approx(0.5)  # 1/2 rewrite_count_norm
     assert values[2] == 0.0 and values[3] == 0.0
 
 
 def test_retrieval_sensor_clamps_doc_count(fake_client):
     """doc_count >= 10 must saturate doc_count_norm at 1.0."""
     reality_bridge.push_retrieval_signal(doc_count=50, avg_score=0.9)
-    post = next(
-        p for p in fake_client.posts
-        if "/api/sensors/localai_rag_retrieval" in p["url"]
-    )
+    post = next(p for p in fake_client.posts if "/api/sensors/localai_rag_retrieval" in p["url"])
     assert post["json"]["values"][0] == 1.0
     assert post["json"]["values"][1] == pytest.approx(0.9)
 
@@ -275,19 +282,20 @@ def test_push_agent_activity_signal_writes_sensor_and_returns_session(fake_clien
       • returns the enriched session context dict
     """
     session = reality_bridge.push_agent_activity_signal(
-        tool_calls=2, tool_errors=0, reasoning_steps=3,
+        tool_calls=2,
+        tool_errors=0,
+        reasoning_steps=3,
     )
     assert session["agent_activity"] == "productive"
-    assert session["ai_load_tier"]   == "nominal"
-    assert session["rag"]            == "generate"
+    assert session["ai_load_tier"] == "nominal"
+    assert session["rag"] == "generate"
 
     activity_post = next(
-        p for p in fake_client.posts
-        if "/api/sensors/localai_agent_activity" in p["url"]
+        p for p in fake_client.posts if "/api/sensors/localai_agent_activity" in p["url"]
     )
     vals = activity_post["json"]["values"]
     assert vals[0] == pytest.approx(0.4)  # 2 / 5 tool_calls_norm
-    assert vals[1] == 0.0                 # 0 / 3 tool_errors_norm
+    assert vals[1] == 0.0  # 0 / 3 tool_errors_norm
     assert vals[2] == pytest.approx(0.3)  # 3 / 10 reasoning_depth_norm
     assert vals[3] == 0.0
 
@@ -297,30 +305,31 @@ def test_push_agent_activity_signal_writes_sensor_and_returns_session(fake_clien
 def test_push_agent_activity_signal_clamps_high_values(fake_client):
     """Saturating inputs must clamp to 1.0 on each dimension."""
     reality_bridge.push_agent_activity_signal(
-        tool_calls=99, tool_errors=99, reasoning_steps=99,
+        tool_calls=99,
+        tool_errors=99,
+        reasoning_steps=99,
     )
-    post = next(
-        p for p in fake_client.posts
-        if "/api/sensors/localai_agent_activity" in p["url"]
-    )
+    post = next(p for p in fake_client.posts if "/api/sensors/localai_agent_activity" in p["url"])
     assert post["json"]["values"][:3] == [1.0, 1.0, 1.0]
 
 
 def test_push_agent_activity_signal_returns_defaults_on_bridge_failure(monkeypatch):
     """When the PE is unreachable, the push function still returns a session dict."""
+
     class _Raising(_FakePEREClient):
         def post(self, url, json=None, **_):
             if "/api/push" in url:
                 raise RuntimeError("PE down")
             return super().post(url, json=json)
+
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: _Raising())
 
     session = reality_bridge.push_agent_activity_signal(1, 0, 2)
     assert session == {
-        "rag":            None,
-        "agent":          {"ever_engaged": False, "tools_ever_used": False},
+        "rag": None,
+        "agent": {"ever_engaged": False, "tools_ever_used": False},
         "agent_activity": None,
-        "ai_load_tier":   None,
+        "ai_load_tier": None,
     }
 
 
@@ -376,10 +385,7 @@ def test_session_context_agent_activity_none_when_classifier_silent():
 
 def test_drift_guard_covers_agent_activity_classifier():
     """The drift guard must check agent_activity_classifier alongside the others."""
-    filenames = {
-        spec["path"].name
-        for spec in reality_bridge._EXPECTED_MACHINE_OFFSETS
-    }
+    filenames = {spec["path"].name for spec in reality_bridge._EXPECTED_MACHINE_OFFSETS}
     assert "agent_activity_classifier.json" in filenames
 
 
@@ -393,6 +399,5 @@ def test_drift_guard_rejects_drifted_agent_sensor(monkeypatch):
 
     mismatches = reality_bridge.verify_machine_offsets()
     assert any(
-        "localai_agent_activity" in m and "agent_activity_classifier.json" in m
-        for m in mismatches
+        "localai_agent_activity" in m and "agent_activity_classifier.json" in m for m in mismatches
     ), f"expected sensor/consumer mismatch in: {mismatches}"

@@ -83,10 +83,7 @@ async def query(req: QueryRequest):
     graph = get_rag_graph()
     result = graph.invoke({"question": req.question, "documents": [], "rewrite_count": 0})
 
-    sources = list({
-        d.metadata.get("source", "unknown")
-        for d in result.get("documents", [])
-    })
+    sources = list({d.metadata.get("source", "unknown") for d in result.get("documents", [])})
 
     return QueryResponse(
         answer=result.get("generation", "No answer generated."),

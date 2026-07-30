@@ -29,6 +29,7 @@ log = structlog.get_logger()
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
+
 @strawberry.enum
 class RagStatusCode(enum.Enum):
     GREEN = "GREEN"
@@ -90,13 +91,14 @@ def _record_event(payload: dict) -> None:
 
 # ── Mutations / Queries ──────────────────────────────────────────────────────
 
+
 @strawberry.type
 class Query:
     @strawberry.field
     def recent_triggers(self, limit: int = 20) -> list[str]:
         """Return the most recent trigger events as compact JSON-like strings."""
         return [
-            f"{e.get('source_machine','?')}:{e.get('rag_status_code','?')}"
+            f"{e.get('source_machine', '?')}:{e.get('rag_status_code', '?')}"
             f"@{e.get('received_at', 0):.0f}"
             for e in list(_EVENTS)[-limit:]
         ]
@@ -105,19 +107,19 @@ class Query:
 @strawberry.type
 class Mutation:
     @strawberry.mutation
-    def update_process_state(
-        self, input: UpdateProcessStateInput
-    ) -> UpdateProcessStatePayload:
+    def update_process_state(self, input: UpdateProcessStateInput) -> UpdateProcessStatePayload:
         description = _RAG_DESCRIPTIONS[input.rag_status_code]
-        _record_event({
-            "id": input.id,
-            "name": input.name,
-            "status": input.status,
-            "rag_status_code": input.rag_status_code.value,
-            "source_machine": input.source_machine,
-            "source_sequence": input.source_sequence,
-            "context": input.context,
-        })
+        _record_event(
+            {
+                "id": input.id,
+                "name": input.name,
+                "status": input.status,
+                "rag_status_code": input.rag_status_code.value,
+                "source_machine": input.source_machine,
+                "source_sequence": input.source_sequence,
+                "context": input.context,
+            }
+        )
         return UpdateProcessStatePayload(
             process_state=ProcessState(
                 id=input.id,

@@ -15,13 +15,16 @@ log = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
-    log.info("localAIStack API starting",
-             llm_model=s.llm_model,
-             embed_model=s.embed_model,
-             ollama_url=s.ollama_base_url)
+    log.info(
+        "localAIStack API starting",
+        llm_model=s.llm_model,
+        embed_model=s.embed_model,
+        ollama_url=s.ollama_base_url,
+    )
     # Warm up vector store connection on startup
     try:
         from core.vector_store import get_vector_store
+
         get_vector_store()
         log.info("Qdrant vector store ready", collection=s.collection_name)
     except Exception as e:
@@ -37,6 +40,7 @@ async def lifespan(app: FastAPI):
             register_sensors,
             verify_machine_offsets,
         )
+
         # Pure local-file structural check; runs before any network call so
         # drift surfaces even when the PE/RE are unreachable.
         offset_mismatches = verify_machine_offsets()

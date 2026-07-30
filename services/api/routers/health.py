@@ -20,8 +20,7 @@ async def _check_pe(pe_url: str, ssl_verify: bool | str) -> dict:
             r.raise_for_status()
             sources = r.json().get("sources", [])
             health_sensors = [
-                s for s in sources
-                if s.get("sensorId", "").startswith("localai_health_")
+                s for s in sources if s.get("sensorId", "").startswith("localai_health_")
             ]
             return {
                 "status": "ok",
@@ -37,24 +36,25 @@ async def _check_re(re_url: str, ssl_verify: bool | str) -> dict:
     try:
         async with httpx.AsyncClient(timeout=3.0, verify=ssl_verify) as c:
             # Fan out: state and machine list in parallel
-            state_coro    = c.get(f"{re_url}/api/perceptual-simulation/state")
+            state_coro = c.get(f"{re_url}/api/perceptual-simulation/state")
             machines_coro = c.get(f"{re_url}/api/machines")
             state_r, machines_r = await asyncio.gather(state_coro, machines_coro)
             state_r.raise_for_status()
             machines_r.raise_for_status()
 
         data = state_r.json()
-        ps   = data.get("state", {}).get("perceptualSpace", [])
+        ps = data.get("state", {}).get("perceptualSpace", [])
 
         from core.reality_bridge import get_health_state
+
         health_state = get_health_state(ps)
 
         machine_count = len(machines_r.json().get("machines", []))
         return {
-            "status":        "ok",
-            "health_state":  health_state,
+            "status": "ok",
+            "health_state": health_state,
             "machine_count": machine_count,
-            "ps_length":     len(ps),
+            "ps_length": len(ps),
         }
     except Exception as exc:
         return {"status": "unreachable", "error": str(exc)[:200]}
@@ -64,17 +64,15 @@ async def _check_re(re_url: str, ssl_verify: bool | str) -> dict:
 async def health():
     s = get_settings()
     # RE_SSL_VERIFY mirrors the env var used by reality_bridge.py
-    ssl_verify: bool | str = os.getenv("RE_SSL_VERIFY", "true").lower() not in (
-        "false", "0", "no"
-    )
+    ssl_verify: bool | str = os.getenv("RE_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
 
     services: dict = {
-        "api":    "ok",
+        "api": "ok",
         "ollama": "unknown",
         "qdrant": "unknown",
-        "redis":  "unknown",
-        "pe":     {"status": "unknown"},
-        "re":     {"status": "unknown"},
+        "redis": "unknown",
+        "pe": {"status": "unknown"},
+        "re": {"status": "unknown"},
     }
 
     # ── Core service probes (run in parallel) ──────────────────────────────────
@@ -114,26 +112,18 @@ async def health():
         _check_ollama(),
         loop.run_in_executor(None, _check_qdrant),
         loop.run_in_executor(None, _check_redis),
-        _attach_pe_re(
-            services, bridge_targets["pe_url"], bridge_targets["re_url"], ssl_verify
-        ),
+        _attach_pe_re(services, bridge_targets["pe_url"], bridge_targets["re_url"], ssl_verify),
     )
 
     # ── Status rollup ──────────────────────────────────────────────────────────
     # Overall "status" reflects only core services — the AI pipeline must work.
     # PE/RE are supplementary; their health is surfaced via "bridge" separately.
-    core_ok = all(
-        services[k] == "ok"
-        for k in ("ollama", "qdrant", "redis")
-    )
-    bridge_ok = all(
-        services[k].get("status") == "ok"
-        for k in ("pe", "re")
-    )
+    core_ok = all(services[k] == "ok" for k in ("ollama", "qdrant", "redis"))
+    bridge_ok = all(services[k].get("status") == "ok" for k in ("pe", "re"))
 
     return {
-        "status":  "ok" if core_ok else "degraded",
-        "bridge":  "ok" if bridge_ok else "degraded",
+        "status": "ok" if core_ok else "degraded",
+        "bridge": "ok" if bridge_ok else "degraded",
         "bridge_target": bridge_targets,
         "services": services,
     }
