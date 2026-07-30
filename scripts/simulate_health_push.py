@@ -137,10 +137,15 @@ def _band(hr: float, hrv: float, sleep: float) -> tuple[float, float, float]:
 def _decode_health_state(ps: list[float]) -> str | None:
     def s(i: int) -> float:
         return ps[i] if len(ps) > i else 0.0
-    if s(_HEALTH_OUTPUT_OFFSET)     >= 0.5: return "thriving"
-    if s(_HEALTH_OUTPUT_OFFSET + 1) >= 0.5: return "balanced"
-    if s(_HEALTH_OUTPUT_OFFSET + 2) >= 0.5: return "watch"
-    if s(_HEALTH_OUTPUT_OFFSET + 3) >= 0.5: return "attention"
+
+    if s(_HEALTH_OUTPUT_OFFSET) >= 0.5:
+        return "thriving"
+    if s(_HEALTH_OUTPUT_OFFSET + 1) >= 0.5:
+        return "balanced"
+    if s(_HEALTH_OUTPUT_OFFSET + 2) >= 0.5:
+        return "watch"
+    if s(_HEALTH_OUTPUT_OFFSET + 3) >= 0.5:
+        return "attention"
     return None
 
 

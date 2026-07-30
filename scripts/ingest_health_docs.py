@@ -45,9 +45,9 @@ if str(_SERVICES_API) not in sys.path:
 # ── Imports (require services/api deps to be installed) ───────────────────────
 
 try:
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
     from langchain_community.document_loaders import UnstructuredMarkdownLoader
     from langchain_qdrant import QdrantVectorStore
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
     from qdrant_client import QdrantClient
     from qdrant_client.models import Distance, VectorParams
 except ImportError as exc:
