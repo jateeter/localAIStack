@@ -8,10 +8,9 @@ Usage:
   python scripts/ingest.py --text "raw text" --source "label"
 """
 
-import sys
-import os
 import argparse
-import json
+import os
+import sys
 from pathlib import Path
 
 try:

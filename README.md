@@ -30,6 +30,21 @@ models, and a Loki + Grafana pair for centralized log monitoring.
 up the compose stack — the qdrant, redis, api, and open-webui containers all
 use the Loki log driver and will fail to start without it.
 
+## Provider completion conformance
+
+Validate the RealityEngine PE completion callback contract without a live
+OpenAI key:
+
+```bash
+make provider-conformance
+node scripts/pe-completion-conformance.mjs --mode native --stub --dry-run
+node scripts/pe-completion-conformance.mjs --mode openai-chat --stub --dry-run
+```
+
+For live Ollama probing, omit `--stub`. Native mode calls `/api/chat`; OpenAI
+compatible mode calls `/v1/chat/completions`. Omit `--dry-run` to POST the
+validated completion body to `$PE_URL/api/integrations/completions`.
+
 ## Logging (Loki + Grafana)
 
 All containerised services ship logs to Loki via the Docker `loki` log driver

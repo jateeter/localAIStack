@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Header
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -10,9 +9,9 @@ from config import get_settings
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 _HEALTH_HINTS: dict[str, str] = {
-    "thriving":  "The user's health metrics are all in nominal range. They are rested, recovered, and at full capacity.",
-    "balanced":  "The user's cardiovascular metrics are good but sleep is below target. They may benefit from an early wind-down today.",
-    "watch":     "The user's HRV indicates low recovery today. Consider recommending lighter activities and extra rest.",
+    "thriving": "The user's health metrics are all in nominal range. They are rested, recovered, and at full capacity.",
+    "balanced": "The user's cardiovascular metrics are good but sleep is below target. They may benefit from an early wind-down today.",
+    "watch": "The user's HRV indicates low recovery today. Consider recommending lighter activities and extra rest.",
     "attention": "The user's heart rate is outside the nominal range. Gently recommend a check-in with a healthcare provider if this persists.",
 }
 
@@ -85,11 +84,13 @@ async def chat(
 
     if inject_health:
         from core.reality_bridge import get_current_health_state
+
         health_state = get_current_health_state()
         if health_state:
             lc_messages = _inject_health_context(lc_messages, health_state)
 
     if req.stream:
+
         async def _stream():
             async for chunk in llm.astream(lc_messages):
                 yield chunk.content

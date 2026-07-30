@@ -34,8 +34,8 @@ def test_personal_health_baseline_offsets_check_in_tree():
     """personal_health_baseline.json must agree with the Python constants."""
     mismatches = reality_bridge.verify_machine_offsets()
     health_mismatches = [m for m in mismatches if "personal_health_baseline" in m]
-    assert health_mismatches == [], (
-        "personal_health_baseline.json offset drift: " + " | ".join(health_mismatches)
+    assert health_mismatches == [], "personal_health_baseline.json offset drift: " + " | ".join(
+        health_mismatches
     )
 
 
@@ -63,16 +63,17 @@ def test_drift_guard_catches_health_machine_offset_mutation(tmp_path, monkeypatc
     monkeypatch.setattr(reality_bridge, "_EXPECTED_MACHINE_OFFSETS", patched)
 
     mismatches = reality_bridge.verify_machine_offsets()
-    assert any(
-        "personal_health_baseline.json" in m and "input" in m for m in mismatches
-    ), f"expected health machine input mismatch in: {mismatches}"
+    assert any("personal_health_baseline.json" in m and "input" in m for m in mismatches), (
+        f"expected health machine input mismatch in: {mismatches}"
+    )
 
 
 def test_health_sensors_are_registered_in_sensor_to_machine():
     """All three health sensor IDs must map to personal_health_baseline.json."""
     for sid in ("localai_health_hr_ok", "localai_health_hrv_ok", "localai_health_sleep_ok"):
-        assert reality_bridge._SENSOR_TO_MACHINE.get(sid) == "personal_health_baseline.json", \
+        assert reality_bridge._SENSOR_TO_MACHINE.get(sid) == "personal_health_baseline.json", (
             f"{sid} missing from _SENSOR_TO_MACHINE"
+        )
 
 
 def test_health_sensors_are_inside_health_machine_input_window():
@@ -82,11 +83,12 @@ def test_health_sensors_are_inside_health_machine_input_window():
     read them — the drift guard must catch this.
     """
     spec = next(
-        s for s in reality_bridge._EXPECTED_MACHINE_OFFSETS
+        s
+        for s in reality_bridge._EXPECTED_MACHINE_OFFSETS
         if s["path"].name == "personal_health_baseline.json"
     )
     m_start = spec["input"]["offset"]
-    m_end   = m_start + spec["input"]["length"]
+    m_end = m_start + spec["input"]["length"]
 
     for sensor in reality_bridge._HEALTH_SENSORS:
         sr = sensor["region"]
@@ -175,10 +177,13 @@ class _FakeHealthClient:
         if "/api/push" in url:
             ps = [0.0] * 256
             ps[self._health_state_offset] = 1.0
-            return _FakeResponse(200, {
-                "step": {"perceptualSpace": ps},
-                "globalStep": 1,
-            })
+            return _FakeResponse(
+                200,
+                {
+                    "step": {"perceptualSpace": ps},
+                    "globalStep": 1,
+                },
+            )
         return _FakeResponse(200, {"ok": True})
 
 
@@ -195,7 +200,9 @@ def test_push_health_signal_thriving_writes_all_sensors_high(fake_health_client)
     push_health_signal must write 1.0 to each sensor and return 'thriving'.
     """
     state = reality_bridge.push_health_signal(
-        hr_bpm=80.0, hrv_sdnn_ms=45.0, sleep_hours=7.5,
+        hr_bpm=80.0,
+        hrv_sdnn_ms=45.0,
+        sleep_hours=7.5,
     )
     assert state == "thriving"
 
@@ -206,8 +213,7 @@ def test_push_health_signal_thriving_writes_all_sensors_high(fake_health_client)
     assert any("/api/push" in u for u in urls)
 
     hr_post = next(
-        p for p in fake_health_client.posts
-        if "/api/sensors/localai_health_hr_ok" in p["url"]
+        p for p in fake_health_client.posts if "/api/sensors/localai_health_hr_ok" in p["url"]
     )
     assert hr_post["json"]["values"] == [1.0]
 
@@ -215,7 +221,7 @@ def test_push_health_signal_thriving_writes_all_sensors_high(fake_health_client)
 def test_push_health_signal_band_values_hr_in_range():
     """HR=60 (exactly on lower bound) and HR=100 (upper bound) should both be OK."""
     for bpm in (60.0, 80.0, 100.0):
-        hr_ok    = 1.0 if 60.0 <= bpm <= 100.0 else 0.0
+        hr_ok = 1.0 if 60.0 <= bpm <= 100.0 else 0.0
         assert hr_ok == 1.0, f"HR={bpm} should be in range"
 
     for bpm in (59.9, 100.1, 120.0, 40.0):
@@ -235,14 +241,13 @@ def test_push_health_signal_attention_writes_hr_low(monkeypatch):
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
 
     state = reality_bridge.push_health_signal(
-        hr_bpm=105.0, hrv_sdnn_ms=25.0, sleep_hours=7.0,
+        hr_bpm=105.0,
+        hrv_sdnn_ms=25.0,
+        sleep_hours=7.0,
     )
     assert state == "attention"
 
-    hr_post = next(
-        p for p in fake.posts
-        if "/api/sensors/localai_health_hr_ok" in p["url"]
-    )
+    hr_post = next(p for p in fake.posts if "/api/sensors/localai_health_hr_ok" in p["url"])
     assert hr_post["json"]["values"] == [0.0]
 
 
@@ -252,14 +257,13 @@ def test_push_health_signal_watch_writes_hrv_low(monkeypatch):
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
 
     state = reality_bridge.push_health_signal(
-        hr_bpm=70.0, hrv_sdnn_ms=18.0, sleep_hours=6.0,
+        hr_bpm=70.0,
+        hrv_sdnn_ms=18.0,
+        sleep_hours=6.0,
     )
     assert state == "watch"
 
-    hrv_post = next(
-        p for p in fake.posts
-        if "/api/sensors/localai_health_hrv_ok" in p["url"]
-    )
+    hrv_post = next(p for p in fake.posts if "/api/sensors/localai_health_hrv_ok" in p["url"])
     assert hrv_post["json"]["values"] == [0.0]
 
 
@@ -269,14 +273,13 @@ def test_push_health_signal_balanced_sleep_low(monkeypatch):
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
 
     state = reality_bridge.push_health_signal(
-        hr_bpm=75.0, hrv_sdnn_ms=38.0, sleep_hours=5.5,
+        hr_bpm=75.0,
+        hrv_sdnn_ms=38.0,
+        sleep_hours=5.5,
     )
     assert state == "balanced"
 
-    sleep_post = next(
-        p for p in fake.posts
-        if "/api/sensors/localai_health_sleep_ok" in p["url"]
-    )
+    sleep_post = next(p for p in fake.posts if "/api/sensors/localai_health_sleep_ok" in p["url"])
     assert sleep_post["json"]["values"] == [0.0]
 
 
@@ -285,6 +288,7 @@ def test_push_health_signal_balanced_sleep_low(monkeypatch):
 
 def test_push_health_signal_falls_back_to_watch_on_pe_failure(monkeypatch):
     """When the PE is unreachable, push_health_signal must return 'watch'."""
+
     class _Raising(_FakeHealthClient):
         def post(self, url, json=None, **_):
             if "/api/push" in url:
@@ -294,13 +298,12 @@ def test_push_health_signal_falls_back_to_watch_on_pe_failure(monkeypatch):
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: _Raising())
 
     state = reality_bridge.push_health_signal(80.0, 40.0, 7.5)
-    assert state == "watch", (
-        "'watch' is the safe default — mindful without assuming crisis"
-    )
+    assert state == "watch", "'watch' is the safe default — mindful without assuming crisis"
 
 
 def test_push_health_signal_short_ps_falls_back_to_watch(monkeypatch):
     """When the PE returns a truncated perceptualSpace, fall back to 'watch'."""
+
     class _ShortPS(_FakeHealthClient):
         def post(self, url, json=None, **_):
             self.posts.append({"url": url, "json": json})
@@ -319,12 +322,16 @@ def test_push_health_signal_short_ps_falls_back_to_watch(monkeypatch):
 
 def test_import_health_machines_skips_when_machine_exists(monkeypatch, fake_health_client):
     """import_health_machines must be idempotent — skip if the machine name exists."""
+
     class _WithMachine(_FakeHealthClient):
         def get(self, url, **_):
             if "/api/machines" in url:
-                return _FakeResponse(200, {
-                    "machines": [{"name": reality_bridge._HEALTH_MACHINE_NAME}],
-                })
+                return _FakeResponse(
+                    200,
+                    {
+                        "machines": [{"name": reality_bridge._HEALTH_MACHINE_NAME}],
+                    },
+                )
             return super().get(url)
 
     fake = _WithMachine()
@@ -348,9 +355,7 @@ def test_import_health_machines_imports_when_missing(monkeypatch, fake_health_cl
 
         def post(self, url, json=None, **_):
             if "/api/machines" in url and json:
-                posted_names.append(
-                    (json.get("machine") or {}).get("name", "")
-                )
+                posted_names.append((json.get("machine") or {}).get("name", ""))
                 return _FakeResponse(200, {"machine": {"id": "fake-health-id"}})
             return super().post(url, json=json)
 

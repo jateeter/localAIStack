@@ -54,9 +54,7 @@ def _probe_health(base_url: str) -> bool:
     """True when GET {base_url}/api/health answers with HTTP 2xx."""
     try:
         req = urllib.request.Request(f"{base_url}/api/health")
-        with urllib.request.urlopen(
-            req, timeout=_PROBE_TIMEOUT_S, context=_ssl_context()
-        ) as r:
+        with urllib.request.urlopen(req, timeout=_PROBE_TIMEOUT_S, context=_ssl_context()) as r:
             return 200 <= r.status < 300
     except Exception:
         return False
@@ -64,9 +62,7 @@ def _probe_health(base_url: str) -> bool:
 
 def _fetch_registry(url: str) -> dict | None:
     try:
-        with urllib.request.urlopen(
-            url, timeout=_PROBE_TIMEOUT_S, context=_ssl_context()
-        ) as r:
+        with urllib.request.urlopen(url, timeout=_PROBE_TIMEOUT_S, context=_ssl_context()) as r:
             return json.loads(r.read().decode("utf-8"))
     except Exception:
         return None
@@ -76,9 +72,7 @@ def _running_instances(registry: dict) -> list[dict]:
     return [
         inst
         for inst in registry.get("instances", [])
-        if inst.get("status", "running") == "running"
-        and inst.get("re_url")
-        and inst.get("pe_url")
+        if inst.get("status", "running") == "running" and inst.get("re_url") and inst.get("pe_url")
     ]
 
 
@@ -91,11 +85,7 @@ def resolve_bridge_targets(force_refresh: bool = False) -> dict:
     is the registry instance id when source is ``"registry"``.
     """
     now = time.monotonic()
-    if (
-        not force_refresh
-        and _cache["targets"] is not None
-        and now - _cache["at"] < _CACHE_TTL_S
-    ):
+    if not force_refresh and _cache["targets"] is not None and now - _cache["at"] < _CACHE_TTL_S:
         return _cache["targets"]
 
     s = get_settings()

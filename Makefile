@@ -1,4 +1,4 @@
-.PHONY: setup start stop up down logs health query ingest models clean
+.PHONY: setup start stop up down logs health query ingest models provider-conformance clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -32,6 +32,9 @@ health:
 models:
 	@curl -s http://localhost:11434/api/tags | python3 -c \
 		"import sys,json; [print(' ', m['name']) for m in json.load(sys.stdin).get('models',[])]"
+
+provider-conformance:
+	@node --test scripts/pe-completion-conformance.test.mjs
 
 # ── RAG operations ────────────────────────────────────────────────────────────
 # Usage: make ingest FILE=./data/documents/spec.pdf

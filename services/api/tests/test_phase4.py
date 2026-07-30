@@ -77,10 +77,13 @@ class _FakeCareKitClient:
         if "/api/push" in url:
             ps = [0.0] * 256
             ps[self._carekit_state_offset] = 1.0
-            return _FakeResponse(200, {
-                "step": {"perceptualSpace": ps},
-                "globalStep": 1,
-            })
+            return _FakeResponse(
+                200,
+                {
+                    "step": {"perceptualSpace": ps},
+                    "globalStep": 1,
+                },
+            )
         return _FakeResponse(200, {"ok": True})
 
 
@@ -111,8 +114,8 @@ def test_carekit_machine_offsets_match_json():
     """medication_adherence.json must agree with the Python constants."""
     mismatches = reality_bridge.verify_machine_offsets()
     ck_mismatches = [m for m in mismatches if "medication_adherence" in m]
-    assert ck_mismatches == [], (
-        "medication_adherence.json offset drift: " + " | ".join(ck_mismatches)
+    assert ck_mismatches == [], "medication_adherence.json offset drift: " + " | ".join(
+        ck_mismatches
     )
 
 
@@ -120,8 +123,8 @@ def test_session_health_context_offsets_match_json():
     """session_health_context.json must agree with the Python constants."""
     mismatches = reality_bridge.verify_machine_offsets()
     carry_mismatches = [m for m in mismatches if "session_health_context" in m]
-    assert carry_mismatches == [], (
-        "session_health_context.json offset drift: " + " | ".join(carry_mismatches)
+    assert carry_mismatches == [], "session_health_context.json offset drift: " + " | ".join(
+        carry_mismatches
     )
 
 
@@ -143,9 +146,9 @@ def test_drift_guard_catches_carekit_machine_input_offset_mutation(tmp_path, mon
     monkeypatch.setattr(reality_bridge, "_EXPECTED_MACHINE_OFFSETS", patched)
 
     mismatches = reality_bridge.verify_machine_offsets()
-    assert any(
-        "medication_adherence.json" in m and "input" in m for m in mismatches
-    ), f"expected carekit machine input mismatch in: {mismatches}"
+    assert any("medication_adherence.json" in m and "input" in m for m in mismatches), (
+        f"expected carekit machine input mismatch in: {mismatches}"
+    )
 
 
 def test_drift_guard_catches_health_carry_output_offset_mutation(tmp_path, monkeypatch):
@@ -166,9 +169,9 @@ def test_drift_guard_catches_health_carry_output_offset_mutation(tmp_path, monke
     monkeypatch.setattr(reality_bridge, "_EXPECTED_MACHINE_OFFSETS", patched)
 
     mismatches = reality_bridge.verify_machine_offsets()
-    assert any(
-        "session_health_context.json" in m and "output" in m for m in mismatches
-    ), f"expected health carry output mismatch in: {mismatches}"
+    assert any("session_health_context.json" in m and "output" in m for m in mismatches), (
+        f"expected health carry output mismatch in: {mismatches}"
+    )
 
 
 # ── (2) CareKit machine JSON ──────────────────────────────────────────────────
@@ -182,16 +185,14 @@ def _load_carekit_machine() -> dict:
 def test_carekit_machine_has_five_sequences():
     """medication_adherence.json must define exactly 5 sequences."""
     machine = _load_carekit_machine()
-    assert len(machine["sequences"]) == 5, (
-        f"Expected 5 sequences, got {len(machine['sequences'])}"
-    )
+    assert len(machine["sequences"]) == 5, f"Expected 5 sequences, got {len(machine['sequences'])}"
 
 
 def test_carekit_machine_perceptual_mapping():
     """medication_adherence.json input [194:198] and output [198:202]."""
     machine = _load_carekit_machine()
     pm = machine["perceptualMapping"]
-    assert pm["input"]  == {"offset": 194, "length": 4}
+    assert pm["input"] == {"offset": 194, "length": 4}
     assert pm["output"] == {"offset": 198, "length": 4}
 
 
@@ -221,11 +222,11 @@ def test_carekit_machine_sequences_emit_one_hot_outputs():
     """
     machine = _load_carekit_machine()
     expected_outputs = {
-        "carekit-adherent":         [1.0, 0.0, 0.0, 0.0],
-        "carekit-partial-task":     [0.0, 1.0, 0.0, 0.0],
-        "carekit-partial-symptom":  [0.0, 1.0, 0.0, 0.0],
-        "carekit-lapsed":           [0.0, 0.0, 1.0, 0.0],
-        "carekit-concern":          [0.0, 0.0, 0.0, 1.0],
+        "carekit-adherent": [1.0, 0.0, 0.0, 0.0],
+        "carekit-partial-task": [0.0, 1.0, 0.0, 0.0],
+        "carekit-partial-symptom": [0.0, 1.0, 0.0, 0.0],
+        "carekit-lapsed": [0.0, 0.0, 1.0, 0.0],
+        "carekit-concern": [0.0, 0.0, 0.0, 1.0],
     }
     for seq in machine["sequences"]:
         sid = seq["id"]
@@ -297,8 +298,9 @@ def test_carekit_sensors_are_registered_in_sensor_to_machine():
         "localai_carekit_task_completion",
         "localai_carekit_symptom_ok",
     ):
-        assert reality_bridge._SENSOR_TO_MACHINE.get(sid) == "medication_adherence.json", \
+        assert reality_bridge._SENSOR_TO_MACHINE.get(sid) == "medication_adherence.json", (
             f"{sid} missing from _SENSOR_TO_MACHINE"
+        )
 
 
 def test_carekit_sensors_are_inside_carekit_machine_input_window():
@@ -308,11 +310,12 @@ def test_carekit_sensors_are_inside_carekit_machine_input_window():
     cannot read the sensor — this must be caught by the drift guard.
     """
     spec = next(
-        s for s in reality_bridge._EXPECTED_MACHINE_OFFSETS
+        s
+        for s in reality_bridge._EXPECTED_MACHINE_OFFSETS
         if s["path"].name == "medication_adherence.json"
     )
     m_start = spec["input"]["offset"]
-    m_end   = m_start + spec["input"]["length"]
+    m_end = m_start + spec["input"]["length"]
 
     for sensor in reality_bridge._CAREKIT_SENSORS:
         sr = sensor["region"]
@@ -327,9 +330,9 @@ def test_carekit_sensors_are_inside_carekit_machine_input_window():
 def test_carekit_sensors_have_correct_offsets():
     """med_adherence→194, task_completion→195, symptom_ok→196."""
     by_id = {s["sensorId"]: s for s in reality_bridge._CAREKIT_SENSORS}
-    assert by_id["localai_carekit_med_adherence"]["region"]["offset"]   == 194
+    assert by_id["localai_carekit_med_adherence"]["region"]["offset"] == 194
     assert by_id["localai_carekit_task_completion"]["region"]["offset"] == 195
-    assert by_id["localai_carekit_symptom_ok"]["region"]["offset"]      == 196
+    assert by_id["localai_carekit_symptom_ok"]["region"]["offset"] == 196
 
 
 # ── (4) get_carekit_state() decoder ──────────────────────────────────────────
@@ -418,8 +421,8 @@ def test_get_health_state_from_carry_first_match_wins():
 def test_carry_reads_202_not_190():
     """Carry decoder must read [202:206], not the live output at [190:194]."""
     ps = [0.0] * 256
-    ps[190] = 1.0   # live output: thriving
-    ps[203] = 1.0   # carry: balanced
+    ps[190] = 1.0  # live output: thriving
+    ps[203] = 1.0  # carry: balanced
     # get_health_state reads [190] → thriving
     assert reality_bridge.get_health_state(ps) == "thriving"
     # get_health_state_from_carry reads [202:206] → balanced
@@ -438,7 +441,9 @@ def test_carry_reads_202_not_190():
         (201, "concern"),
     ],
 )
-def test_push_carekit_signal_returns_correct_state(monkeypatch, carekit_state_offset, expected_state):
+def test_push_carekit_signal_returns_correct_state(
+    monkeypatch, carekit_state_offset, expected_state
+):
     fake = _FakeCareKitClient(carekit_state_offset=carekit_state_offset)
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
 
@@ -458,9 +463,9 @@ def test_push_carekit_signal_writes_all_three_sensors(fake_carekit_client):
         symptom_ok=1.0,
     )
     urls = [p["url"] for p in fake_carekit_client.posts]
-    assert any("/api/sensors/localai_carekit_med_adherence"   in u for u in urls)
+    assert any("/api/sensors/localai_carekit_med_adherence" in u for u in urls)
     assert any("/api/sensors/localai_carekit_task_completion" in u for u in urls)
-    assert any("/api/sensors/localai_carekit_symptom_ok"      in u for u in urls)
+    assert any("/api/sensors/localai_carekit_symptom_ok" in u for u in urls)
     assert any("/api/push" in u for u in urls)
 
 
@@ -471,11 +476,11 @@ def test_push_carekit_signal_writes_correct_sensor_values(fake_carekit_client):
         symptom_ok=0.0,
     )
     by_url = {p["url"]: p["json"] for p in fake_carekit_client.posts}
-    med_url  = next(u for u in by_url if "med_adherence" in u)
+    med_url = next(u for u in by_url if "med_adherence" in u)
     task_url = next(u for u in by_url if "task_completion" in u)
     symp_url = next(u for u in by_url if "symptom_ok" in u)
 
-    assert by_url[med_url]["values"]  == [0.75]
+    assert by_url[med_url]["values"] == [0.75]
     assert by_url[task_url]["values"] == [0.60]
     assert by_url[symp_url]["values"] == [0.0]
 
@@ -510,6 +515,7 @@ def test_push_carekit_signal_clamps_below_zero(fake_carekit_client):
 
 def test_push_carekit_signal_falls_back_to_partial_on_pe_failure(monkeypatch):
     """When the PE is unreachable, push_carekit_signal must return 'partial'."""
+
     class _Raising(_FakeCareKitClient):
         def post(self, url, json=None, **_):
             if "/api/push" in url:
@@ -523,6 +529,7 @@ def test_push_carekit_signal_falls_back_to_partial_on_pe_failure(monkeypatch):
 
 def test_push_carekit_signal_falls_back_on_short_ps(monkeypatch):
     """When PE returns a truncated perceptualSpace, fall back to 'partial'."""
+
     class _ShortPS(_FakeCareKitClient):
         def post(self, url, json=None, **_):
             self.posts.append({"url": url, "json": json})
@@ -540,12 +547,16 @@ def test_push_carekit_signal_falls_back_on_short_ps(monkeypatch):
 
 def test_import_carekit_machine_skips_when_machine_exists(monkeypatch):
     """import_carekit_machine must be idempotent — skip if the machine name exists."""
+
     class _WithMachine(_FakeCareKitClient):
         def get(self, url, **_):
             if "/api/machines" in url:
-                return _FakeResponse(200, {
-                    "machines": [{"name": reality_bridge._CAREKIT_MACHINE_NAME}],
-                })
+                return _FakeResponse(
+                    200,
+                    {
+                        "machines": [{"name": reality_bridge._CAREKIT_MACHINE_NAME}],
+                    },
+                )
             return super().get(url)
 
     fake = _WithMachine()
@@ -568,9 +579,7 @@ def test_import_carekit_machine_imports_when_missing(monkeypatch):
 
         def post(self, url, json=None, **_):
             if "/api/machines" in url and json:
-                posted_names.append(
-                    (json.get("machine") or {}).get("name", "")
-                )
+                posted_names.append((json.get("machine") or {}).get("name", ""))
                 return _FakeResponse(200, {"machine": {"id": "fake-ck-id"}})
             return super().post(url, json=json)
 
@@ -592,16 +601,14 @@ def test_session_health_context_perceptual_mapping():
     """session_health_context: input [190:194] (health output), output [202:206] (carry)."""
     machine = _load_health_carry_machine()
     pm = machine["perceptualMapping"]
-    assert pm["input"]  == {"offset": 190, "length": 4}
+    assert pm["input"] == {"offset": 190, "length": 4}
     assert pm["output"] == {"offset": 202, "length": 4}
 
 
 def test_session_health_context_has_four_sequences():
     """session_health_context.json must define exactly 4 sequences (one per health state)."""
     machine = _load_health_carry_machine()
-    assert len(machine["sequences"]) == 4, (
-        f"Expected 4 sequences, got {len(machine['sequences'])}"
-    )
+    assert len(machine["sequences"]) == 4, f"Expected 4 sequences, got {len(machine['sequences'])}"
 
 
 def test_session_health_context_all_sequences_are_initial():
@@ -617,9 +624,9 @@ def test_session_health_context_sequence_outputs_are_one_hot():
     """Each carry sequence writes a distinct one-hot to [202:206]."""
     machine = _load_health_carry_machine()
     expected = {
-        "sess-health-thriving":  [1.0, 0.0, 0.0, 0.0],
-        "sess-health-balanced":  [0.0, 1.0, 0.0, 0.0],
-        "sess-health-watch":     [0.0, 0.0, 1.0, 0.0],
+        "sess-health-thriving": [1.0, 0.0, 0.0, 0.0],
+        "sess-health-balanced": [0.0, 1.0, 0.0, 0.0],
+        "sess-health-watch": [0.0, 0.0, 1.0, 0.0],
         "sess-health-attention": [0.0, 0.0, 0.0, 1.0],
     }
     for seq in machine["sequences"]:
@@ -651,7 +658,7 @@ def test_get_session_context_includes_health_state_key():
 def test_get_session_context_health_state_from_carry():
     """When carry [202:206] is set, health_state must reflect the carry."""
     ps = [0.0] * 256
-    ps[203] = 1.0   # carry: balanced
+    ps[203] = 1.0  # carry: balanced
     ctx = reality_bridge.get_session_context(ps)
     assert ctx["health_state"] == "balanced"
 
@@ -678,19 +685,18 @@ def test_get_current_health_state_uses_carry_when_live_is_silent(monkeypatch):
     [202:206] has a state (carry from a prior push), get_current_health_state()
     must return the carry state rather than None.
     """
+
     class _CarryOnly(_FakeCareKitClient):
         def get(self, url, **_):
             if "/api/perceptual-simulation/state" in url:
                 ps = [0.0] * 256
-                ps[204] = 1.0   # carry: watch — live [190:194] is all-zero
+                ps[204] = 1.0  # carry: watch — live [190:194] is all-zero
                 return _FakeResponse(200, {"state": {"perceptualSpace": ps}})
             return super().get(url)
 
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: _CarryOnly())
     state = reality_bridge.get_current_health_state()
-    assert state == "watch", (
-        "Expected 'watch' from carry [204], but got: " + repr(state)
-    )
+    assert state == "watch", "Expected 'watch' from carry [204], but got: " + repr(state)
 
 
 def test_get_current_health_state_prefers_live_over_carry(monkeypatch):
@@ -698,24 +704,26 @@ def test_get_current_health_state_prefers_live_over_carry(monkeypatch):
     When both [190:194] (live) and [202:206] (carry) are set, the live output
     must win — it is the most recent machine classification.
     """
+
     class _Both(_FakeCareKitClient):
         def get(self, url, **_):
             if "/api/perceptual-simulation/state" in url:
                 ps = [0.0] * 256
-                ps[190] = 1.0   # live: thriving
-                ps[203] = 1.0   # carry: balanced (must be overridden)
+                ps[190] = 1.0  # live: thriving
+                ps[203] = 1.0  # carry: balanced (must be overridden)
                 return _FakeResponse(200, {"state": {"perceptualSpace": ps}})
             return super().get(url)
 
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: _Both())
     state = reality_bridge.get_current_health_state()
-    assert state == "thriving", (
-        "Live output at [190] should win over carry at [203]; got: " + repr(state)
+    assert state == "thriving", "Live output at [190] should win over carry at [203]; got: " + repr(
+        state
     )
 
 
 def test_get_current_health_state_returns_none_on_re_failure(monkeypatch):
     """When the RE is unreachable, get_current_health_state must return None."""
+
     class _Down(_FakeCareKitClient):
         def get(self, url, **_):
             raise RuntimeError("RE down")
@@ -737,20 +745,18 @@ def test_drift_guard_checks_carekit_sensors_not_just_rag(monkeypatch, tmp_path):
     bad_carekit = [
         {
             "sensorId": "localai_carekit_fake_sensor",
-            "name":     "localai/carekit/fake",
-            "region":   {"offset": 194, "length": 1},
-            "ttlMs":    3_600_000,
+            "name": "localai/carekit/fake",
+            "region": {"offset": 194, "length": 1},
+            "ttlMs": 3_600_000,
         }
     ]
-    monkeypatch.setattr(reality_bridge, "_CAREKIT_SENSORS",
-                        reality_bridge._CAREKIT_SENSORS + bad_carekit)
+    monkeypatch.setattr(
+        reality_bridge, "_CAREKIT_SENSORS", reality_bridge._CAREKIT_SENSORS + bad_carekit
+    )
     # This sensor has no entry in _SENSOR_TO_MACHINE → must be flagged
     mismatches = reality_bridge.verify_machine_offsets()
-    assert any(
-        "localai_carekit_fake_sensor" in m for m in mismatches
-    ), (
-        "verify_machine_offsets() did not check CareKit sensors. "
-        f"Mismatches returned: {mismatches}"
+    assert any("localai_carekit_fake_sensor" in m for m in mismatches), (
+        f"verify_machine_offsets() did not check CareKit sensors. Mismatches returned: {mismatches}"
     )
 
 
@@ -762,19 +768,17 @@ def test_drift_guard_checks_health_sensors_not_just_rag(monkeypatch):
     bad_health = [
         {
             "sensorId": "localai_health_fake_sensor",
-            "name":     "localai/health/fake",
-            "region":   {"offset": 186, "length": 1},
-            "ttlMs":    300_000,
+            "name": "localai/health/fake",
+            "region": {"offset": 186, "length": 1},
+            "ttlMs": 300_000,
         }
     ]
-    monkeypatch.setattr(reality_bridge, "_HEALTH_SENSORS",
-                        reality_bridge._HEALTH_SENSORS + bad_health)
+    monkeypatch.setattr(
+        reality_bridge, "_HEALTH_SENSORS", reality_bridge._HEALTH_SENSORS + bad_health
+    )
     mismatches = reality_bridge.verify_machine_offsets()
-    assert any(
-        "localai_health_fake_sensor" in m for m in mismatches
-    ), (
-        "verify_machine_offsets() did not check health sensors. "
-        f"Mismatches returned: {mismatches}"
+    assert any("localai_health_fake_sensor" in m for m in mismatches), (
+        f"verify_machine_offsets() did not check health sensors. Mismatches returned: {mismatches}"
     )
 
 
@@ -786,23 +790,29 @@ def test_drift_guard_all_sensor_lists_pass_clean():
     """
     mismatches = reality_bridge.verify_machine_offsets()
     phase4_mismatches = [
-        m for m in mismatches
-        if any(k in m for k in (
-            "localai_carekit_",
-            "localai_health_",
-            "medication_adherence",
-            "session_health_context",
-            "personal_health_baseline",
-        ))
+        m
+        for m in mismatches
+        if any(
+            k in m
+            for k in (
+                "localai_carekit_",
+                "localai_health_",
+                "medication_adherence",
+                "session_health_context",
+                "personal_health_baseline",
+            )
+        )
     ]
-    assert phase4_mismatches == [], (
-        "Phase 4 offset drift detected: " + " | ".join(phase4_mismatches)
+    assert phase4_mismatches == [], "Phase 4 offset drift detected: " + " | ".join(
+        phase4_mismatches
     )
 
 
 # ── (12) pe-integrations.json ─────────────────────────────────────────────────
 
-_PE_INTEGRATIONS_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "config" / "pe-integrations.json"
+_PE_INTEGRATIONS_PATH = (
+    pathlib.Path(__file__).parent.parent.parent.parent / "config" / "pe-integrations.json"
+)
 
 
 def _load_pe_integrations() -> dict:
@@ -844,32 +854,32 @@ def test_pe_integrations_healthkit_source_mappings():
     """HealthKit source mappings must cover HR, HRV, and Sleep at offsets 186–188."""
     data = _load_pe_integrations()
     by_id = {m["id"]: m for m in data.get("sourceMappings", [])}
-    hk_hr  = by_id.get("healthkit:HKQuantityTypeIdentifierHeartRate")
+    hk_hr = by_id.get("healthkit:HKQuantityTypeIdentifierHeartRate")
     hk_hrv = by_id.get("healthkit:HKQuantityTypeIdentifierHeartRateVariabilitySDNN")
-    hk_sl  = by_id.get("healthkit:HKCategoryTypeIdentifierSleepAnalysis")
+    hk_sl = by_id.get("healthkit:HKCategoryTypeIdentifierSleepAnalysis")
 
-    assert hk_hr  is not None, "HK HR source mapping missing"
+    assert hk_hr is not None, "HK HR source mapping missing"
     assert hk_hrv is not None, "HK HRV source mapping missing"
-    assert hk_sl  is not None, "HK Sleep source mapping missing"
+    assert hk_sl is not None, "HK Sleep source mapping missing"
 
-    assert hk_hr["region"]["offset"]  == 186
+    assert hk_hr["region"]["offset"] == 186
     assert hk_hrv["region"]["offset"] == 187
-    assert hk_sl["region"]["offset"]  == 188
+    assert hk_sl["region"]["offset"] == 188
 
 
 def test_pe_integrations_carekit_source_mappings():
     """CareKit source mappings must cover med, task, symptom at offsets 194–196."""
     data = _load_pe_integrations()
     by_id = {m["id"]: m for m in data.get("sourceMappings", [])}
-    ck_med  = by_id.get("carekit-localai-med")
+    ck_med = by_id.get("carekit-localai-med")
     ck_task = by_id.get("carekit-localai-task")
     ck_symp = by_id.get("carekit-localai-symptom")
 
-    assert ck_med  is not None, "CareKit med source mapping missing"
+    assert ck_med is not None, "CareKit med source mapping missing"
     assert ck_task is not None, "CareKit task source mapping missing"
     assert ck_symp is not None, "CareKit symptom source mapping missing"
 
-    assert ck_med["region"]["offset"]  == 194
+    assert ck_med["region"]["offset"] == 194
     assert ck_task["region"]["offset"] == 195
     assert ck_symp["region"]["offset"] == 196
 
@@ -880,7 +890,9 @@ def test_pe_integrations_source_mapping_regions_match_sensor_constants():
     constants in reality_bridge._CAREKIT_SENSORS and _HEALTH_SENSORS.
     """
     data = _load_pe_integrations()
-    by_sensor_id = {m.get("sensorId"): m for m in data.get("sourceMappings", []) if m.get("sensorId")}
+    by_sensor_id = {
+        m.get("sensorId"): m for m in data.get("sourceMappings", []) if m.get("sensorId")
+    }
 
     all_sensors = reality_bridge._HEALTH_SENSORS + reality_bridge._CAREKIT_SENSORS
     for sensor in all_sensors:
@@ -888,7 +900,7 @@ def test_pe_integrations_source_mapping_regions_match_sensor_constants():
         if sid not in by_sensor_id:
             continue
         json_offset = by_sensor_id[sid]["region"]["offset"]
-        py_offset   = sensor["region"]["offset"]
+        py_offset = sensor["region"]["offset"]
         assert json_offset == py_offset, (
             f"Offset mismatch for {sid}: "
             f"pe-integrations.json says {json_offset}, "

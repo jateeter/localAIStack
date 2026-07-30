@@ -30,7 +30,7 @@ from __future__ import annotations
 # Per-graph base offsets.  rag stays at 76 (no conflicts), agent starts at 104
 # where DC alert FF outputs used to live (now relocated to [144:150]).
 GRAPH_BASE_OFFSETS: dict[str, int] = {
-    "rag":   76,
+    "rag": 76,
     "agent": 104,
 }
 # Legacy constant kept for any external consumers that still reference it;
@@ -67,7 +67,7 @@ def compute_bindings() -> dict:
     from graphs.rag_graph import get_rag_graph
 
     raw_nodes = {
-        "rag":   [n for n in get_rag_graph().nodes   if n not in _LANGGRAPH_INTERNALS],
+        "rag": [n for n in get_rag_graph().nodes if n not in _LANGGRAPH_INTERNALS],
         "agent": [n for n in get_agent_graph().nodes if n not in _LANGGRAPH_INTERNALS],
     }
 
@@ -88,19 +88,19 @@ def compute_bindings() -> dict:
         for node in nodes:
             node_map[node] = {
                 "sensor_id": f"localai_{graph_name}_{node}",
-                "pe_name":   f"localai/{graph_name}/{node}",
-                "offset":    current_offset,
-                "length":    BYTES_PER_NODE,
+                "pe_name": f"localai/{graph_name}/{node}",
+                "offset": current_offset,
+                "length": BYTES_PER_NODE,
             }
             current_offset += BYTES_PER_NODE
 
-        input_region  = {"offset": graph_base,     "length": len(nodes) * BYTES_PER_NODE}
+        input_region = {"offset": graph_base, "length": len(nodes) * BYTES_PER_NODE}
         output_region = {"offset": current_offset, "length": OUTPUT_LENGTH}
 
         bindings[graph_name] = {
-            "nodes":         node_map,
-            "node_order":    nodes,
-            "input_region":  input_region,
+            "nodes": node_map,
+            "node_order": nodes,
+            "input_region": input_region,
             "output_region": output_region,
         }
 
@@ -119,10 +119,10 @@ def build_machine_json(graph_name: str, binding: dict) -> dict:
     executes at a time), exactly one sequence fires per RE step, giving
     a clean "which node is active" readout on the output region.
     """
-    nodes         = binding["node_order"]
-    input_region  = binding["input_region"]
+    nodes = binding["node_order"]
+    input_region = binding["input_region"]
     output_region = binding["output_region"]
-    input_length  = input_region["length"]
+    input_length = input_region["length"]
 
     sequences = []
     for i, node in enumerate(nodes):
@@ -143,60 +143,68 @@ def build_machine_json(graph_name: str, binding: dict) -> dict:
         if i < output_region["length"]:
             output_vector[i] = 1.0
 
-        sequences.append({
-            "id":   f"topo-{graph_name}-{node}",
-            "name": f"Node active: {node}",
-            "metadata": {
-                "description":    f"Fires when LangGraph node '{node}' is executing",
-                "node":           node,
-                "graph":          graph_name,
-                "signal_element": i * BYTES_PER_NODE,
-                "output_bit":     i,
-            },
-            "vectors": [{
-                "id":          f"vec-topo-{graph_name}-{node}",
-                "isInitial":   True,
-                "elements":    elements,
-                "nextVectorIds": [],
-                "outputVectors": [{
-                    "id":     f"out-topo-{graph_name}-{node}",
-                    "vector": output_vector,
-                    "metadata": {
-                        "description": f"Active node: {node}",
-                        "node":        node,
-                    },
-                }],
-            }],
-        })
+        sequences.append(
+            {
+                "id": f"topo-{graph_name}-{node}",
+                "name": f"Node active: {node}",
+                "metadata": {
+                    "description": f"Fires when LangGraph node '{node}' is executing",
+                    "node": node,
+                    "graph": graph_name,
+                    "signal_element": i * BYTES_PER_NODE,
+                    "output_bit": i,
+                },
+                "vectors": [
+                    {
+                        "id": f"vec-topo-{graph_name}-{node}",
+                        "isInitial": True,
+                        "elements": elements,
+                        "nextVectorIds": [],
+                        "outputVectors": [
+                            {
+                                "id": f"out-topo-{graph_name}-{node}",
+                                "vector": output_vector,
+                                "metadata": {
+                                    "description": f"Active node: {node}",
+                                    "node": node,
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
 
-    input_label  = f"[{input_region['offset']}:{input_region['offset']  + input_region['length']}]"
-    output_label = f"[{output_region['offset']}:{output_region['offset'] + output_region['length']}]"
+    input_label = f"[{input_region['offset']}:{input_region['offset'] + input_region['length']}]"
+    output_label = (
+        f"[{output_region['offset']}:{output_region['offset'] + output_region['length']}]"
+    )
     node_signals = ", ".join(f"{n}_active" for n in nodes)
-    output_bits  = ", ".join(f"{n}={i}" for i, n in enumerate(nodes[:OUTPUT_LENGTH]))
+    output_bits = ", ".join(f"{n}={i}" for i, n in enumerate(nodes[:OUTPUT_LENGTH]))
 
     return {
         "version": "1.0.0",
         "machine": {
-            "name":        f"localai/{graph_name}_topology",
+            "name": f"localai/{graph_name}_topology",
             "description": (
                 f"Auto-generated topology machine for the '{graph_name}' LangGraph graph. "
                 f"Each sequence fires when its LangGraph node begins execution, "
                 f"giving real-time node visibility in the Tobias canvas."
             ),
             "metadata": {
-                "category":       "ai-pipeline",
-                "author":         "localAIStack topology builder",
-                "created":        "2026-04-16T00:00:00Z",
-                "eventSpace":     f"{input_region['length']}D node-signal vector at {input_label}: [{node_signals}]",
-                "outputSpace":    f"{output_region['length']}D binary at {output_label}: [{output_bits}]",
+                "category": "ai-pipeline",
+                "author": "localAIStack topology builder",
+                "created": "2026-04-16T00:00:00Z",
+                "eventSpace": f"{input_region['length']}D node-signal vector at {input_label}: [{node_signals}]",
+                "outputSpace": f"{output_region['length']}D binary at {output_label}: [{output_bits}]",
                 "auto_generated": True,
-                "graph_name":     graph_name,
-                "nodes":          nodes,
+                "graph_name": graph_name,
+                "nodes": nodes,
             },
-            "arbiterRule":    "OR",
+            "arbiterRule": "OR",
             "matchAlgorithm": "gte",
             "perceptualMapping": {
-                "input":  {"offset": input_region["offset"],  "length": input_region["length"]},
+                "input": {"offset": input_region["offset"], "length": input_region["length"]},
                 "output": {"offset": output_region["offset"], "length": output_region["length"]},
             },
             "sequences": sequences,

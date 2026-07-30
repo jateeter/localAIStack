@@ -7,7 +7,6 @@ POST /graph/agent    → run the ReAct agent graph
 GET  /graph/schema   → return input/output schemas for both graphs
 """
 
-
 from fastapi import APIRouter
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -19,6 +18,7 @@ router = APIRouter(prefix="/graph", tags=["graph"])
 
 
 # ── RAG graph ─────────────────────────────────────────────────────────────────
+
 
 class RAGRequest(BaseModel):
     question: str
@@ -37,10 +37,7 @@ async def run_rag_graph(req: RAGRequest):
     result = graph.invoke(
         {"question": req.question, "documents": [], "rewrite_count": 0, "re_routing": "rewrite"}
     )
-    sources = list({
-        d.metadata.get("source", "unknown")
-        for d in result.get("documents", [])
-    })
+    sources = list({d.metadata.get("source", "unknown") for d in result.get("documents", [])})
     return RAGResponse(
         question=result["question"],
         answer=result.get("generation", ""),
@@ -50,6 +47,7 @@ async def run_rag_graph(req: RAGRequest):
 
 
 # ── Agent graph ───────────────────────────────────────────────────────────────
+
 
 class AgentMessage(BaseModel):
     role: str
@@ -78,13 +76,14 @@ async def run_agent_graph(req: AgentRequest):
     result = graph.invoke(state)
 
     last_ai = next(
-        (m for m in reversed(result["messages"]) if hasattr(m, "content") and not hasattr(m, "tool_call_id")),
+        (
+            m
+            for m in reversed(result["messages"])
+            if hasattr(m, "content") and not hasattr(m, "tool_call_id")
+        ),
         None,
     )
-    tool_calls = sum(
-        1 for m in result["messages"]
-        if hasattr(m, "tool_call_id")
-    )
+    tool_calls = sum(1 for m in result["messages"] if hasattr(m, "tool_call_id"))
 
     return AgentResponse(
         answer=last_ai.content if last_ai else "",
@@ -94,10 +93,12 @@ async def run_agent_graph(req: AgentRequest):
 
 # ── Schema introspection ──────────────────────────────────────────────────────
 
+
 @router.get("/schema")
 async def graph_schema():
     """Return graph topology for langgraph.x.reality binding."""
     from core.reality_bridge import get_topology_bindings
+
     topology = get_topology_bindings()
 
     def _topo(graph_name: str) -> dict:
@@ -105,14 +106,14 @@ async def graph_schema():
         if not b:
             return {}
         return {
-            "input_region":  b["input_region"],
+            "input_region": b["input_region"],
             "output_region": b["output_region"],
-            "node_order":    b["node_order"],
+            "node_order": b["node_order"],
             "nodes": {
                 node: {
                     "sensor_id": info["sensor_id"],
-                    "offset":    info["offset"],
-                    "length":    info["length"],
+                    "offset": info["offset"],
+                    "length": info["length"],
                 }
                 for node, info in b["nodes"].items()
             },
@@ -121,25 +122,25 @@ async def graph_schema():
     return {
         "session_context": {
             "rag": {
-                "machine":  "localai/session_rag_context",
-                "pattern":  "bistable-flip-flop",
-                "input_region":  [72, 76],
+                "machine": "localai/session_rag_context",
+                "pattern": "bistable-flip-flop",
+                "input_region": [72, 76],
                 "output_region": [96, 100],
                 "carry_signals": {
                     "last_generate": 96,
-                    "last_rewrite":  97,
-                    "last_abort":    98,
+                    "last_rewrite": 97,
+                    "last_abort": 98,
                 },
                 "hold_mechanism": "PE carry-forward — no sequence fires between RAG calls",
             },
             "agent": {
-                "machine":  "localai/session_agent_context",
-                "pattern":  "bistable-flip-flop",
-                "input_region":  [88, 104],
+                "machine": "localai/session_agent_context",
+                "pattern": "bistable-flip-flop",
+                "input_region": [88, 104],
                 "output_region": [100, 104],
                 "carry_signals": {
                     "agent_ever_engaged": 100,
-                    "tools_ever_used":    101,
+                    "tools_ever_used": 101,
                 },
                 "hold_mechanism": "PE carry-forward + carry-feedback elements [12:14] prevent regression",
             },
@@ -177,5 +178,5 @@ async def graph_schema():
                 },
                 "endpoint": "/graph/agent",
             },
-        }
+        },
     }

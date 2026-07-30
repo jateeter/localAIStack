@@ -28,6 +28,7 @@ from core.vector_store import get_health_vector_store, get_vector_store
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
+
 @tool
 def rag_search(query: str) -> str:
     """Search the local knowledge base for information relevant to the query."""
@@ -36,8 +37,7 @@ def rag_search(query: str) -> str:
     if not docs:
         return "No relevant documents found in the knowledge base."
     return "\n\n---\n\n".join(
-        f"[Source: {d.metadata.get('source', 'unknown')}]\n{d.page_content}"
-        for d in docs
+        f"[Source: {d.metadata.get('source', 'unknown')}]\n{d.page_content}" for d in docs
     )
 
 
@@ -52,8 +52,7 @@ def health_search(query: str) -> str:
     if not docs:
         return "No relevant health information found in the knowledge base."
     return "\n\n---\n\n".join(
-        f"[{d.metadata.get('category', 'health')}]\n{d.page_content}"
-        for d in docs
+        f"[{d.metadata.get('category', 'health')}]\n{d.page_content}" for d in docs
     )
 
 
@@ -61,6 +60,7 @@ def health_search(query: str) -> str:
 def list_collections(_: str = "") -> str:
     """List all document collections available in the vector store."""
     from core.vector_store import get_qdrant_client
+
     client = get_qdrant_client()
     collections = [c.name for c in client.get_collections().collections]
     return json.dumps(collections)
@@ -71,6 +71,7 @@ TOOLS = [rag_search, health_search, list_collections]
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
+
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], operator.add]
     system_prompt: str
@@ -78,8 +79,10 @@ class AgentState(TypedDict):
 
 # ── Nodes ─────────────────────────────────────────────────────────────────────
 
+
 def agent_node(state: AgentState) -> dict:
     from core.reality_bridge import push_node_signal
+
     push_node_signal("agent", "agent", 1.0, trigger_push=True)
 
     s = get_settings()
@@ -107,7 +110,7 @@ _tool_node_instance = ToolNode(TOOLS)
 
 def _count_activity_metrics(
     prior_messages: Sequence[BaseMessage],
-    new_messages:   Sequence[BaseMessage],
+    new_messages: Sequence[BaseMessage],
 ) -> tuple[int, int, int]:
     """
     Return (tool_calls, tool_errors, reasoning_steps) describing the turn so far.
@@ -121,16 +124,13 @@ def _count_activity_metrics(
     """
     all_messages = list(prior_messages) + list(new_messages)
 
-    tool_calls = sum(
-        len(getattr(m, "tool_calls", []) or [])
-        for m in all_messages
-    )
+    tool_calls = sum(len(getattr(m, "tool_calls", []) or []) for m in all_messages)
     tool_errors = sum(
-        1 for m in new_messages
+        1
+        for m in new_messages
         if isinstance(m, ToolMessage)
         and any(
-            marker in (m.content or "").lower()
-            for marker in ("error", "exception", "traceback")
+            marker in (m.content or "").lower() for marker in ("error", "exception", "traceback")
         )
     )
     reasoning_steps = sum(1 for m in all_messages if isinstance(m, AIMessage))
@@ -139,6 +139,7 @@ def _count_activity_metrics(
 
 def _tools_node(state: AgentState) -> dict:
     from core.reality_bridge import push_agent_activity_signal, push_node_signal
+
     push_node_signal("agent", "tools", 1.0, trigger_push=True)
     result = _tool_node_instance(state)
     push_node_signal("agent", "tools", 0.0, trigger_push=False)
@@ -148,7 +149,8 @@ def _tools_node(state: AgentState) -> dict:
     # just executed. Safe to call even when the bridge is unreachable — it
     # swallows all network failures internally.
     calls, errors, depth = _count_activity_metrics(
-        state["messages"], result.get("messages", []),
+        state["messages"],
+        result.get("messages", []),
     )
     push_agent_activity_signal(
         tool_calls=calls,
@@ -167,6 +169,7 @@ def should_continue(state: AgentState) -> str:
 
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
+
 
 def build_agent_graph():
     graph = StateGraph(AgentState)

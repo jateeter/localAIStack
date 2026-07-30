@@ -30,6 +30,7 @@ from core.vector_store import get_vector_store
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
+
 class RAGState(TypedDict):
     question: str
     documents: Annotated[list[Document], operator.add]
@@ -39,6 +40,7 @@ class RAGState(TypedDict):
 
 
 # ── Node implementations ──────────────────────────────────────────────────────
+
 
 def retrieve(state: RAGState) -> dict:
     s = get_settings()
@@ -52,6 +54,7 @@ def retrieve(state: RAGState) -> dict:
     avg_score = sum(sc for _, sc in scored) / max(len(scored), 1)
 
     from core.reality_bridge import push_retrieval_signal
+
     push_retrieval_signal(doc_count=len(docs), avg_score=avg_score)
 
     return {"documents": docs}
@@ -77,6 +80,7 @@ def grade_documents(state: RAGState) -> dict:
             kept.append(doc)
 
     from core.reality_bridge import push_grading_signal
+
     routing = push_grading_signal(
         retrieved_count=len(state["documents"]),
         kept_count=len(kept),
@@ -92,12 +96,14 @@ def generate(state: RAGState) -> dict:
 
     context = "\n\n---\n\n".join(d.page_content for d in state["documents"])
     messages = [
-        SystemMessage(content=(
-            "You are a helpful assistant. Answer the question using ONLY the provided context. "
-            "If the context doesn't contain enough information, say so clearly. "
-            "Be concise and factual.\n\n"
-            f"Context:\n{context}"
-        )),
+        SystemMessage(
+            content=(
+                "You are a helpful assistant. Answer the question using ONLY the provided context. "
+                "If the context doesn't contain enough information, say so clearly. "
+                "Be concise and factual.\n\n"
+                f"Context:\n{context}"
+            )
+        ),
         HumanMessage(content=state["question"]),
     ]
     response = llm.invoke(messages)
@@ -109,11 +115,13 @@ def rewrite_query(state: RAGState) -> dict:
     llm = ChatOllama(base_url=s.ollama_base_url, model=s.llm_model, temperature=0.3)
 
     messages = [
-        SystemMessage(content=(
-            "Rephrase the following question to improve document retrieval. "
-            "Make it more specific and use different terminology. "
-            "Return ONLY the rephrased question, nothing else."
-        )),
+        SystemMessage(
+            content=(
+                "Rephrase the following question to improve document retrieval. "
+                "Make it more specific and use different terminology. "
+                "Return ONLY the rephrased question, nothing else."
+            )
+        ),
         HumanMessage(content=state["question"]),
     ]
     response = llm.invoke(messages)
@@ -125,6 +133,7 @@ def rewrite_query(state: RAGState) -> dict:
 
 
 # ── Conditional routing ───────────────────────────────────────────────────────
+
 
 def route_after_grading(state: RAGState) -> Literal["generate", "rewrite_query"]:
     """
@@ -143,6 +152,7 @@ def route_after_grading(state: RAGState) -> Literal["generate", "rewrite_query"]
 
 
 # ── Graph assembly ────────────────────────────────────────────────────────────
+
 
 def build_rag_graph() -> StateGraph:
     graph = StateGraph(RAGState)

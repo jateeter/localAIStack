@@ -52,12 +52,12 @@ import httpx
 
 # ── Sensor / machine constants (mirrors reality_bridge.py) ────────────────────
 
-_HR_LOW_BPM     = 60.0
-_HR_HIGH_BPM    = 100.0
-_HRV_OK_MS      = 30.0
+_HR_LOW_BPM = 60.0
+_HR_HIGH_BPM = 100.0
+_HRV_OK_MS = 30.0
 _SLEEP_OK_HOURS = 6.5
 
-_HEALTH_OUTPUT_OFFSET = 190   # [thriving, balanced, watch, attention]
+_HEALTH_OUTPUT_OFFSET = 190  # [thriving, balanced, watch, attention]
 
 _HEALTH_SENSORS = [
     {
@@ -95,16 +95,16 @@ mutation UpdateProcessState($input: UpdateProcessStateInput!) {
 """
 
 _STATE_TO_RAG = {
-    "thriving":  "GREEN",
-    "balanced":  "GREEN",
-    "watch":     "AMBER",
+    "thriving": "GREEN",
+    "balanced": "GREEN",
+    "watch": "AMBER",
     "attention": "RED",
 }
 
 _STATE_TO_DESCRIPTION = {
-    "thriving":  "All baseline health metrics are in nominal range.",
-    "balanced":  "Cardiovascular metrics healthy but sleep is below target.",
-    "watch":     "Heart rate nominal but HRV indicates low recovery.",
+    "thriving": "All baseline health metrics are in nominal range.",
+    "balanced": "Cardiovascular metrics healthy but sleep is below target.",
+    "watch": "Heart rate nominal but HRV indicates low recovery.",
     "attention": "Heart rate is outside the nominal range. Recommend a health check-in.",
 }
 
@@ -118,29 +118,35 @@ class HealthReading(NamedTuple):
 
 
 _SCENARIOS: dict[str, HealthReading] = {
-    "thriving":  HealthReading("All nominal — thriving",            72.0, 45.0, 7.5, "thriving"),
-    "balanced":  HealthReading("Good vitals, poor sleep — balanced", 75.0, 38.0, 5.5, "balanced"),
-    "watch":     HealthReading("HR ok, HRV low — watch",            70.0, 18.0, 6.0, "watch"),
-    "attention": HealthReading("HR out of range — attention",       105.0, 25.0, 7.0, "attention"),
+    "thriving": HealthReading("All nominal — thriving", 72.0, 45.0, 7.5, "thriving"),
+    "balanced": HealthReading("Good vitals, poor sleep — balanced", 75.0, 38.0, 5.5, "balanced"),
+    "watch": HealthReading("HR ok, HRV low — watch", 70.0, 18.0, 6.0, "watch"),
+    "attention": HealthReading("HR out of range — attention", 105.0, 25.0, 7.0, "attention"),
 }
 
 
 # ── PE interaction helpers ────────────────────────────────────────────────────
 
+
 def _band(hr: float, hrv: float, sleep: float) -> tuple[float, float, float]:
-    hr_ok    = 1.0 if _HR_LOW_BPM <= hr <= _HR_HIGH_BPM else 0.0
-    hrv_ok   = 1.0 if hrv  >= _HRV_OK_MS               else 0.0
-    sleep_ok = 1.0 if sleep >= _SLEEP_OK_HOURS           else 0.0
+    hr_ok = 1.0 if _HR_LOW_BPM <= hr <= _HR_HIGH_BPM else 0.0
+    hrv_ok = 1.0 if hrv >= _HRV_OK_MS else 0.0
+    sleep_ok = 1.0 if sleep >= _SLEEP_OK_HOURS else 0.0
     return hr_ok, hrv_ok, sleep_ok
 
 
 def _decode_health_state(ps: list[float]) -> str | None:
     def s(i: int) -> float:
         return ps[i] if len(ps) > i else 0.0
-    if s(_HEALTH_OUTPUT_OFFSET)     >= 0.5: return "thriving"
-    if s(_HEALTH_OUTPUT_OFFSET + 1) >= 0.5: return "balanced"
-    if s(_HEALTH_OUTPUT_OFFSET + 2) >= 0.5: return "watch"
-    if s(_HEALTH_OUTPUT_OFFSET + 3) >= 0.5: return "attention"
+
+    if s(_HEALTH_OUTPUT_OFFSET) >= 0.5:
+        return "thriving"
+    if s(_HEALTH_OUTPUT_OFFSET + 1) >= 0.5:
+        return "balanced"
+    if s(_HEALTH_OUTPUT_OFFSET + 2) >= 0.5:
+        return "watch"
+    if s(_HEALTH_OUTPUT_OFFSET + 3) >= 0.5:
+        return "attention"
     return None
 
 
@@ -192,14 +198,16 @@ def push_health_reading(
     """
     hr_ok, hrv_ok, sleep_ok = _band(reading.hr_bpm, reading.hrv_sdnn_ms, reading.sleep_hours)
 
-    print(f"\n  Reading:  HR={reading.hr_bpm}bpm  HRV={reading.hrv_sdnn_ms}ms  "
-          f"Sleep={reading.sleep_hours}h")
+    print(
+        f"\n  Reading:  HR={reading.hr_bpm}bpm  HRV={reading.hrv_sdnn_ms}ms  "
+        f"Sleep={reading.sleep_hours}h"
+    )
     print(f"  Bands:    hr.ok={hr_ok}  hrv.ok={hrv_ok}  sleep.ok={sleep_ok}")
 
     with httpx.Client(timeout=5) as client:
         for sid, val in [
-            ("localai_health_hr_ok",    hr_ok),
-            ("localai_health_hrv_ok",   hrv_ok),
+            ("localai_health_hr_ok", hr_ok),
+            ("localai_health_hrv_ok", hrv_ok),
             ("localai_health_sleep_ok", sleep_ok),
         ]:
             try:
@@ -212,7 +220,7 @@ def push_health_reading(
             push_resp = client.post(f"{pe_url}/api/push")
             push_resp.raise_for_status()
             data = push_resp.json()
-            ps   = data.get("step", {}).get("perceptualSpace", [])
+            ps = data.get("step", {}).get("perceptualSpace", [])
             step = data.get("globalStep")
             state = _decode_health_state(ps)
             return state, step
@@ -226,19 +234,21 @@ def send_graphql_trigger(localai_url: str, state: str, reading: HealthReading) -
     rag_code = _STATE_TO_RAG.get(state, "AMBER")
     variables = {
         "input": {
-            "id":              "personal-health-baseline",
-            "name":            "Personal Health Baseline",
-            "status":          state,
-            "ragStatusCode":   rag_code,
-            "sourceMachine":   "localai/personal_health_baseline",
-            "sourceSequence":  f"health-{state}",
-            "context": json.dumps({
-                "hr_bpm":      reading.hr_bpm,
-                "hrv_sdnn_ms": reading.hrv_sdnn_ms,
-                "sleep_hours": reading.sleep_hours,
-                "state":       state,
-                "description": _STATE_TO_DESCRIPTION.get(state, ""),
-            }),
+            "id": "personal-health-baseline",
+            "name": "Personal Health Baseline",
+            "status": state,
+            "ragStatusCode": rag_code,
+            "sourceMachine": "localai/personal_health_baseline",
+            "sourceSequence": f"health-{state}",
+            "context": json.dumps(
+                {
+                    "hr_bpm": reading.hr_bpm,
+                    "hrv_sdnn_ms": reading.hrv_sdnn_ms,
+                    "sleep_hours": reading.sleep_hours,
+                    "state": state,
+                    "description": _STATE_TO_DESCRIPTION.get(state, ""),
+                }
+            ),
         },
     }
     try:
@@ -255,16 +265,17 @@ def send_graphql_trigger(localai_url: str, state: str, reading: HealthReading) -
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--pe-url",      default="http://localhost:3004")
-    parser.add_argument("--re-url",      default="http://localhost:3000")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--pe-url", default="http://localhost:3004")
+    parser.add_argument("--re-url", default="http://localhost:3000")
     parser.add_argument("--localai-url", default="http://localhost:4000")
-    parser.add_argument("--scenario",    default="cycle",
-                        choices=[*_SCENARIOS, "cycle"])
-    parser.add_argument("--interval",    type=float, default=2.0,
-                        help="Seconds between cycle steps")
-    parser.add_argument("--no-graphql",  action="store_true")
+    parser.add_argument("--scenario", default="cycle", choices=[*_SCENARIOS, "cycle"])
+    parser.add_argument("--interval", type=float, default=2.0, help="Seconds between cycle steps")
+    parser.add_argument("--no-graphql", action="store_true")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -278,7 +289,9 @@ def main() -> None:
     print("[1/3] Ensuring PE health sensors are registered …")
     ensure_sensors_registered(args.pe_url)
 
-    scenarios = list(_SCENARIOS.values()) if args.scenario == "cycle" else [_SCENARIOS[args.scenario]]
+    scenarios = (
+        list(_SCENARIOS.values()) if args.scenario == "cycle" else [_SCENARIOS[args.scenario]]
+    )
 
     print(f"\n[2/3] Running {len(scenarios)} health scenario(s) …")
     for reading in scenarios:

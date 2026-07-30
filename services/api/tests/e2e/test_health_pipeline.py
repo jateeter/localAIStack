@@ -37,9 +37,9 @@ import pytest
 from tests.e2e.conftest import poll_until
 
 # Band normalization constants — mirror reality_bridge.py
-_HR_LOW_BPM     = 60.0
-_HR_HIGH_BPM    = 100.0
-_HRV_OK_MS      = 30.0
+_HR_LOW_BPM = 60.0
+_HR_HIGH_BPM = 100.0
+_HRV_OK_MS = 30.0
 _SLEEP_OK_HOURS = 6.5
 
 
@@ -51,18 +51,23 @@ def _ssl_verify(url: str) -> bool:
         ("https://localhost", "https://127.0.0.1", "https://host.docker.internal")
     )
 
+
 _HEALTH_SENSORS = [
-    {"sensorId": "localai_health_hr_ok",    "region": {"offset": 186, "length": 1}, "ttlMs": 300_000},
-    {"sensorId": "localai_health_hrv_ok",   "region": {"offset": 187, "length": 1}, "ttlMs": 900_000},
-    {"sensorId": "localai_health_sleep_ok", "region": {"offset": 188, "length": 1}, "ttlMs": 86_400_000},
+    {"sensorId": "localai_health_hr_ok", "region": {"offset": 186, "length": 1}, "ttlMs": 300_000},
+    {"sensorId": "localai_health_hrv_ok", "region": {"offset": 187, "length": 1}, "ttlMs": 900_000},
+    {
+        "sensorId": "localai_health_sleep_ok",
+        "region": {"offset": 188, "length": 1},
+        "ttlMs": 86_400_000,
+    },
 ]
 
 _HEALTH_MACHINE_NAME = "localai/personal_health_baseline"
 
 _SCENARIOS = {
-    "thriving":  (72.0, 45.0, 7.5),
-    "balanced":  (75.0, 38.0, 5.5),
-    "watch":     (70.0, 18.0, 6.0),
+    "thriving": (72.0, 45.0, 7.5),
+    "balanced": (75.0, 38.0, 5.5),
+    "watch": (70.0, 18.0, 6.0),
     "attention": (105.0, 25.0, 7.0),
 }
 
@@ -73,8 +78,8 @@ _SCENARIOS = {
 def _band(hr: float, hrv: float, sleep: float) -> tuple[float, float, float]:
     return (
         1.0 if _HR_LOW_BPM <= hr <= _HR_HIGH_BPM else 0.0,
-        1.0 if hrv   >= _HRV_OK_MS               else 0.0,
-        1.0 if sleep >= _SLEEP_OK_HOURS           else 0.0,
+        1.0 if hrv >= _HRV_OK_MS else 0.0,
+        1.0 if sleep >= _SLEEP_OK_HOURS else 0.0,
     )
 
 
@@ -108,8 +113,8 @@ def _push_health_scenario(pe_url: str, scenario: str) -> str | None:
     hr, hrv, sleep = _SCENARIOS[scenario]
     hr_ok, hrv_ok, sleep_ok = _band(hr, hrv, sleep)
     for sid, val in [
-        ("localai_health_hr_ok",    hr_ok),
-        ("localai_health_hrv_ok",   hrv_ok),
+        ("localai_health_hr_ok", hr_ok),
+        ("localai_health_hrv_ok", hrv_ok),
         ("localai_health_sleep_ok", sleep_ok),
     ]:
         httpx.post(
@@ -126,7 +131,9 @@ def _push_health_scenario(pe_url: str, scenario: str) -> str | None:
 
 
 def _decode_state(ps: list) -> str | None:
-    def s(i: int) -> float: return ps[i] if len(ps) > i else 0.0  # noqa: E731
+    def s(i: int) -> float:
+        return ps[i] if len(ps) > i else 0.0  # noqa: E731
+
     if s(190) >= 0.5:
         return "thriving"
     if s(191) >= 0.5:
@@ -235,9 +242,7 @@ def test_health_endpoint_pe_status_ok_when_running(live_api: str, live_pe: str) 
 
 
 @pytest.mark.live
-def test_chat_with_health_context_enabled_includes_health_hint(
-    live_api: str, live_pe: str
-) -> None:
+def test_chat_with_health_context_enabled_includes_health_hint(live_api: str, live_pe: str) -> None:
     """
     After pushing a 'watch' scenario, a chat request with health_context=true
     should receive a response whose system context mentions HRV or recovery.
@@ -271,9 +276,7 @@ def test_chat_with_health_context_enabled_includes_health_hint(
 
 
 @pytest.mark.live
-def test_chat_with_health_context_false_has_no_injection(
-    live_api: str, live_pe: str
-) -> None:
+def test_chat_with_health_context_false_has_no_injection(live_api: str, live_pe: str) -> None:
     """
     With health_context=False, the LLM system prompt must NOT contain a health hint
     regardless of the current RE state. We can't easily verify the system prompt
@@ -342,9 +345,9 @@ def test_health_graphql_trigger_is_recorded(live_api: str, live_pe: str) -> None
     """
     variables = {
         "input": {
-            "id":            "personal-health-baseline",
-            "name":          "Personal Health Baseline",
-            "status":        "thriving",
+            "id": "personal-health-baseline",
+            "name": "Personal Health Baseline",
+            "status": "thriving",
             "ragStatusCode": "GREEN",
             "sourceMachine": _HEALTH_MACHINE_NAME,
             "sourceSequence": "health-thriving",
@@ -361,10 +364,9 @@ def test_health_graphql_trigger_is_recorded(live_api: str, live_pe: str) -> None
     # Verify it appears in the ring buffer
     events_r = httpx.get(f"{live_api}/graphql/events", timeout=5)
     events = events_r.json().get("events", [])
-    assert any(
-        e.get("id") == "personal-health-baseline"
-        for e in events
-    ), f"Event not found in /graphql/events. Events: {events}"
+    assert any(e.get("id") == "personal-health-baseline" for e in events), (
+        f"Event not found in /graphql/events. Events: {events}"
+    )
 
 
 # ── Full pipeline e2e ─────────────────────────────────────────────────────────
@@ -385,9 +387,7 @@ def test_full_health_pipeline_cycle(live_pe: str, live_api: str, live_re: str) -
 
     for scenario in ("thriving", "balanced", "watch", "attention"):
         state = _push_health_scenario(live_pe, scenario)
-        assert state == scenario, (
-            f"PE→RE push returned {state!r}, expected {scenario!r}"
-        )
+        assert state == scenario, f"PE→RE push returned {state!r}, expected {scenario!r}"
 
         def _health_matches(expected: str = scenario) -> bool:
             return _health_state_from_api(live_api) == expected
@@ -403,18 +403,18 @@ def test_full_health_pipeline_cycle(live_pe: str, live_api: str, live_re: str) -
 # ── Phase 4: CareKit sensors ──────────────────────────────────────────────────
 
 _CAREKIT_SENSORS = [
-    {"sensorId": "localai_carekit_med_adherence",   "offset": 194, "ttlMs": 3_600_000},
+    {"sensorId": "localai_carekit_med_adherence", "offset": 194, "ttlMs": 3_600_000},
     {"sensorId": "localai_carekit_task_completion", "offset": 195, "ttlMs": 86_400_000},
-    {"sensorId": "localai_carekit_symptom_ok",      "offset": 196, "ttlMs": 86_400_000},
+    {"sensorId": "localai_carekit_symptom_ok", "offset": 196, "ttlMs": 86_400_000},
 ]
 _CAREKIT_MACHINE_NAME = "localai/medication_adherence"
 _HEALTH_CARRY_MACHINE_NAME = "localai/session_health_context"
 
 _CAREKIT_SCENARIOS = {
-    "adherent": (1.0, 1.0, 1.0),   # med=1.0, task=1.0, symptom_ok=1.0
-    "partial":  (1.0, 0.2, 1.0),   # med=1.0, task=0.2 → partial-task
-    "lapsed":   (0.2, 0.5, 1.0),   # med=0.2, symptom_ok=1.0 → lapsed
-    "concern":  (0.0, 0.3, 0.0),   # med=0.0, symptom_ok=0.0 → concern
+    "adherent": (1.0, 1.0, 1.0),  # med=1.0, task=1.0, symptom_ok=1.0
+    "partial": (1.0, 0.2, 1.0),  # med=1.0, task=0.2 → partial-task
+    "lapsed": (0.2, 0.5, 1.0),  # med=0.2, symptom_ok=1.0 → lapsed
+    "concern": (0.0, 0.3, 0.0),  # med=0.0, symptom_ok=0.0 → concern
 }
 
 
@@ -445,9 +445,9 @@ def _ensure_carekit_sensors(pe_url: str) -> None:
 def _push_carekit_scenario(pe_url: str, scenario: str) -> str | None:
     med, task, symp = _CAREKIT_SCENARIOS[scenario]
     for sid, val in [
-        ("localai_carekit_med_adherence",   med),
+        ("localai_carekit_med_adherence", med),
         ("localai_carekit_task_completion", task),
-        ("localai_carekit_symptom_ok",      symp),
+        ("localai_carekit_symptom_ok", symp),
     ]:
         httpx.post(
             f"{pe_url}/api/sensors/{sid}",
@@ -463,7 +463,9 @@ def _push_carekit_scenario(pe_url: str, scenario: str) -> str | None:
 
 
 def _decode_carekit_state(ps: list) -> str | None:
-    def s(i: int) -> float: return ps[i] if len(ps) > i else 0.0  # noqa: E731
+    def s(i: int) -> float:
+        return ps[i] if len(ps) > i else 0.0  # noqa: E731
+
     if s(198) >= 0.5:
         return "adherent"
     if s(199) >= 0.5:
@@ -476,7 +478,9 @@ def _decode_carekit_state(ps: list) -> str | None:
 
 
 def _decode_health_carry(ps: list) -> str | None:
-    def s(i: int) -> float: return ps[i] if len(ps) > i else 0.0  # noqa: E731
+    def s(i: int) -> float:
+        return ps[i] if len(ps) > i else 0.0  # noqa: E731
+
     if s(202) >= 0.5:
         return "thriving"
     if s(203) >= 0.5:

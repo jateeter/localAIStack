@@ -45,19 +45,13 @@ REGISTRY = {
 
 @pytest.fixture(autouse=True)
 def _fresh_cache(monkeypatch):
-    monkeypatch.setattr(
-        registry_resolver, "_cache", {"at": 0.0, "targets": None}
-    )
+    monkeypatch.setattr(registry_resolver, "_cache", {"at": 0.0, "targets": None})
     monkeypatch.setenv("RE_REGISTRY_URL", "http://registry.test/re-registry.json")
 
 
 def _patch_probes(monkeypatch, alive: set[str], registry: dict | None = REGISTRY):
-    monkeypatch.setattr(
-        registry_resolver, "_probe_health", lambda url: url in alive
-    )
-    monkeypatch.setattr(
-        registry_resolver, "_fetch_registry", lambda url: registry
-    )
+    monkeypatch.setattr(registry_resolver, "_probe_health", lambda url: url in alive)
+    monkeypatch.setattr(registry_resolver, "_fetch_registry", lambda url: registry)
 
 
 def test_env_targets_win_when_alive(monkeypatch):
