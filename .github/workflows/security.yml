@@ -8,7 +8,23 @@ on:
       - "services/api/requirements.txt"
       - "services/api/Dockerfile"
       - ".github/workflows/security.yml"
+  # Changes to this workflow must be provable before they merge — the previous
+  # breakage (an unresolvable action ref) sat undetected because nothing ran it
+  # on a PR.
+  pull_request:
+    paths:
+      - "services/api/requirements.txt"
+      - "services/api/Dockerfile"
+      - ".github/workflows/security.yml"
+      - ".github/scripts/check-sarif.sh"
   workflow_dispatch:
+
+# upload-sarif needs security-events: write. Without this block the job inherits
+# a read-only token (Contents/Metadata/Packages: read) and the upload fails, so
+# results never reach the Security tab.
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
 
@@ -53,8 +69,10 @@ jobs:
           load: true
           tags: localaistack-api:scan
 
+      # Pinned by commit SHA rather than tag. A security scanner is exactly the
+      # action you do not want silently replaced by a moved tag.
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: localaistack-api:scan
           format: sarif
@@ -62,11 +80,22 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "0"   # report only; don't fail build
 
+      - name: Verify the image scan produced results
+        run: bash .github/scripts/check-sarif.sh trivy-image.sarif "Trivy (Docker)"
+
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-image.sarif
           category: trivy-docker
+
+      - name: Upload image SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-sarif
+          path: trivy-image.sarif
+          retention-days: 30
 
   # ── Filesystem scan ─────────────────────────────────────────────────────────
   trivy-fs:
@@ -76,7 +105,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -85,8 +114,19 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "0"
 
+      - name: Verify the filesystem scan produced results
+        run: bash .github/scripts/check-sarif.sh trivy-fs.sarif "Trivy (filesystem)"
+
       - name: Upload Trivy FS results
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
+
+      - name: Upload filesystem SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-sarif
+          path: trivy-fs.sarif
+          retention-days: 30
