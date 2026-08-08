@@ -8,7 +8,7 @@ services:
   # Port 4100 kept bound to host: the Docker logging driver runs on the host
   # daemon and needs localhost:4100 to push logs into this compose network.
   loki:
-    image: grafana/loki:2.9.3
+    image: grafana/loki:3.4.2
     container_name: localai_loki
     restart: unless-stopped
     ports:
@@ -27,7 +27,7 @@ services:
   # Pre-provisioned with the Loki datasource and the "localAIStack Overview"
   # dashboard from config/dashboards/.  Browse at http://localhost:4002
   grafana:
-    image: grafana/grafana:10.2.3
+    image: grafana/grafana:11.6.1
     container_name: localai_grafana
     restart: unless-stopped
     ports:
@@ -61,7 +61,7 @@ services:
   #   reality-vectors  — RE perceptual vectors, same dim (auto-created by RE on startup)
   # RealityEngine_AI connects via host.docker.internal:4333 from its Docker network.
   qdrant:
-    image: qdrant/qdrant:v1.13.1
+    image: qdrant/qdrant:v1.14.1
     container_name: localai_qdrant
     restart: unless-stopped
     ports:
@@ -87,7 +87,7 @@ services:
 
   # ── Cache + LangGraph Checkpointer ───────────────────────────────────────────
   redis:
-    image: redis:7.2-alpine
+    image: redis:7.4-alpine
     container_name: localai_redis
     restart: unless-stopped
     ports:
