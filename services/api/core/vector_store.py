@@ -7,8 +7,7 @@ from core.embeddings import get_embeddings
 
 _client: QdrantClient | None = None
 _store: QdrantVectorStore | None = None
-
-EMBED_DIM = 768  # nomic-embed-text output dimension
+_health_store: QdrantVectorStore | None = None
 
 
 def get_qdrant_client() -> QdrantClient:
@@ -22,9 +21,10 @@ def get_qdrant_client() -> QdrantClient:
 def ensure_collection(client: QdrantClient, name: str) -> None:
     collections = [c.name for c in client.get_collections().collections]
     if name not in collections:
+        s = get_settings()
         client.create_collection(
             collection_name=name,
-            vectors_config=VectorParams(size=EMBED_DIM, distance=Distance.COSINE),
+            vectors_config=VectorParams(size=s.embed_dim, distance=Distance.COSINE),
         )
 
 
@@ -40,3 +40,18 @@ def get_vector_store() -> QdrantVectorStore:
             embedding=get_embeddings(),
         )
     return _store
+
+
+def get_health_vector_store() -> QdrantVectorStore:
+    """Return the QdrantVectorStore for the personal health knowledge collection."""
+    global _health_store
+    if _health_store is None:
+        s = get_settings()
+        client = get_qdrant_client()
+        ensure_collection(client, s.health_collection_name)
+        _health_store = QdrantVectorStore(
+            client=client,
+            collection_name=s.health_collection_name,
+            embedding=get_embeddings(),
+        )
+    return _health_store

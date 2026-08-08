@@ -1,0 +1,36 @@
+# Ternary Bonsai 4B — 1-bit-quantized Qwen3-4B from prism-ml
+#
+# Source:  https://huggingface.co/prism-ml/Bonsai-4B-gguf
+# License: Apache 2.0
+#
+# NOTE: we reference a local GGUF (downloaded by setup.sh) rather than Ollama's
+# `FROM hf.co/<user>/<repo>:<quant>` syntax — the latter requires Ollama >= 0.4,
+# and users on 0.3.x fail with "unexpected status code 200" mid-pull.  Local
+# files work on every Ollama version.
+FROM ./gguf/Bonsai-4B-Q1_0.gguf
+
+# Qwen3 uses ChatML-style role tokens.  The GGUF ships its own chat template in
+# metadata; declaring it here keeps behaviour identical if Ollama ever falls
+# back to a generic template.
+TEMPLATE """{{ if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+{{ end }}<|im_start|>assistant
+{{ .Response }}<|im_end|>
+"""
+
+SYSTEM """You are a helpful assistant"""
+
+# Generation parameters recommended by the model card.
+PARAMETER temperature 0.5
+PARAMETER top_k 20
+PARAMETER top_p 0.9
+PARAMETER repeat_penalty 1.0
+
+# Context window — the model supports 32768, but 8192 is a safer default on
+# 16 GB machines.  Raise in .env / Open WebUI per-chat if needed.
+PARAMETER num_ctx 8192
+
+PARAMETER stop "<|im_start|>"
+PARAMETER stop "<|im_end|>"

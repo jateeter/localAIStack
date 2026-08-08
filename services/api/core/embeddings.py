@@ -1,4 +1,5 @@
 from langchain_ollama import OllamaEmbeddings
+
 from config import get_settings
 
 _embeddings: OllamaEmbeddings | None = None

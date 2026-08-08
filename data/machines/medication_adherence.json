@@ -1,0 +1,279 @@
+{
+  "version": "1.0.0",
+  "machine": {
+    "name": "localai/medication_adherence",
+    "description": "CareKit medication adherence classifier. Reads three pre-normalised scalars — medication adherence ratio, task completion ratio, symptom_ok flag — from the Perception Engine and asserts one of four mutually exclusive states: adherent, partial, lapsed, or concern. Structurally parallel to personal_health_baseline: all sequences are isInitial and fire in OR arbitration; the five guards partition the [med × task × symptom] space with full coverage and no overlap.",
+    "metadata": {
+      "category": "personal-health",
+      "author": "localAIStack health bridge",
+      "created": "2026-06-18T00:00:00Z",
+      "pattern": "health-state-classifier",
+      "eventSpace": "4D ratio vector at [194:198]: [med_adherence, task_completion, symptom_ok, _]",
+      "outputSpace": "4D classification at [198:202]: [adherent, partial, lapsed, concern]",
+      "tags": ["health", "carekit", "medication", "classifier", "localai", "personal-health"],
+      "sensorSources": {
+        "localai_carekit_med_adherence": {
+          "region": "[194:195]",
+          "description": "Medication adherence ratio (0.0–1.0): doses taken / doses scheduled in rolling 24 h window",
+          "ttlMs": 3600000
+        },
+        "localai_carekit_task_completion": {
+          "region": "[195:196]",
+          "description": "CareKit task completion ratio (0.0–1.0): tasks completed / tasks scheduled today",
+          "ttlMs": 86400000
+        },
+        "localai_carekit_symptom_ok": {
+          "region": "[196:197]",
+          "description": "Symptom sentinel: 1.0 = no symptoms or severity < moderate; 0.0 = moderate or worse symptoms reported",
+          "ttlMs": 86400000
+        }
+      },
+      "stateLogic": {
+        "adherent":       "med ≥ 0.5 AND task ≥ 0.5 AND symptom ≥ 0.5 — full compliance, no symptoms",
+        "partial-task":   "med ≥ 0.5 AND task < 0.5 — medication taken but task completion lagging (symptom wildcard)",
+        "partial-symptom":"med ≥ 0.5 AND task ≥ 0.5 AND symptom < 0.5 — medication and tasks done but symptoms flagged",
+        "lapsed":         "med < 0.5 AND symptom ≥ 0.5 — missed medication but no symptom escalation",
+        "concern":        "med < 0.5 AND symptom < 0.5 — missed medication AND symptoms present",
+        "mutualExclusivity": "adherent ⊃ partial-* ⊃ lapsed ⊃ concern; all five guards partition [med×task×symptom] with no overlap; partial-task and partial-symptom both emit [0,1,0,0]"
+      },
+      "localAIPromptHints": {
+        "adherent": "The user is fully adhering to their care plan. No medication or task gaps detected.",
+        "partial":  "The user is taking their medication but has missed some care plan tasks or has reported mild symptoms.",
+        "lapsed":   "The user has missed medication doses. No symptom escalation — a gentle reminder is appropriate.",
+        "concern":  "The user has missed medication doses AND has reported symptoms. A check-in with a care coordinator is warranted."
+      },
+      "sequenceCount": 5,
+      "notes": "Five sequences cover four output states: adherent (1), partial (2 sequences: partial-task and partial-symptom), lapsed (1), concern (1). Both partial sequences emit [0,1,0,0] so downstream consumers see a single 'partial' state."
+    },
+    "arbiterRule": "OR",
+    "matchAlgorithm": "gte",
+    "perceptualMapping": {
+      "input":  { "offset": 194, "length": 4 },
+      "output": { "offset": 198, "length": 4 }
+    },
+    "sequences": [
+      {
+        "id": "carekit-adherent",
+        "name": "Adherent: med=HIGH AND task=HIGH AND symptom=HIGH",
+        "metadata": {
+          "description": "Fires when all three compliance metrics are in their good range. Full care plan adherence — no action needed.",
+          "output": "[1,0,0,0] — adherent"
+        },
+        "vectors": [
+          {
+            "id": "carekit-adherent-check",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "carekit-adherent-out",
+                "vector": [1.0, 0.0, 0.0, 0.0],
+                "metadata": {
+                  "description": "Full compliance — adherent",
+                  "state": "adherent",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "The user is fully adhering to their care plan."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "CAREKIT_ADHERENT_CHECK",
+              "description": "element[0]: med_adherence HIGH (≥0.5); element[1]: task_completion HIGH; element[2]: symptom_ok HIGH; element[3]: reserved wildcard"
+            }
+          }
+        ]
+      },
+      {
+        "id": "carekit-partial-task",
+        "name": "Partial (task): med=HIGH AND task=LOW",
+        "metadata": {
+          "description": "Fires when medication is being taken but care plan tasks are falling behind. Symptom status is a wildcard — this is purely a task-adherence signal.",
+          "output": "[0,1,0,0] — partial"
+        },
+        "vectors": [
+          {
+            "id": "carekit-partial-task-check",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "carekit-partial-task-out",
+                "vector": [0.0, 1.0, 0.0, 0.0],
+                "metadata": {
+                  "description": "Medication taken, tasks incomplete — partial",
+                  "state": "partial",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "The user is taking their medication but has missed some care plan tasks."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "CAREKIT_PARTIAL_TASK_CHECK",
+              "description": "element[0]: med HIGH; element[1]: task_completion LOW (<0.5, GTE split); element[2]: symptom wildcard; element[3]: reserved wildcard. Mutually exclusive with adherent (task is LOW here) and with lapsed/concern (med is HIGH)."
+            }
+          }
+        ]
+      },
+      {
+        "id": "carekit-partial-symptom",
+        "name": "Partial (symptom): med=HIGH AND task=HIGH AND symptom=LOW",
+        "metadata": {
+          "description": "Fires when medication is being taken and tasks are complete, but the user has reported symptoms. Strictly exclusive from partial-task (task is HIGH here).",
+          "output": "[0,1,0,0] — partial"
+        },
+        "vectors": [
+          {
+            "id": "carekit-partial-symptom-check",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "carekit-partial-symptom-out",
+                "vector": [0.0, 1.0, 0.0, 0.0],
+                "metadata": {
+                  "description": "Medication and tasks compliant but symptoms reported — partial",
+                  "state": "partial",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "The user is taking their medication and completing tasks, but has reported symptoms."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "CAREKIT_PARTIAL_SYMPTOM_CHECK",
+              "description": "element[0]: med HIGH; element[1]: task HIGH; element[2]: symptom_ok LOW (<0.5); element[3]: wildcard. Exclusive from partial-task (task=HIGH vs LOW)."
+            }
+          }
+        ]
+      },
+      {
+        "id": "carekit-lapsed",
+        "name": "Lapsed: med=LOW AND symptom=HIGH",
+        "metadata": {
+          "description": "Fires when medication has been missed but the user has not reported symptoms — a missed-dose window without clinical escalation. Task completion is a wildcard.",
+          "output": "[0,0,1,0] — lapsed"
+        },
+        "vectors": [
+          {
+            "id": "carekit-lapsed-check",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "carekit-lapsed-out",
+                "vector": [0.0, 0.0, 1.0, 0.0],
+                "metadata": {
+                  "description": "Missed medication, no symptom escalation — lapsed",
+                  "state": "lapsed",
+                  "ragStatusCode": "AMBER",
+                  "promptHint": "The user has missed medication doses. No symptom escalation detected — a gentle reminder is appropriate."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "CAREKIT_LAPSED_CHECK",
+              "description": "element[0]: med LOW (<0.5); element[1]: task wildcard; element[2]: symptom_ok HIGH (≥0.5); element[3]: wildcard. Mutually exclusive with adherent/partial (med is LOW here); exclusive with concern (symptom is HIGH here)."
+            }
+          }
+        ]
+      },
+      {
+        "id": "carekit-concern",
+        "name": "Concern: med=LOW AND symptom=LOW",
+        "metadata": {
+          "description": "Fires when medication has been missed AND the user has reported symptoms — the highest-priority state. Task completion is a wildcard.",
+          "output": "[0,0,0,1] — concern"
+        },
+        "vectors": [
+          {
+            "id": "carekit-concern-check",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "carekit-concern-out",
+                "vector": [0.0, 0.0, 0.0, 1.0],
+                "metadata": {
+                  "description": "Missed medication with symptoms — concern",
+                  "state": "concern",
+                  "ragStatusCode": "RED",
+                  "promptHint": "The user has missed medication doses and has reported symptoms. A check-in with a care coordinator is warranted."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "CAREKIT_CONCERN_CHECK",
+              "description": "element[0]: med LOW; element[1]: task wildcard; element[2]: symptom_ok LOW (<0.5); element[3]: wildcard. Exclusive from lapsed (symptom=LOW here)."
+            }
+          }
+        ]
+      }
+    ],
+    "inputSequences": [
+      {
+        "name": "Full adherence — adherent",
+        "pattern": "med=1.0, task=1.0, symptom=1.0 → adherent",
+        "description": "All three metrics in good range. carekit-adherent fires [1,0,0,0].",
+        "vectors": [ [1.0, 1.0, 1.0, 0.0] ],
+        "metadata": { "expectedOutput": "[1,0,0,0]", "activeSequence": "carekit-adherent" }
+      },
+      {
+        "name": "Tasks incomplete — partial",
+        "pattern": "med=1.0, task=0.2, symptom=1.0 → partial",
+        "description": "Medication taken but task completion is 20%. carekit-partial-task fires [0,1,0,0].",
+        "vectors": [ [1.0, 0.2, 1.0, 0.0] ],
+        "metadata": { "expectedOutput": "[0,1,0,0]", "activeSequence": "carekit-partial-task" }
+      },
+      {
+        "name": "Symptoms reported — partial",
+        "pattern": "med=1.0, task=1.0, symptom=0.0 → partial",
+        "description": "Medication and tasks compliant but symptom check-in flagged. carekit-partial-symptom fires [0,1,0,0].",
+        "vectors": [ [1.0, 1.0, 0.0, 0.0] ],
+        "metadata": { "expectedOutput": "[0,1,0,0]", "activeSequence": "carekit-partial-symptom" }
+      },
+      {
+        "name": "Missed doses, no symptoms — lapsed",
+        "pattern": "med=0.2, task=any, symptom=1.0 → lapsed",
+        "description": "Only 20% of doses taken but no symptom escalation. carekit-lapsed fires [0,0,1,0].",
+        "vectors": [ [0.2, 0.5, 1.0, 0.0] ],
+        "metadata": { "expectedOutput": "[0,0,1,0]", "activeSequence": "carekit-lapsed" }
+      },
+      {
+        "name": "Missed doses with symptoms — concern",
+        "pattern": "med=0.0, task=any, symptom=0.0 → concern",
+        "description": "No doses taken and symptoms reported. carekit-concern fires [0,0,0,1].",
+        "vectors": [ [0.0, 0.3, 0.0, 0.0] ],
+        "metadata": { "expectedOutput": "[0,0,0,1]", "activeSequence": "carekit-concern" }
+      }
+    ]
+  }
+}

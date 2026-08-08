@@ -1,0 +1,222 @@
+{
+  "version": "1.0.0",
+  "machine": {
+    "name": "localai/agent_activity_classifier",
+    "description": "Classifies the LangGraph agent's current turn into one of three activity tiers based on the localai_agent_activity sensor at [64:68]. Structurally parallel to rag_corrective_cycle: reads normalized activity signals and asserts exactly one of productive / normal / struggling on its output window [68:72]. Downstream consumers can observe the classification directly on perceptual space without coupling to agent_graph internals.",
+    "metadata": {
+      "category": "ai-pipeline",
+      "author": "localAIStack agent_activity_classifier",
+      "created": "2026-04-19T00:00:00Z",
+      "pattern": "signal-classifier",
+      "eventSpace": "4D activity vector at [64:68]: [tool_calls_norm, tool_errors_norm, reasoning_depth_norm, _]",
+      "outputSpace": "4D classification at [68:72]: [productive, normal, struggling, _]",
+      "tags": ["agent", "activity", "classifier", "localai"],
+      "normalization": {
+        "tool_calls_norm":      "min(tool_calls / 5, 1.0)       — 5 calls = max",
+        "tool_errors_norm":     "min(tool_errors / 3, 1.0)      — 3 errors = max",
+        "reasoning_depth_norm": "min(reasoning_steps / 10, 1.0) — 10 steps = max"
+      },
+      "routingLogic": {
+        "productive": "tool_calls_norm >= 0.2 AND tool_errors_norm < 0.5 — agent is making progress with tools",
+        "struggling": "tool_errors_norm >= 0.5 OR reasoning_depth_norm >= 0.8 — high error rate or deep reasoning loop",
+        "normal":     "default (no productive/struggling signal) — idle or light activity",
+        "mutualExclusivity": "productive and struggling are partitioned by the tool_errors_norm split; normal fires when neither matches"
+      },
+      "sequenceCount": 3
+    },
+    "arbiterRule": "OR",
+    "matchAlgorithm": "gte",
+    "perceptualMapping": {
+      "input":  { "offset": 64, "length": 4 },
+      "output": { "offset": 68, "length": 4 }
+    },
+    "sequences": [
+      {
+        "id": "agact-productive",
+        "name": "Productive: tool_calls HIGH AND tool_errors LOW",
+        "metadata": {
+          "description": "Fires when the agent has made at least one tool call and errors stay below the midpoint.",
+          "output": "[1,0,0,0] — productive"
+        },
+        "vectors": [
+          {
+            "id": "agact-productive-check",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 1.0, "threshold": 0.2 },
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "agact-productive-out",
+                "vector": [1.0, 0.0, 0.0, 0.0],
+                "metadata": {
+                  "description": "agent productive — tool calls happening with low error rate",
+                  "classification": "productive"
+                }
+              }
+            ],
+            "metadata": {
+              "name": "PRODUCTIVE_CHECK",
+              "description": "element[0]: tool_calls_norm HIGH (>=0.2); element[1]: tool_errors_norm LOW (<0.5, GTE split at 0.5 with value=0)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "agact-struggling",
+        "name": "Struggling: tool_errors HIGH OR reasoning_depth HIGH",
+        "metadata": {
+          "description": "Fires when the agent hits repeated tool errors. The reasoning-depth leg is covered by a second initial vector in this sequence so either signal triggers it (OR semantics within sequence via two initial vectors).",
+          "output": "[0,0,1,0] — struggling"
+        },
+        "vectors": [
+          {
+            "id": "agact-struggling-errors",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "agact-struggling-errors-out",
+                "vector": [0.0, 0.0, 1.0, 0.0],
+                "metadata": {
+                  "description": "agent struggling — tool errors above midpoint",
+                  "classification": "struggling",
+                  "trigger": "tool_errors_norm HIGH"
+                }
+              }
+            ],
+            "metadata": {
+              "name": "STRUGGLING_ERRORS",
+              "description": "element[1]: tool_errors_norm HIGH (>=0.5); others: wildcard"
+            }
+          },
+          {
+            "id": "agact-struggling-depth",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 1.0, "threshold": 0.8 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "agact-struggling-depth-out",
+                "vector": [0.0, 0.0, 1.0, 0.0],
+                "metadata": {
+                  "description": "agent struggling — deep reasoning loop without resolution",
+                  "classification": "struggling",
+                  "trigger": "reasoning_depth_norm HIGH"
+                }
+              }
+            ],
+            "metadata": {
+              "name": "STRUGGLING_DEPTH",
+              "description": "element[2]: reasoning_depth_norm HIGH (>=0.8); others: wildcard"
+            }
+          }
+        ]
+      },
+      {
+        "id": "agact-normal",
+        "name": "Normal: no tool calls (idle / light activity)",
+        "metadata": {
+          "description": "Fires when tool_calls_norm is LOW — default state when the agent is either idle or just emitting reasoning without tool invocation. Mutually exclusive with productive via the tool_calls_norm split.",
+          "output": "[0,1,0,0] — normal"
+        },
+        "vectors": [
+          {
+            "id": "agact-normal-check",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 0.0, "threshold": 0.2 },
+              { "value": 0.0, "threshold": 0.5 },
+              { "value": 0.0, "threshold": 0.8 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "agact-normal-out",
+                "vector": [0.0, 1.0, 0.0, 0.0],
+                "metadata": {
+                  "description": "agent normal — idle or pure-reasoning turn",
+                  "classification": "normal"
+                }
+              }
+            ],
+            "metadata": {
+              "name": "NORMAL_CHECK",
+              "description": "All activity signals LOW (tool_calls<0.2, tool_errors<0.5, reasoning_depth<0.8)"
+            }
+          }
+        ]
+      }
+    ],
+    "inputSequences": [
+      {
+        "name": "Productive turn — 2 tool calls, no errors",
+        "pattern": "tool_calls=0.4, tool_errors=0.0, reasoning_depth=0.3 → productive",
+        "description": "Agent invoked 2 tools (norm=0.4) with no errors and moderate reasoning (3 steps). Should assert productive [1,0,0,0].",
+        "vectors": [
+          [0.4, 0.0, 0.3, 0.0]
+        ],
+        "metadata": {
+          "expectedOutput": "[1,0,0,0]",
+          "activeSequence": "agact-productive",
+          "notes": "tool_calls=0.4 (>=0.2 HIGH), tool_errors=0.0 (<0.5 LOW) → productive fires"
+        }
+      },
+      {
+        "name": "Struggling turn — repeated tool errors",
+        "pattern": "tool_calls=0.6, tool_errors=0.67, reasoning_depth=0.2 → struggling",
+        "description": "Agent tried 3 tools but 2 errored (norm=0.67). Should assert struggling [0,0,1,0] via the errors leg.",
+        "vectors": [
+          [0.6, 0.67, 0.2, 0.0]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,1,0]",
+          "activeSequence": "agact-struggling",
+          "notes": "tool_errors=0.67 (>=0.5 HIGH) → struggling fires"
+        }
+      },
+      {
+        "name": "Struggling turn — deep reasoning without tools",
+        "pattern": "tool_calls=0.0, tool_errors=0.0, reasoning_depth=0.9 → struggling",
+        "description": "Agent has looped through 9 reasoning steps without tool calls — likely stuck. Should assert struggling [0,0,1,0] via the depth leg.",
+        "vectors": [
+          [0.0, 0.0, 0.9, 0.0]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,1,0]",
+          "activeSequence": "agact-struggling",
+          "notes": "reasoning_depth=0.9 (>=0.8 HIGH) → struggling fires"
+        }
+      },
+      {
+        "name": "Normal turn — no tool calls, shallow reasoning",
+        "pattern": "tool_calls=0.0, tool_errors=0.0, reasoning_depth=0.2 → normal",
+        "description": "Agent emitted a quick reasoning-only response. Should assert normal [0,1,0,0].",
+        "vectors": [
+          [0.0, 0.0, 0.2, 0.0]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,1,0,0]",
+          "activeSequence": "agact-normal",
+          "notes": "All signals LOW → normal fires"
+        }
+      }
+    ]
+  }
+}

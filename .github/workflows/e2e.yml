@@ -1,0 +1,113 @@
+name: E2E Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:    # allow manual triggers for full verification
+
+jobs:
+
+  # ── API Integration (compose stack, no PE/RE) ────────────────────────────────
+  # Starts qdrant + redis + api via compose, then runs the @integration test suite.
+  # PE/RE are unreachable — validates bridge-optional behaviour and /health structure.
+  api-integration:
+    name: API integration (compose)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build the API image with layer caching so reruns are fast
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/api
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: localaistack-api:ci
+
+      # Start only the services needed for integration tests.
+      # The ci override strips the loki logging driver and removes loki from
+      # depends_on chains so the stack comes up without Loki/Grafana.
+      - name: Start compose stack
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.ci.yml \
+            up -d qdrant redis api
+
+      # Poll until the API container's Docker health check reports healthy.
+      # The API health check is: curl -f http://localhost:8000/health
+      # We wait up to 90 s (18 × 5 s) for startup.
+      - name: Wait for API to be healthy
+        run: |
+          echo "Waiting for localai_api to become healthy..."
+          for i in $(seq 1 18); do
+            STATUS=$(docker inspect localai_api --format='{{.State.Health.Status}}' 2>/dev/null || echo "starting")
+            echo "  attempt $i: $STATUS"
+            if [ "$STATUS" = "healthy" ]; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "API did not become healthy in time"
+          docker compose logs api
+          exit 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: pip install httpx pytest
+
+      # Run only the @integration tests — these probe the running compose stack.
+      # The API is exposed on host port 4000 (mapped from container port 8000).
+      - name: Run integration tests
+        env:
+          LOCALAI_API_URL: "http://localhost:4000"
+        run: |
+          pytest services/api/tests/e2e/test_api_integration.py \
+            --integration \
+            -v \
+            --tb=short
+
+      - name: Dump API logs on failure
+        if: failure()
+        run: docker compose logs api
+
+      - name: Tear down compose stack
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
+
+  # ── Unit tests (sanity-check that unit suite still passes) ───────────────────
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal test deps
+        run: |
+          pip install pytest httpx pydantic pydantic-settings structlog
+
+      - name: Run unit tests
+        working-directory: services/api
+        run: |
+          pytest tests/ \
+            --ignore=tests/e2e \
+            -v \
+            --tb=short

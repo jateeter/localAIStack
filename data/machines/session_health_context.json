@@ -1,0 +1,181 @@
+{
+  "version": "1.0.0",
+  "machine": {
+    "name": "localai/session_health_context",
+    "description": "Bistable flip-flop that carries the last health state classification forward through PE perceptual space persist semantics. Reads the personal_health_baseline one-hot output at [190:194] and writes a sticky carry to [202:206]. Structurally identical to session_rag_context: each of the four sequences fires when its health state bit is HIGH, and when no health push occurs in a cycle (agent tool call, idle turn), no sequence fires — PE carry-forward holds [202:206] unchanged, so the health state persists across the entire conversation without re-querying the RE.",
+    "metadata": {
+      "category": "personal-health",
+      "author": "localAIStack health bridge",
+      "created": "2026-06-18T00:00:00Z",
+      "pattern": "bistable-flip-flop",
+      "eventSpace": "4D health state signal at [190:194]: [thriving, balanced, watch, attention]  ← reads personal_health_baseline output",
+      "outputSpace": "4D carry vector at [202:206]: [last_thriving, last_balanced, last_watch, last_attention]",
+      "bistableNote": "SET: one of four sequences fires when personal_health_baseline writes a new health state to [190:194] → writes 1.0 to the matching carry element, 0.0 to others. HOLD: no sequence fires (no health push this cycle) → PE carry-forward preserves [202:206] unchanged. The four guards partition the health state space; mutual exclusivity is guaranteed by personal_health_baseline upstream (one-hot output).",
+      "whyThisExists": "get_current_health_state() polls the RE on every chat request. The carry machine makes the health state available in the assembled perceptual space on every push without extra HTTP calls — downstream Python code reads [202:206] from the push response rather than making a separate GET /api/perceptual-simulation/state call. Falls back to the live read only when the carry is still cold (no push yet this session).",
+      "sequenceCount": 4
+    },
+    "arbiterRule": "OR",
+    "matchAlgorithm": "gte",
+    "perceptualMapping": {
+      "input":  { "offset": 190, "length": 4 },
+      "output": { "offset": 202, "length": 4 }
+    },
+    "sequences": [
+      {
+        "id": "sess-health-thriving",
+        "name": "Carry: last health state was thriving",
+        "metadata": {
+          "description": "Fires when personal_health_baseline asserts thriving (ps[190] ≥ 0.5). Sets last_thriving carry HIGH, clears others.",
+          "trigger": "ps[190] HIGH",
+          "carryOutput": "[1, 0, 0, 0]"
+        },
+        "vectors": [
+          {
+            "id": "vec-sess-health-thriving",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "out-sess-health-thriving",
+                "vector": [1.0, 0.0, 0.0, 0.0],
+                "metadata": { "description": "last_thriving=1, last_balanced=0, last_watch=0, last_attention=0", "carry": "thriving" }
+              }
+            ],
+            "metadata": {
+              "name": "SESS_HEALTH_THRIVING",
+              "description": "element[0]: ps[190] thriving HIGH (GTE ≥0.5); elements[1-3]: wildcards. Fires only when personal_health_baseline wrote thriving this cycle."
+            }
+          }
+        ]
+      },
+      {
+        "id": "sess-health-balanced",
+        "name": "Carry: last health state was balanced",
+        "metadata": {
+          "description": "Fires when personal_health_baseline asserts balanced (ps[191] ≥ 0.5). Sets last_balanced carry HIGH, clears others.",
+          "trigger": "ps[191] HIGH",
+          "carryOutput": "[0, 1, 0, 0]"
+        },
+        "vectors": [
+          {
+            "id": "vec-sess-health-balanced",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "out-sess-health-balanced",
+                "vector": [0.0, 1.0, 0.0, 0.0],
+                "metadata": { "description": "last_thriving=0, last_balanced=1, last_watch=0, last_attention=0", "carry": "balanced" }
+              }
+            ],
+            "metadata": {
+              "name": "SESS_HEALTH_BALANCED",
+              "description": "element[1]: ps[191] balanced HIGH; elements[0,2,3]: wildcards."
+            }
+          }
+        ]
+      },
+      {
+        "id": "sess-health-watch",
+        "name": "Carry: last health state was watch",
+        "metadata": {
+          "description": "Fires when personal_health_baseline asserts watch (ps[192] ≥ 0.5). Sets last_watch carry HIGH, clears others.",
+          "trigger": "ps[192] HIGH",
+          "carryOutput": "[0, 0, 1, 0]"
+        },
+        "vectors": [
+          {
+            "id": "vec-sess-health-watch",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 1.0, "threshold": 0.5 },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+            ],
+            "outputVectors": [
+              {
+                "id": "out-sess-health-watch",
+                "vector": [0.0, 0.0, 1.0, 0.0],
+                "metadata": { "description": "last_thriving=0, last_balanced=0, last_watch=1, last_attention=0", "carry": "watch" }
+              }
+            ],
+            "metadata": {
+              "name": "SESS_HEALTH_WATCH",
+              "description": "element[2]: ps[192] watch HIGH; elements[0,1,3]: wildcards."
+            }
+          }
+        ]
+      },
+      {
+        "id": "sess-health-attention",
+        "name": "Carry: last health state was attention",
+        "metadata": {
+          "description": "Fires when personal_health_baseline asserts attention (ps[193] ≥ 0.5). Sets last_attention carry HIGH, clears others.",
+          "trigger": "ps[193] HIGH",
+          "carryOutput": "[0, 0, 0, 1]"
+        },
+        "vectors": [
+          {
+            "id": "vec-sess-health-attention",
+            "isInitial": true,
+            "nextVectorIds": [],
+            "elements": [
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
+              { "value": 1.0, "threshold": 0.5 }
+            ],
+            "outputVectors": [
+              {
+                "id": "out-sess-health-attention",
+                "vector": [0.0, 0.0, 0.0, 1.0],
+                "metadata": { "description": "last_thriving=0, last_balanced=0, last_watch=0, last_attention=1", "carry": "attention" }
+              }
+            ],
+            "metadata": {
+              "name": "SESS_HEALTH_ATTENTION",
+              "description": "element[3]: ps[193] attention HIGH; elements[0,1,2]: wildcards."
+            }
+          }
+        ]
+      }
+    ],
+    "inputSequences": [
+      {
+        "name": "Thriving push — carry latches thriving",
+        "pattern": "thriving=1.0, balanced=0, watch=0, attention=0",
+        "description": "personal_health_baseline fired thriving this cycle. sess-health-thriving fires, writing [1,0,0,0] to carry. On the next push with no health sensors active, no sequence fires and PE carry-forward holds [1,0,0,0].",
+        "vectors": [ [1.0, 0.0, 0.0, 0.0] ],
+        "metadata": { "expectedOutput": "[1, 0, 0, 0]", "activeSequence": "sess-health-thriving" }
+      },
+      {
+        "name": "Watch push — carry latches watch",
+        "pattern": "thriving=0, balanced=0, watch=1.0, attention=0",
+        "description": "personal_health_baseline fired watch. sess-health-watch fires. Carry persists as [0,0,1,0] until the next health push.",
+        "vectors": [ [0.0, 0.0, 1.0, 0.0] ],
+        "metadata": { "expectedOutput": "[0, 0, 1, 0]", "activeSequence": "sess-health-watch" }
+      },
+      {
+        "name": "Bistable hold — between health pushes",
+        "pattern": "all zeros (no health push this cycle)",
+        "description": "No health state signals active — the API is processing a chat or agent turn with no health sensor update. None of the four sequences fires. OR arbiter produces no output. PE carry-forward preserves whichever carry was last written.",
+        "vectors": [ [0.0, 0.0, 0.0, 0.0] ],
+        "metadata": { "expectedOutput": "no output (PE carry-forward preserves prior state)", "activeSequence": "none — bistable hold" }
+      }
+    ]
+  }
+}
