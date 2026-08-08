@@ -46,7 +46,7 @@ jobs:
         run: pip-audit -r services/api/requirements.txt --output json --output-file pip-audit.json || true
 
       - name: Upload audit report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: pip-audit-report
           path: pip-audit.json
@@ -84,7 +84,8 @@ jobs:
         run: bash .github/scripts/check-sarif.sh trivy-image.sarif "Trivy (Docker)"
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true
         with:
           sarif_file: trivy-image.sarif
           category: trivy-docker
@@ -118,7 +119,8 @@ jobs:
         run: bash .github/scripts/check-sarif.sh trivy-fs.sarif "Trivy (filesystem)"
 
       - name: Upload Trivy FS results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true
         with:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
