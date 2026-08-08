@@ -20,6 +20,9 @@ services:
   grafana:
     profiles: [monitoring]
 
+  prometheus:
+    profiles: [monitoring]
+
   open-webui:
     profiles: [ui]
 
