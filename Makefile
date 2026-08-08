@@ -13,6 +13,7 @@ stop:
 restart: stop start
 
 up:
+	@bash scripts/lib/ollama_guard.sh --ensure
 	@ollama serve &>/tmp/ollama.log & sleep 1
 	@docker compose up -d
 
