@@ -84,7 +84,8 @@ jobs:
         run: bash .github/scripts/check-sarif.sh trivy-image.sarif "Trivy (Docker)"
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true
         with:
           sarif_file: trivy-image.sarif
           category: trivy-docker
@@ -118,7 +119,8 @@ jobs:
         run: bash .github/scripts/check-sarif.sh trivy-fs.sarif "Trivy (filesystem)"
 
       - name: Upload Trivy FS results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true
         with:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
