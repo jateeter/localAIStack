@@ -4,7 +4,8 @@ A local AI stack that runs alongside any active RealityEngine runtime (CPP,
 Scala, LSP). It hosts the RAG / LangGraph orchestration API (FastAPI +
 Strawberry GraphQL), a Qdrant vector store shared with the Reality Engine,
 Redis for LangGraph checkpointing, Open WebUI for chatting with native Ollama
-models, and a Loki + Grafana pair for centralized log monitoring.
+models, and a Loki + Prometheus + Grafana trio for centralized log and metrics
+monitoring.
 
 ## Service URLs
 
@@ -17,6 +18,20 @@ models, and a Loki + Grafana pair for centralized log monitoring.
 | Ollama | http://localhost:11434 | Native LLM runtime (Metal on macOS) |
 | **Grafana** | **http://localhost:4002** | **localAIStack Overview dashboard** |
 | **Loki** | **http://localhost:4100** | **Log aggregation API** |
+| **Prometheus** | **http://localhost:4090** | **Metrics scraping (Loki + API)** |
+
+## Pinned service versions
+
+All observability and vector services use explicit, stable image pins to ensure
+deterministic builds:
+
+| Service | Image | Pinned version |
+|---|---|---|
+| Qdrant | `qdrant/qdrant` | `v1.14.1` |
+| Loki | `grafana/loki` | `3.4.2` |
+| Grafana | `grafana/grafana` | `11.6.1` |
+| Prometheus | `prom/prometheus` | `v2.53.4` (LTS) |
+| Redis | `redis` | `7.4-alpine` |
 
 ## Quick start
 
