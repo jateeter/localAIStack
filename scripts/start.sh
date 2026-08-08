@@ -9,6 +9,8 @@ die()  { echo -e "${RED}[error]${NC} $*"; exit 1; }
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+source "$ROOT_DIR/scripts/lib/ollama_guard.sh"
+ensure_ollama_pinned_version
 
 [[ -f .env ]] || { warn ".env not found — copying from .env.example"; cp .env.example .env; }
 # shellcheck source=/dev/null

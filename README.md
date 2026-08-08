@@ -30,6 +30,12 @@ models, and a Loki + Grafana pair for centralized log monitoring.
 up the compose stack — the qdrant, redis, api, and open-webui containers all
 use the Loki log driver and will fail to start without it.
 
+Both `setup.sh` and `start.sh` (plus `make up`) enforce a pinned Ollama version:
+**v0.32.0**. They parse `ollama --version` output (including formats like
+`ollama version is 0.32.0`) and will auto-install/upgrade to v0.32.0 on
+macOS/Linux via the official installer when needed. If automatic install is not
+possible, they fail with a concise manual-install instruction.
+
 ## Provider completion conformance
 
 Validate the RealityEngine PE completion callback contract without a live

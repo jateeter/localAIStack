@@ -11,10 +11,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 cd "$ROOT_DIR"
+source "$SCRIPT_DIR/lib/ollama_guard.sh"
+ensure_ollama_pinned_version
 
 # ── Prerequisites ──────────────────────────────────────────────────────────────
 info "Checking prerequisites..."
-command -v ollama >/dev/null || die "Ollama not found. Install from https://ollama.ai"
 command -v docker  >/dev/null || die "Docker not found."
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 required."
 ok "Prerequisites satisfied"
