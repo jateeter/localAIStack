@@ -56,8 +56,8 @@ jobs:
             ## Stack versions
             | Component | Image |
             |---|---|
-            | Qdrant | `qdrant/qdrant:v1.9.2` |
-            | Redis  | `redis:7.2-alpine` |
+            | Qdrant | `qdrant/qdrant:v1.14.1` |
+            | Redis  | `redis:7.4-alpine` |
             | Open WebUI | `ghcr.io/open-webui/open-webui:main` |
 
             ## Quick start
