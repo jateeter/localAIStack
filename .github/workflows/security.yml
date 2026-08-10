@@ -46,7 +46,7 @@ jobs:
         run: pip-audit -r services/api/requirements.txt --output json --output-file pip-audit.json || true
 
       - name: Upload audit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pip-audit-report
           path: pip-audit.json
@@ -92,7 +92,7 @@ jobs:
 
       - name: Upload image SARIF artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trivy-image-sarif
           path: trivy-image.sarif
@@ -127,7 +127,7 @@ jobs:
 
       - name: Upload filesystem SARIF artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trivy-fs-sarif
           path: trivy-fs.sarif
