@@ -1,4 +1,4 @@
-.PHONY: setup start stop up down logs health query ingest models provider-conformance clean
+.PHONY: setup start stop up down logs health query ingest models models-installed model-pull model-info provider-conformance clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -30,9 +30,25 @@ logs-api:
 health:
 	@curl -s http://localhost:4000/health | python3 -m json.tool
 
+# ── Model registry ────────────────────────────────────────────────────────────
+# Registry = config/models.registry.json (available), .env = selected,
+# Ollama = installed. `make models` shows all three; the API serves the same
+# join at GET /models.
 models:
+	@bash scripts/lib/models_registry.sh --list
+
+# Tags actually pulled on the Ollama host, registry or not.
+models-installed:
 	@curl -s http://localhost:11434/api/tags | python3 -c \
 		"import sys,json; [print(' ', m['name']) for m in json.load(sys.stdin).get('models',[])]"
+
+# Usage: make model-pull ID=nemotron-3-nano-4b
+model-pull:
+	@bash scripts/lib/models_registry.sh --pull $(ID)
+
+# Usage: make model-info ID=nemotron-3-nano-4b   (requires the API to be up)
+model-info:
+	@curl -s http://localhost:4000/models/$(ID) | python3 -m json.tool
 
 provider-conformance:
 	@node --test scripts/pe-completion-conformance.test.mjs

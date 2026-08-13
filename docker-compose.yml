@@ -172,9 +172,16 @@ services:
       RE_REGISTRY_URL: "${RE_REGISTRY_URL:-http://host.docker.internal:5999/re-registry.json}"
       RE_SSL_VERIFY: "false"
       MACHINES_DIR: "/app/data/machines"
+      # Model registry — config/ is mounted below; without this the loader's
+      # repo-root walk overshoots to / because services/api mounts at /app.
+      MODELS_REGISTRY_PATH: "/app/config/models.registry.json"
+      # Docker Desktop reports the Linux VM's RAM, not the Mac's. Set this so
+      # GET /models reports fits_host against real host memory.
+      HOST_RAM_GB: "${HOST_RAM_GB:-}"
     volumes:
       - ./data/documents:/app/data/documents
       - ./data/machines:/app/data/machines:ro
+      - ./config:/app/config:ro
       - ./services/api:/app  # live-reload in dev
     depends_on:
       qdrant:

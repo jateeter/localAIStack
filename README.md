@@ -51,6 +51,73 @@ Both `setup.sh` and `start.sh` (plus `make up`) enforce a pinned Ollama version:
 macOS/Linux via the official installer when needed. If automatic install is not
 possible, they fail with a concise manual-install instruction.
 
+## Model registry
+
+`config/models.registry.json` is the single source of truth for every local
+model the stack knows how to run. It is *declarative* — listing a model does not
+download it. Three separate facts get joined at read time:
+
+| Fact | Lives in | Means |
+|---|---|---|
+| available | `config/models.registry.json` | the stack has curated metadata for it |
+| selected | `.env` (`LLM_MODEL` / `EMBED_MODEL`) | the API will use it |
+| installed | the Ollama host (`/api/tags`) | the weights are actually pulled |
+
+```bash
+make models                              # registry table, * marks installed
+make model-pull ID=nemotron-3-nano-4b    # pull a registered model
+make model-info ID=nemotron-3-nano-4b    # full entry (API must be up)
+curl -s localhost:4000/models | python3 -m json.tool
+curl -s 'localhost:4000/models?role=embedding' | python3 -m json.tool
+```
+
+`GET /models` returns the join, so the three common failure modes are
+distinguishable in one response: `installed: false` (never pulled),
+`unregistered_selections` (a `.env` tag no entry claims — usually a typo), and
+`fits_host: false` (bigger than this machine's RAM). `setup.sh` runs the same
+check against your `.env` selections and warns without blocking — overriding the
+registry is legitimate while testing.
+
+### Registered models
+
+| ID | Tag | Role | Size | Context | Notes |
+|---|---|---|---|---|---|
+| `llama3.1-8b` | `llama3.1:8b` | llm | 4.9 GB | 128K | Default generator |
+| `llama3.2-3b` | `llama3.2:3b` | llm | 2.0 GB | 128K | Fast smoke tests |
+| `mistral-7b` | `mistral:7b-instruct-q4_K_M` | llm | 4.4 GB | 32K | RAG grading A/B |
+| `phi3.5-mini` | `phi3.5:3.8b` | llm | 2.2 GB | 128K | No tool-calling |
+| `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.8 GB | 256K | NVIDIA agentic — tools + thinking |
+| `nemotron-3-nano-30b` | `nemotron-3-nano:30b` | llm | 24 GB | 1M | Needs ≥48 GB RAM |
+| `nomic-embed-text` | `nomic-embed-text` | embedding | 274 MB | 2K | Default embedder, 768-dim |
+| `ternary-bonsai-4b` | `ternary-bonsai:4` | embedding | 546 MB | 32K | **broken** — see known issue below |
+
+**NVIDIA Nemotron 3 Nano 4B** is the registry's recommended agent model on a
+16 GB host: hybrid Mamba-2/MoE, native tool-calling and reasoning modes, and a
+256K context at 2.8 GB — roughly half the footprint of `llama3.1-8b` with twice
+the context. Try it without changing the default:
+
+```bash
+make model-pull ID=nemotron-3-nano-4b
+curl -s -X POST localhost:4000/chat -H 'Content-Type: application/json' \
+  -d '{"model":"nemotron-3-nano:4b","messages":[{"role":"user","content":"hi"}]}'
+```
+
+To promote it to the stack default, set `LLM_MODEL=nemotron-3-nano:4b` in `.env`
+and restart the API. The 30B variant is registered but not for this baseline:
+`nemotron-3-nano:latest` resolves to it, which is why the registry pins explicit
+`:4b` / `:30b` tags.
+
+### Adding a model
+
+1. Append an entry to `config/models.registry.json` (stable kebab-case `id`,
+   exact Ollama `tag`).
+2. `make model-pull ID=<id>`
+3. Point `.env` at it only if it should become the selected llm/embedder.
+
+Swapping the *embedder* also means matching `EMBED_DIM` and recreating the
+`localai_docs` Qdrant collection — the registry records each embedder's
+`embed_dim` so the mismatch is visible before you hit it.
+
 ## Provider completion conformance
 
 Validate the RealityEngine PE completion callback contract without a live
@@ -108,6 +175,9 @@ tail -f /tmp/ollama.log
   (document embeddings) and `reality-vectors` (perceptual vectors) live in this
   instance.  Any active runtime (CPP, Scala, LSP) connects from its Docker
   network via `host.docker.internal:4333`.
+- **Model metadata** lives in `config/models.registry.json`, mounted into the
+  api container at `/app/config` and served at `GET /models`. See
+  [Model registry](#model-registry).
 - **Embedding model** defaults to `ternary-bonsai:4` (registered at setup time
   from `hf.co/prism-ml/Bonsai-4B-gguf`).  Override via `.env` `EMBED_MODEL`.
   > ⚠ **Known issue:** the prism-ml repo ships only a Q1_0 (BitNet ternary)
