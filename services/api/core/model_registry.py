@@ -33,15 +33,21 @@ _cache: dict = {"at": 0.0, "registry": None, "path": None}
 
 _TAGS_TIMEOUT_S = 3.0
 
-# services/api/core/model_registry.py → services/api/core → services/api → services → <root>
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 
-# In Docker, services/api is mounted at /app and config/ alongside it at
-# /app/config, so the repo-root walk above overshoots. Try both layouts.
-_DEFAULT_PATHS = (
-    _REPO_ROOT / "config" / "models.registry.json",
-    pathlib.Path("/app/config/models.registry.json"),
-)
+def _default_paths() -> tuple[pathlib.Path, ...]:
+    """Candidate registry locations, most specific first.
+
+    Two layouts exist. In a checkout this file sits four levels below the repo
+    root (services/api/core/model_registry.py). In the container services/api
+    is mounted at /app, so the same file is only two levels below / and the
+    repo-root walk has nowhere to go — hence the guarded ``parents`` index.
+    Compose sets MODELS_REGISTRY_PATH there anyway; this is the fallback.
+    """
+    parents = pathlib.Path(__file__).resolve().parents
+    paths = [pathlib.Path("/app/config/models.registry.json")]
+    if len(parents) > 3:
+        paths.insert(0, parents[3] / "config" / "models.registry.json")
+    return tuple(paths)
 
 
 class ModelSource(BaseModel):
@@ -106,7 +112,8 @@ def registry_path() -> pathlib.Path:
     override = os.getenv("MODELS_REGISTRY_PATH") or get_settings().models_registry_path
     if override:
         return pathlib.Path(override)
-    return next((p for p in _DEFAULT_PATHS if p.is_file()), _DEFAULT_PATHS[0])
+    candidates = _default_paths()
+    return next((p for p in candidates if p.is_file()), candidates[0])
 
 
 def load_registry(force_refresh: bool = False) -> ModelRegistry:

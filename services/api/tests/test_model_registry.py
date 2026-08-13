@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import pathlib
 
 import pytest
 
@@ -140,6 +141,24 @@ def test_comment_keys_are_stripped(fixture_registry):
     reg = mr.load_registry(force_refresh=True)
     assert reg.version == "9.9"
     assert len(reg.models) == 3
+
+
+def test_default_paths_survive_the_container_layout(monkeypatch):
+    """Regression: the api container mounts services/api at /app.
+
+    This module is then /app/core/model_registry.py — two levels below root,
+    not the four a checkout has. Walking to a repo root unguarded raised
+    IndexError at *import* time, taking the whole API down with it.
+    """
+    monkeypatch.setattr(mr, "__file__", "/app/core/model_registry.py")
+    paths = mr._default_paths()
+    assert pathlib.Path("/app/config/models.registry.json") in paths
+
+
+def test_registry_path_falls_back_without_raising(monkeypatch):
+    monkeypatch.delenv("MODELS_REGISTRY_PATH", raising=False)
+    monkeypatch.setattr(mr, "__file__", "/app/core/model_registry.py")
+    assert mr.registry_path().name == "models.registry.json"
 
 
 def test_missing_file_raises(monkeypatch, tmp_path):
