@@ -12,6 +12,7 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 cd "$ROOT_DIR"
 source "$SCRIPT_DIR/lib/ollama_guard.sh"
+source "$SCRIPT_DIR/lib/models_registry.sh"
 ensure_ollama_pinned_version
 
 # ── Prerequisites ──────────────────────────────────────────────────────────────
@@ -31,6 +32,14 @@ fi
 source .env
 LLM_MODEL="${LLM_MODEL:-llama3.1:8b-q4_K_M}"
 EMBED_MODEL="${EMBED_MODEL:-ternary-bonsai:4}"
+
+# ── Registry check ────────────────────────────────────────────────────────────
+# The registry declares what is available; .env decides what is selected. This
+# only reports — an unregistered or known-broken selection warns and continues,
+# because overriding the registry is a legitimate thing to do while testing.
+info "Checking model selections against config/models.registry.json"
+registry_check_selection "LLM" "$LLM_MODEL" || true
+registry_check_selection "Embedding" "$EMBED_MODEL" || true
 
 # ── Start Ollama (native) ─────────────────────────────────────────────────────
 info "Starting Ollama service..."
@@ -123,4 +132,6 @@ echo ""
 echo "  Next steps:"
 echo "    make ingest FILE=./data/documents/your_doc.pdf"
 echo "    make query  Q='What is in my knowledge base?'"
+echo "    make models                              # registry + what's installed"
+echo "    make model-pull ID=nemotron-3-nano-4b    # add another registered model"
 echo ""

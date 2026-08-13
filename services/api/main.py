@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from routers import chat, graph, health, patient_wellness, rag
+from routers import chat, graph, health, models, patient_wellness, rag
 from routers.graphql_endpoint import events_router as graphql_events_router
 from routers.graphql_endpoint import graphql_app
 
@@ -89,6 +89,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(chat.router)
+app.include_router(models.router)
 app.include_router(rag.router)
 app.include_router(graph.router)
 app.include_router(patient_wellness.router)

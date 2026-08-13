@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     embed_dim: int = 768
     collection_name: str = "localai_docs"
 
+    # Model registry (config/models.registry.json). Empty = auto-resolve; see
+    # core.model_registry.registry_path for the search order.
+    models_registry_path: str = ""
+
     # RAG retrieval
     retrieval_top_k: int = 5
     retrieval_score_threshold: float = 0.4
