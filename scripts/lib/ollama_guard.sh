@@ -1,7 +1,45 @@
 #!/usr/bin/env bash
 
-# Single source of truth for the Ollama version this repository pins.
-OLLAMA_VERSION="0.32.0"
+# The pinned Ollama version lives in config/models.registry.json under
+# `runtime.pinned_version` — the same registry that declares the models. Nothing
+# here hardcodes a version; the fallback below exists only so `make up` still
+# works if the registry is missing or unreadable, and is deliberately old enough
+# to be obviously a fallback rather than a second source of truth.
+#
+# The pin is a FLOOR. An older Ollama is upgraded to it; a newer one is left
+# alone rather than downgraded. Export OLLAMA_STRICT_PIN=1 to require the exact
+# version instead (reproducibility runs, bisecting an upstream regression).
+_OLLAMA_FALLBACK_VERSION="0.32.0"
+
+_ollama_registry_file() {
+    if [[ -n "${MODELS_REGISTRY_PATH:-}" ]]; then
+        echo "$MODELS_REGISTRY_PATH"
+        return 0
+    fi
+    local lib_dir
+    lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    echo "$(cd "$lib_dir/../.." && pwd)/config/models.registry.json"
+}
+
+read_pinned_ollama_version() {
+    local file version
+    file="$(_ollama_registry_file)"
+    if [[ -f "$file" ]] && command -v python3 >/dev/null 2>&1; then
+        version="$(python3 -c '
+import json, sys
+try:
+    reg = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+runtime = reg.get("runtime")
+if isinstance(runtime, dict):
+    print(runtime.get("pinned_version") or "")
+' "$file" 2>/dev/null)"
+    fi
+    echo "${version:-$_OLLAMA_FALLBACK_VERSION}"
+}
+
+OLLAMA_VERSION="$(read_pinned_ollama_version)"
 
 _ollama_info() {
     if declare -F info >/dev/null 2>&1; then
@@ -88,6 +126,7 @@ install_or_upgrade_ollama_pinned() {
 
 ensure_ollama_pinned_version() {
     local required="$OLLAMA_VERSION"
+    local strict="${OLLAMA_STRICT_PIN:-0}"
 
     if ! command -v ollama >/dev/null 2>&1; then
         _ollama_warn "Ollama is not installed."
@@ -98,24 +137,67 @@ ensure_ollama_pinned_version() {
     raw_version="$(ollama --version 2>&1 || true)"
     current_version="$(extract_semver "$raw_version")"
     [[ -n "$current_version" ]] \
-        || _ollama_error "Unable to parse installed Ollama version from: '$raw_version'. Expected v${required}."
+        || _ollama_error "Unable to parse installed Ollama version from: '$raw_version'. Expected v${required} or newer."
 
     cmp="$(semver_compare "$current_version" "$required")"
+
+    # Newer than the pin: leave it alone. Downgrading a host that has moved
+    # ahead of the repo breaks the developer's other work to satisfy a floor
+    # they already clear. Strict mode opts back into exact matching.
+    if [[ "$cmp" -eq 1 ]]; then
+        if [[ "$strict" == "1" ]]; then
+            _ollama_warn "OLLAMA_STRICT_PIN=1 and found v${current_version}; reinstalling exactly v${required}."
+        else
+            _ollama_info "Using Ollama v${current_version} (ahead of the v${required} pin — run 'make ollama-check' to see if the pin is stale)"
+            return 0
+        fi
+    fi
+
     if [[ "$cmp" -ne 0 ]]; then
-        _ollama_warn "Found Ollama v${current_version}; required v${required}. Reinstalling pinned version."
+        _ollama_warn "Found Ollama v${current_version}; this repo requires v${required} or newer. Installing pinned version."
         install_or_upgrade_ollama_pinned || return 1
         raw_version="$(ollama --version 2>&1 || true)"
         current_version="$(extract_semver "$raw_version")"
         [[ -n "$current_version" ]] \
             || _ollama_error "Unable to parse Ollama version after install. Output: '$raw_version'"
         cmp="$(semver_compare "$current_version" "$required")"
-        [[ "$cmp" -eq 0 ]] \
-            || _ollama_error "Expected Ollama v${required}, found v${current_version}. Please install v${required} manually: https://ollama.com/download?version=${required}"
+        [[ "$cmp" -ge 0 ]] \
+            || _ollama_error "Expected Ollama v${required} or newer, found v${current_version}. Please install v${required} manually: https://ollama.com/download?version=${required}"
     fi
 
-    _ollama_info "Using pinned Ollama v${required}"
+    _ollama_info "Using pinned Ollama v${current_version}"
 }
 
-if [[ "${1:-}" == "--ensure" ]]; then
-    ensure_ollama_pinned_version
-fi
+# Report pinned vs latest-upstream vs installed. Never installs anything —
+# this is the "is our pin stale?" command, and the same comparison the
+# ollama-pin workflow makes on a schedule.
+ollama_check() {
+    local pinned installed latest
+    pinned="$OLLAMA_VERSION"
+    installed="$(command -v ollama >/dev/null 2>&1 && extract_semver "$(ollama --version 2>&1)" || echo "not installed")"
+    latest="$(curl -sf --max-time 10 https://api.github.com/repos/ollama/ollama/releases/latest 2>/dev/null \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name",""))' 2>/dev/null || true)"
+    latest="$(extract_semver "${latest:-}")"
+
+    echo "pinned    (config/models.registry.json): v${pinned}"
+    if [[ "$installed" =~ ^[0-9] ]]; then
+        installed="v${installed}"
+    fi
+    echo "installed (this host):                   ${installed}"
+    echo "latest    (ollama/ollama releases):      ${latest:+v}${latest:-unknown}"
+
+    if [[ -n "$latest" && "$(semver_compare "$latest" "$pinned")" -eq 1 ]]; then
+        echo ""
+        echo "Pin is behind upstream. .github/workflows/ollama-pin.yml opens a PR for this"
+        echo "weekly; to bump now, set runtime.pinned_version to ${latest} in"
+        echo "config/models.registry.json."
+        return 1
+    fi
+    return 0
+}
+
+case "${1:-}" in
+    --ensure) ensure_ollama_pinned_version ;;
+    --check)  ollama_check ;;
+    --print)  echo "$OLLAMA_VERSION" ;;
+esac

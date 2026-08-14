@@ -10,6 +10,9 @@ __pycache__/
 *.pyo
 *.egg-info/
 .venv/
+# pytest writes its own .gitignore inside this dir, so it is normally
+# self-ignoring — listed explicitly so the protection does not depend on that.
+.pytest_cache/
 
 # macOS
 .DS_Store
