@@ -18,9 +18,11 @@ validation and ``make model-pull``.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import pathlib
+import re
 import time
 
 import httpx
@@ -80,9 +82,24 @@ class ModelEntry(BaseModel):
     notes: str | None = None
 
 
+class RuntimeSpec(BaseModel):
+    """The local AI runtime this registry targets, and the version it pins.
+
+    ``pinned_version`` is a floor, not an equality — see the runtime block in
+    config/models.registry.json and scripts/lib/ollama_guard.sh.
+    """
+
+    name: str = "ollama"
+    pinned_version: str | None = None
+    latest_known: str | None = None
+    checked_at: str | None = None
+    release_feed: str | None = None
+    download_url: str | None = None
+
+
 class ModelRegistry(BaseModel):
     version: str
-    runtime: str = "ollama"
+    runtime: RuntimeSpec = Field(default_factory=RuntimeSpec)
     roles: dict = Field(default_factory=dict)
     models: list[ModelEntry] = Field(default_factory=list)
 
@@ -170,6 +187,25 @@ async def installed_tags(base_url: str | None = None) -> tuple[list[str], str]:
         return [], f"unreachable: {str(exc)[:160]}"
 
 
+async def installed_version(base_url: str | None = None) -> str | None:
+    """Version reported by the live Ollama host, or None when unreachable."""
+    s = get_settings()
+    url = base_url or s.ollama_base_url
+    try:
+        async with httpx.AsyncClient(timeout=_TAGS_TIMEOUT_S) as c:
+            r = await c.get(f"{url}/api/version")
+            r.raise_for_status()
+            return r.json().get("version")
+    except Exception:
+        return None
+
+
+def version_tuple(v: str) -> tuple[int, ...]:
+    """Parse a semver-ish string into a comparable tuple; unparseable → (0,)."""
+    parts = re.findall(r"\d+", v or "")
+    return tuple(int(p) for p in parts[:3]) or (0,)
+
+
 def _tag_matches(entry_tag: str, installed: list[str]) -> bool:
     """Ollama reports bare tags as ``name:latest``; match either spelling."""
     wanted = {entry_tag, f"{entry_tag}:latest"} if ":" not in entry_tag else {entry_tag}
@@ -198,7 +234,9 @@ async def resolve_models(role: str | None = None) -> dict:
     """Join registry metadata with .env selection and live Ollama state."""
     registry = load_registry()
     s = get_settings()
-    installed, ollama_status = await installed_tags()
+    (installed, ollama_status), running_version = await asyncio.gather(
+        installed_tags(), installed_version()
+    )
     ram = host_ram_gb()
 
     selected = {"llm": s.llm_model, "embedding": s.embed_model}
@@ -221,10 +259,23 @@ async def resolve_models(role: str | None = None) -> dict:
     # this endpoint exists to catch — surface it rather than silently omitting.
     unregistered = {r: tag for r, tag in selected.items() if registry.by_tag(tag) is None}
 
+    # The pin is a floor: a host ahead of it is fine, a host behind it is the
+    # thing worth reporting, since that is what setup.sh will act on.
+    pinned = registry.runtime.pinned_version
+    behind_pin = (
+        None
+        if running_version is None or pinned is None
+        else version_tuple(running_version) < version_tuple(pinned)
+    )
+
     return {
         "registry_version": registry.version,
         "registry_path": str(registry_path()),
-        "runtime": registry.runtime,
+        "runtime": {
+            **registry.runtime.model_dump(),
+            "running_version": running_version,
+            "behind_pin": behind_pin,
+        },
         "ollama": {"status": ollama_status, "base_url": s.ollama_base_url},
         "host_ram_gb": None if ram is None else round(ram, 1),
         "selected": selected,

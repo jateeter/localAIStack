@@ -1,4 +1,4 @@
-.PHONY: setup start stop up down logs health query ingest models models-installed model-pull model-info provider-conformance clean
+.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -41,6 +41,9 @@ models:
 models-installed:
 	@curl -s http://localhost:11434/api/tags | python3 -c \
 		"import sys,json; [print(' ', m['name']) for m in json.load(sys.stdin).get('models',[])]"
+
+ollama-check:
+	@bash scripts/lib/ollama_guard.sh --check
 
 # Usage: make model-pull ID=nemotron-3-nano-4b
 model-pull:

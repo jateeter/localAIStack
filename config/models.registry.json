@@ -7,10 +7,14 @@
     "*available*, `.env` (LLM_MODEL / EMBED_MODEL) declares what is *selected*,",
     "and Ollama decides what is *installed*.  GET /models joins all three.",
     "",
+    "It also pins the Ollama runtime version — see the `runtime` block below.",
+    "",
     "Consumers:",
     "  services/api/core/model_registry.py   loader + Ollama installed-state merge",
     "  services/api/routers/models.py        GET /models, GET /models/{id}",
     "  scripts/lib/models_registry.sh        setup.sh validation, `make model-pull`",
+    "  scripts/lib/ollama_guard.sh           reads runtime.pinned_version",
+    "  .github/workflows/ollama-pin.yml      opens a PR when the pin falls behind",
     "",
     "Adding a model:",
     "  1. Append an entry below (id is stable and kebab-case; tag is the exact",
@@ -31,8 +35,28 @@
     "                reported by GET /models with fits_host=false.",
     "  status        supported | experimental | broken (see notes for why)."
   ],
-  "version": "1.0",
-  "runtime": "ollama",
+  "version": "1.1",
+  "runtime": {
+    "name": "ollama",
+    "_comment": [
+      "Single source of truth for the Ollama version this repo targets.",
+      "scripts/lib/ollama_guard.sh reads pinned_version from here — do not",
+      "hardcode a version anywhere else, including docs.",
+      "",
+      "pinned_version is a FLOOR, not an equality. setup.sh/start.sh install it",
+      "when Ollama is absent or older, and accept anything newer rather than",
+      "downgrading a host that has moved ahead. Set OLLAMA_STRICT_PIN=1 to",
+      "require the exact version (reproducibility runs, bisecting a regression).",
+      "",
+      "checked_at / latest_known are maintained by .github/workflows/ollama-pin.yml,",
+      "which polls ollama/ollama weekly and opens a PR when this pin falls behind."
+    ],
+    "pinned_version": "0.32.9",
+    "latest_known": "0.32.9",
+    "checked_at": "2026-08-13",
+    "release_feed": "https://api.github.com/repos/ollama/ollama/releases/latest",
+    "download_url": "https://ollama.com/download"
+  },
   "roles": {
     "llm": {
       "default": "llama3.1-8b",

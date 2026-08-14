@@ -22,7 +22,14 @@ from core import model_registry as mr
 FIXTURE = {
     "_comment": ["stripped by the loader"],
     "version": "9.9",
-    "runtime": "ollama",
+    "runtime": {
+        "name": "ollama",
+        "pinned_version": "0.32.9",
+        "latest_known": "0.32.9",
+        "checked_at": "2026-08-13",
+        "release_feed": "https://api.github.com/repos/ollama/ollama/releases/latest",
+        "download_url": "https://ollama.com/download",
+    },
     "roles": {"llm": {"default": "big"}, "embedding": {"default": "embedder"}},
     "models": [
         {
@@ -88,7 +95,8 @@ def fixture_registry(tmp_path, monkeypatch):
 def test_shipped_registry_loads():
     reg = mr.load_registry(force_refresh=True)
     assert reg.models, "registry ships with no models"
-    assert reg.runtime == "ollama"
+    assert reg.runtime.name == "ollama"
+    assert reg.runtime.pinned_version
 
 
 def test_shipped_registry_ids_and_tags_are_unique():
@@ -197,7 +205,11 @@ def _patch_env(monkeypatch, installed, ram, llm="small:3b", embed="embedder"):
     async def _tags(base_url=None):
         return installed, "ok"
 
+    async def _version(base_url=None):
+        return "0.32.9"
+
     monkeypatch.setattr(mr, "installed_tags", _tags)
+    monkeypatch.setattr(mr, "installed_version", _version)
     monkeypatch.setattr(mr, "host_ram_gb", lambda: ram)
 
     s = mr.get_settings()
@@ -256,8 +268,22 @@ def test_unreachable_ollama_is_reported_not_raised(fixture_registry, monkeypatch
     async def _tags(base_url=None):
         return [], "unreachable: connection refused"
 
+    async def _version(base_url=None):
+        return None
+
     monkeypatch.setattr(mr, "installed_tags", _tags)
+    monkeypatch.setattr(mr, "installed_version", _version)
 
     out = asyncio.run(mr.resolve_models())
     assert out["ollama"]["status"].startswith("unreachable")
     assert all(m["installed"] is False for m in out["models"])
+
+
+def test_resolve_reports_runtime_pin_state(fixture_registry, monkeypatch):
+    _patch_env(monkeypatch, installed=[], ram=16.0)
+
+    out = asyncio.run(mr.resolve_models())
+    assert out["runtime"]["name"] == "ollama"
+    assert out["runtime"]["pinned_version"] == "0.32.9"
+    assert out["runtime"]["running_version"] == "0.32.9"
+    assert out["runtime"]["behind_pin"] is False
