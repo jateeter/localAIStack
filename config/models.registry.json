@@ -59,8 +59,8 @@
   },
   "roles": {
     "llm": {
-      "default": "llama3.1-8b",
-      "_comment": "Matches .env.example LLM_MODEL. config.py's hardcoded fallback is the equivalent llama3.1:8b-q4_K_M tag."
+      "default": "nemotron-3-nano-4b",
+      "_comment": "Matches .env.example LLM_MODEL and config.py's hardcoded fallback: nemotron-3-nano:4b."
     },
     "embedding": {
       "default": "nomic-embed-text",
@@ -83,10 +83,10 @@
       "context_length": 131072,
       "capabilities": ["completion", "tools"],
       "min_ram_gb": 16,
-      "install": "selected",
+      "install": "on-demand",
       "status": "supported",
       "license": "Llama 3.1 Community License",
-      "notes": "Default chat/RAG generator. Best quality-per-GB on a 16 GB M-series host."
+      "notes": "Strong general chat/RAG baseline, kept on-demand now that Nemotron 3 Nano 4B is the default agentic generator."
     },
     {
       "id": "llama3.2-3b",
@@ -160,10 +160,10 @@
       "context_length": 262144,
       "capabilities": ["completion", "tools", "thinking"],
       "min_ram_gb": 8,
-      "install": "on-demand",
+      "install": "selected",
       "status": "supported",
       "license": "NVIDIA Open Model License Agreement",
-      "notes": "Agentic model built for tool use and reasoning, with a unified reasoning/non-reasoning mode. 256K context at 2.8 GB makes it the best tool-calling fit on a 16 GB host for /graph/agent — it carries far more retrieved context than llama3.1-8b at half the footprint. Languages: en, de, es, fr, it, ja."
+      "notes": "Default agentic generator for tool use and reasoning, with a unified reasoning/non-reasoning mode. 256K context at 2.8 GB makes it the best tool-calling fit on a 16 GB host for /graph/agent — it carries far more retrieved context than llama3.1-8b at half the footprint. Languages: en, de, es, fr, it, ja."
     },
     {
       "id": "nemotron-3-nano-30b",

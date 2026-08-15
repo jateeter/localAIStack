@@ -135,6 +135,8 @@ def test_nemotron_is_registered():
     entry = reg.by_id("nemotron-3-nano-4b")
     assert entry is not None, "NVIDIA Nemotron is missing from the registry"
     assert entry.tag == "nemotron-3-nano:4b"
+    assert reg.default_for("llm") == "nemotron-3-nano-4b"
+    assert entry.install == "selected"
     assert entry.publisher == "NVIDIA"
     assert entry.role == "llm"
     # Registered specifically for tool-using agent work on a 16 GB host.

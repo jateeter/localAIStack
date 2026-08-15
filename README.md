@@ -82,19 +82,19 @@ registry is legitimate while testing.
 
 | ID | Tag | Role | Size | Context | Notes |
 |---|---|---|---|---|---|
-| `llama3.1-8b` | `llama3.1:8b` | llm | 4.9 GB | 128K | Default generator |
+| `llama3.1-8b` | `llama3.1:8b` | llm | 4.9 GB | 128K | General chat/RAG baseline |
 | `llama3.2-3b` | `llama3.2:3b` | llm | 2.0 GB | 128K | Fast smoke tests |
 | `mistral-7b` | `mistral:7b-instruct-q4_K_M` | llm | 4.4 GB | 32K | RAG grading A/B |
 | `phi3.5-mini` | `phi3.5:3.8b` | llm | 2.2 GB | 128K | No tool-calling |
-| `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.8 GB | 256K | NVIDIA agentic — tools + thinking |
+| `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.8 GB | 256K | Default NVIDIA agentic — tools + thinking |
 | `nemotron-3-nano-30b` | `nemotron-3-nano:30b` | llm | 24 GB | 1M | Needs ≥48 GB RAM |
 | `nomic-embed-text` | `nomic-embed-text` | embedding | 274 MB | 2K | Default embedder, 768-dim |
 | `ternary-bonsai-4b` | `ternary-bonsai:4` | embedding | 546 MB | 32K | **broken** — see known issue below |
 
-**NVIDIA Nemotron 3 Nano 4B** is the registry's recommended agent model on a
+**NVIDIA Nemotron 3 Nano 4B** is the registry's default agent model on a
 16 GB host: hybrid Mamba-2/MoE, native tool-calling and reasoning modes, and a
 256K context at 2.8 GB — roughly half the footprint of `llama3.1-8b` with twice
-the context. Try it without changing the default:
+the context.
 
 ```bash
 make model-pull ID=nemotron-3-nano-4b
@@ -102,10 +102,10 @@ curl -s -X POST localhost:4000/chat -H 'Content-Type: application/json' \
   -d '{"model":"nemotron-3-nano:4b","messages":[{"role":"user","content":"hi"}]}'
 ```
 
-To promote it to the stack default, set `LLM_MODEL=nemotron-3-nano:4b` in `.env`
-and restart the API. The 30B variant is registered but not for this baseline:
-`nemotron-3-nano:latest` resolves to it, which is why the registry pins explicit
-`:4b` / `:30b` tags.
+Fresh `.env` files select it with `LLM_MODEL=nemotron-3-nano:4b`, and
+`setup.sh` pulls that tag by default. The 30B variant is registered but not for
+this baseline: `nemotron-3-nano:latest` resolves to it, which is why the
+registry pins explicit `:4b` / `:30b` tags.
 
 ### Adding a model
 

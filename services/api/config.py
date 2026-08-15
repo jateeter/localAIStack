@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     redis_url: str = "redis://localhost:4379"
 
-    llm_model: str = "llama3.1:8b-q4_K_M"
+    llm_model: str = "nemotron-3-nano:4b"
     embed_model: str = "ternary-bonsai:4"
     # Output dimension of embed_model. Must match the existing Qdrant collection;
     # recreate the collection if you swap to a model with a different dim.
