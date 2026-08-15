@@ -44,4 +44,19 @@ updates:
       day: monday
       time: "06:00"
       timezone: America/Chicago
+    ignore:
+      # The API image's Python version is pinned by the document-loader
+      # dependency set, not by what is newest: unstructured==0.25.2 declares
+      # Requires-Python >=3.11,<3.14, and no released version supports 3.14.
+      # Dependabot has bumped this base image past that ceiling twice (#31,
+      # reverting #28), and each bump breaks `docker compose build` — which
+      # the RealityEngine_CI hosted regression runs, so the break lands as a
+      # red universe-wide run rather than as a red build here.
+      #
+      # Unpin when requirements.txt moves to an `unstructured` that allows
+      # 3.14; raising the Python version before then only re-breaks the build.
+      - dependency-name: "python"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
     open-pull-requests-limit: 3
