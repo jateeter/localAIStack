@@ -1,4 +1,6 @@
-FROM python:3.14-slim
+# Keep the runtime on Python 3.11 until the document-loader dependency set
+# supports Python 3.14. In particular, unstructured==0.25.2 declares <3.14.
+FROM python:3.11-slim
 
 WORKDIR /app
 
