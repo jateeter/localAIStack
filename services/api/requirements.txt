@@ -28,7 +28,7 @@ python-docx==1.2.0
 markdown==3.10.3
 
 # GraphQL (machine trigger receiver)
-strawberry-graphql[fastapi]==0.323.2
+strawberry-graphql[fastapi]==0.324.0
 
 # Utilities
 httpx==0.28.1
