@@ -41,6 +41,7 @@ Each rule's outputMatches is read from the sequence's own declared output
 vector, so the rules describe what the machine already does rather than
 asserting something new.
 """
+
 from __future__ import annotations
 
 import json
@@ -154,17 +155,19 @@ def trigger_config(stem: str, machine: dict) -> dict:
             # does not exist.
             continue
         seq_meta = sequence.get("metadata") or {}
-        rules.append({
-            "sequenceId": sequence.get("id"),
-            "outputMatches": outputs[0],
-            # GREEN/info deliberately — see the module docstring. This value
-            # reaches the arbiter through the 4.3.1 governance join.
-            "ragStatusCode": "GREEN",
-            "processStatus": "info",
-            "description": seq_meta.get("description")
-            or sequence.get("name")
-            or sequence.get("id"),
-        })
+        rules.append(
+            {
+                "sequenceId": sequence.get("id"),
+                "outputMatches": outputs[0],
+                # GREEN/info deliberately — see the module docstring. This value
+                # reaches the arbiter through the 4.3.1 governance join.
+                "ragStatusCode": "GREEN",
+                "processStatus": "info",
+                "description": seq_meta.get("description")
+                or sequence.get("name")
+                or sequence.get("id"),
+            }
+        )
     return {
         "processId": stem.upper().replace("_", ""),
         "processName": PROCESS_NAME[stem],
@@ -207,7 +210,9 @@ def main() -> int:
         print(f"conform-machines: no machineClass mapping for {unknown} — add one", file=sys.stderr)
         return 2
     changed = [f.name for f in files if conform(f)]
-    print(f"conform-machines: {len(changed)} changed, {len(files) - len(changed)} already conformant")
+    print(
+        f"conform-machines: {len(changed)} changed, {len(files) - len(changed)} already conformant"
+    )
     for name in changed:
         print(f"  {name}")
     return 0

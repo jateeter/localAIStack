@@ -262,9 +262,9 @@ def build_machine_json(graph_name: str, binding: dict) -> dict:
                     "rules": [
                         {
                             "sequenceId": sequence["id"],
-                            "outputMatches": (
-                                sequence["vectors"][0].get("outputVectors") or [{}]
-                            )[0].get("vector", []),
+                            "outputMatches": (sequence["vectors"][0].get("outputVectors") or [{}])[
+                                0
+                            ].get("vector", []),
                             "ragStatusCode": "GREEN",
                             "processStatus": "info",
                             "description": sequence.get("name") or sequence["id"],
