@@ -196,9 +196,20 @@ def test_carekit_machine_perceptual_mapping():
     assert pm["output"] == {"offset": 198, "length": 4}
 
 
-def test_carekit_machine_arbiter_is_or():
+def test_carekit_machine_arbiter_is_passthrough():
+    """PASSTHROUGH, which is what OR meant here (localAIStack#38).
+
+    This asserted "OR" until the definitions were brought under the canonical
+    machine schema, whose arbiterRule enum admits only PASSTHROUGH. The change
+    is behaviour-preserving rather than a re-specification: in all three
+    runtimes OR is "some sequence produced output" and PASSTHROUGH is "the
+    concatenation of outputs is non-empty", and those agree on every input —
+    C++ `withOutput > 0` vs `!all.empty()`, LSP `(> sequences-with-output 0)`
+    vs non-empty `all-outputs`, Scala `sequencesWithOutput > 0` vs
+    `outputList.nonEmpty`. Only AND differs.
+    """
     machine = _load_carekit_machine()
-    assert machine["arbiterRule"] == "OR"
+    assert machine["arbiterRule"] == "PASSTHROUGH"
 
 
 def test_carekit_machine_match_algorithm_is_gte():

@@ -107,6 +107,36 @@ def compute_bindings() -> dict:
     return bindings
 
 
+def _bits_per_element(sequences: list) -> int:
+    """Element width from the values the sequences carry.
+
+    SEMANTIC_GUARDRAIL_CONTRACT.md derives this from evidence rather than a
+    label, because the label is contradicted by the data often enough not to be
+    trusted on its own:
+
+        machine-native-binary   1   {0,1}
+        machine-native-ordinal  4   {0..3}
+        machine-native-scalar   8   0..1 continuous
+    """
+    values: set[float] = set()
+    for sequence in sequences:
+        for vector in sequence.get("vectors") or []:
+            for element in vector.get("elements") or []:
+                if isinstance(element.get("value"), (int, float)):
+                    values.add(float(element["value"]))
+            for ov in vector.get("outputVectors") or []:
+                for value in ov.get("vector") or []:
+                    if isinstance(value, (int, float)):
+                        values.add(float(value))
+    if not values:
+        return 8
+    if values <= {0.0, 1.0}:
+        return 1
+    if values <= {0.0, 1.0, 2.0, 3.0}:
+        return 4
+    return 8
+
+
 def build_machine_json(graph_name: str, binding: dict) -> dict:
     """
     Build the CES machine JSON for a topology-tracking machine.
@@ -200,12 +230,66 @@ def build_machine_json(graph_name: str, binding: dict) -> dict:
                 "auto_generated": True,
                 "graph_name": graph_name,
                 "nodes": nodes,
+                # The canonical machine schema requires these three. A topology
+                # machine is registered into the RE alongside the corpus and
+                # writes the universal vector, so it is held to the same
+                # contract as a corpus machine — see jateeter/localAIStack#38
+                # and tests/test_machine_schema.py, which validates this output.
+                "machineClass": "signal-monitor",
+                "governance": {
+                    "schemaVersion": "1.0.0",
+                    "ownerTeam": "localaistack",
+                    "runbook": f"https://runbooks.example.org/localai/{graph_name}-topology",
+                    "escalationPolicy": "slack:#localaistack",
+                    "contact": {
+                        "primary": "localaistack-primary@example.org",
+                        "secondary": "localaistack-secondary@example.org",
+                    },
+                    "sla": {"ok": None, "info": None, "warning": None, "error": None},
+                    "notes": (
+                        f"Auto-generated topology machine for the '{graph_name}' graph; "
+                        "built at runtime by the topology builder, not loaded from the corpus."
+                    ),
+                },
+                # GREEN/info throughout: triggerConfig is not inert. The runtimes
+                # join ragStatusCode onto each contribution and the SEVERITY rule
+                # resolves contended cells by it, so asserting a severity here
+                # would change arbitration outcomes for any cell this machine
+                # contends. Node-visibility signals carry no severity of their own.
+                "triggerConfig": {
+                    "processId": f"{graph_name.upper()}TOPOLOGY",
+                    "processName": f"LocalAI {graph_name} Topology",
+                    "rules": [
+                        {
+                            "sequenceId": sequence["id"],
+                            "outputMatches": (sequence["vectors"][0].get("outputVectors") or [{}])[
+                                0
+                            ].get("vector", []),
+                            "ragStatusCode": "GREEN",
+                            "processStatus": "info",
+                            "description": sequence.get("name") or sequence["id"],
+                        }
+                        for sequence in sequences
+                        if sequence.get("vectors")
+                        and (sequence["vectors"][0].get("outputVectors") or [])
+                    ],
+                },
             },
-            "arbiterRule": "OR",
+            # PASSTHROUGH, not OR. The two are the same predicate in all three
+            # runtimes — "some sequence produced output" and "the concatenation
+            # is non-empty" agree on every input — and PASSTHROUGH is the only
+            # value the canonical schema admits.
+            "arbiterRule": "PASSTHROUGH",
             "matchAlgorithm": "gte",
             "perceptualMapping": {
                 "input": {"offset": input_region["offset"], "length": input_region["length"]},
                 "output": {"offset": output_region["offset"], "length": output_region["length"]},
+                # Derived from the values these sequences actually carry, per the
+                # derivation table in SEMANTIC_GUARDRAIL_CONTRACT.md — never from
+                # a label or a guess. The comparator thresholds put 0.5 in the
+                # value set, so these are machine-native-scalar (8), not the
+                # binary (1) the {0,1} output bits alone would suggest.
+                "bitsPerElement": _bits_per_element(sequences),
             },
             "sequences": sequences,
         },

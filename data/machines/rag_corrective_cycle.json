@@ -9,26 +9,98 @@
       "created": "2026-04-16T00:00:00Z",
       "eventSpace": "8D vector at [52:60]: [doc_count_norm, avg_score, _, _, kept_ratio, rewrite_count_norm, _, _]",
       "outputSpace": "4D binary at [60:64]: [generate, rewrite, abort, _]",
-      "tags": ["rag", "routing", "corrective-rag", "localai"],
+      "tags": [
+        "rag",
+        "routing",
+        "corrective-rag",
+        "localai"
+      ],
       "normalization": {
         "doc_count_norm": "min(retrieved_doc_count / 10, 1.0)  — 10 docs maps to 1.0",
-        "avg_score":      "Qdrant relevance score [0, 1]",
-        "kept_ratio":     "kept_count / max(retrieved_count, 1)  — 1.0 = all docs passed grading",
+        "avg_score": "Qdrant relevance score [0, 1]",
+        "kept_ratio": "kept_count / max(retrieved_count, 1)  — 1.0 = all docs passed grading",
         "rewrite_count_norm": "min(rewrite_count / 2, 1.0)  — 2 rewrites maps to 1.0, triggers abort"
       },
       "routingLogic": {
         "generate": "doc_count_norm >= 0.1  AND  kept_ratio >= 0.5",
-        "abort":    "kept_ratio < 0.5  AND  rewrite_count_norm >= 0.5",
-        "rewrite":  "kept_ratio < 0.5  AND  rewrite_count_norm < 0.5",
+        "abort": "kept_ratio < 0.5  AND  rewrite_count_norm >= 0.5",
+        "rewrite": "kept_ratio < 0.5  AND  rewrite_count_norm < 0.5",
         "mutualExclusivity": "the three guards partition the state space; exactly one fires per step"
       },
-      "sequenceCount": 3
+      "sequenceCount": 3,
+      "machineClass": "signal-monitor",
+      "governance": {
+        "schemaVersion": "1.0.0",
+        "ownerTeam": "localaistack",
+        "runbook": "https://runbooks.example.org/localai/rag-corrective-cycle",
+        "escalationPolicy": "slack:#localaistack",
+        "contact": {
+          "primary": "localaistack-primary@example.org",
+          "secondary": "localaistack-secondary@example.org"
+        },
+        "sla": {
+          "ok": null,
+          "info": null,
+          "warning": null,
+          "error": null
+        },
+        "notes": "localAIStack integration machine, registered into the RE at runtime by the reality bridge rather than loaded from the corpus."
+      },
+      "triggerConfig": {
+        "processId": "RAGCORRECTIVECYCLE",
+        "processName": "LocalAI RAG Corrective Cycle",
+        "rules": [
+          {
+            "sequenceId": "rag-generate-path",
+            "outputMatches": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires [1,0,0,0] when enough documents were retrieved AND the grader kept the majority. The doc_count guard (threshold 0.1) prevents firing on empty retrieval; the kept_ratio guard (threshold 0.5) ensures most retrieved docs survived grading."
+          },
+          {
+            "sequenceId": "rag-abort-path",
+            "outputMatches": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires [0,0,1,0] when the grader rejected most docs AND we have already rewritten the query at least once. Signals the graph to generate with whatever context exists rather than looping further."
+          },
+          {
+            "sequenceId": "rag-rewrite-path",
+            "outputMatches": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires [0,1,0,0] when the grader rejected most docs and we have not yet rewritten the query. The query should be rephrased to improve retrieval on the next cycle."
+          }
+        ]
+      }
     },
-    "arbiterRule": "OR",
+    "arbiterRule": "PASSTHROUGH",
     "matchAlgorithm": "gte",
     "perceptualMapping": {
-      "input":  { "offset": 52, "length": 8 },
-      "output": { "offset": 60, "length": 4 }
+      "input": {
+        "offset": 52,
+        "length": 8
+      },
+      "output": {
+        "offset": 60,
+        "length": 4
+      },
+      "bitsPerElement": 8
     },
     "sequences": [
       {
@@ -43,20 +115,55 @@
             "id": "rag-gen-check",
             "isInitial": true,
             "elements": [
-              { "value": 1.0, "threshold": 0.1 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 1.0,
+                "threshold": 0.1
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "rag-gen-output",
-                "vector": [1.0, 0.0, 0.0, 0.0],
+                "vector": [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "generate — graded documents are sufficient for answer generation",
                   "routing": "generate"
@@ -82,20 +189,55 @@
             "id": "rag-abort-check",
             "isInitial": true,
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.0, "threshold": 0.5 },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "rag-abort-output",
-                "vector": [0.0, 0.0, 1.0, 0.0],
+                "vector": [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "abort — max rewrites exhausted with poor grading; fall through to generate",
                   "routing": "abort"
@@ -121,20 +263,55 @@
             "id": "rag-rewrite-check",
             "isInitial": true,
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.0, "threshold": 0.5 },
-              { "value": 0.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "rag-rewrite-output",
-                "vector": [0.0, 1.0, 0.0, 0.0],
+                "vector": [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "rewrite — poor grading on first attempt; rephrase the question",
                   "routing": "rewrite"
@@ -155,7 +332,16 @@
         "pattern": "doc_count=5, all_kept, rewrite=0 → generate",
         "description": "5 docs retrieved (norm=0.5), all 5 kept (ratio=1.0), first attempt (rewrite_norm=0). Should assert generate [1,0,0,0].",
         "vectors": [
-          [0.5, 0.7, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+          [
+            0.5,
+            0.7,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[1,0,0,0]",
@@ -168,7 +354,16 @@
         "pattern": "doc_count=3, none_kept, rewrite=0 → rewrite",
         "description": "3 docs retrieved (norm=0.3) but none passed keyword grading (ratio=0.0), first attempt (rewrite_norm=0). Should assert rewrite [0,1,0,0].",
         "vectors": [
-          [0.3, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+          [
+            0.3,
+            0.6,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[0,1,0,0]",
@@ -181,7 +376,16 @@
         "pattern": "doc_count=2, none_kept, rewrite=1 → abort",
         "description": "2 docs retrieved (norm=0.2), none kept (ratio=0.0), already rewritten once (rewrite_norm=0.5). Should assert abort [0,0,1,0].",
         "vectors": [
-          [0.2, 0.5, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
+          [
+            0.2,
+            0.5,
+            0.0,
+            0.0,
+            0.0,
+            0.5,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[0,0,1,0]",
@@ -194,7 +398,16 @@
         "pattern": "doc_count=4, 80%_kept, rewrite=1 → generate",
         "description": "After one rewrite the revised query found 4 docs (norm=0.4) with 80% passing grading (ratio=0.8). Rewrite_norm=0.5 (1 rewrite done). Should still assert generate — good docs win over rewrite count.",
         "vectors": [
-          [0.4, 0.75, 0.0, 0.0, 0.8, 0.5, 0.0, 0.0]
+          [
+            0.4,
+            0.75,
+            0.0,
+            0.0,
+            0.8,
+            0.5,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[1,0,0,0]",

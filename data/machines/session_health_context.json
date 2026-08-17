@@ -12,13 +12,92 @@
       "outputSpace": "4D carry vector at [202:206]: [last_thriving, last_balanced, last_watch, last_attention]",
       "bistableNote": "SET: one of four sequences fires when personal_health_baseline writes a new health state to [190:194] → writes 1.0 to the matching carry element, 0.0 to others. HOLD: no sequence fires (no health push this cycle) → PE carry-forward preserves [202:206] unchanged. The four guards partition the health state space; mutual exclusivity is guaranteed by personal_health_baseline upstream (one-hot output).",
       "whyThisExists": "get_current_health_state() polls the RE on every chat request. The carry machine makes the health state available in the assembled perceptual space on every push without extra HTTP calls — downstream Python code reads [202:206] from the push response rather than making a separate GET /api/perceptual-simulation/state call. Falls back to the live read only when the carry is still cold (no push yet this session).",
-      "sequenceCount": 4
+      "sequenceCount": 4,
+      "machineClass": "signal-monitor",
+      "governance": {
+        "schemaVersion": "1.0.0",
+        "ownerTeam": "localaistack",
+        "runbook": "https://runbooks.example.org/localai/session-health-context",
+        "escalationPolicy": "slack:#localaistack",
+        "contact": {
+          "primary": "localaistack-primary@example.org",
+          "secondary": "localaistack-secondary@example.org"
+        },
+        "sla": {
+          "ok": null,
+          "info": null,
+          "warning": null,
+          "error": null
+        },
+        "notes": "localAIStack integration machine, registered into the RE at runtime by the reality bridge rather than loaded from the corpus."
+      },
+      "triggerConfig": {
+        "processId": "SESSIONHEALTHCONTEXT",
+        "processName": "LocalAI Session Health Context",
+        "rules": [
+          {
+            "sequenceId": "sess-health-thriving",
+            "outputMatches": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when personal_health_baseline asserts thriving (ps[190] ≥ 0.5). Sets last_thriving carry HIGH, clears others."
+          },
+          {
+            "sequenceId": "sess-health-balanced",
+            "outputMatches": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when personal_health_baseline asserts balanced (ps[191] ≥ 0.5). Sets last_balanced carry HIGH, clears others."
+          },
+          {
+            "sequenceId": "sess-health-watch",
+            "outputMatches": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when personal_health_baseline asserts watch (ps[192] ≥ 0.5). Sets last_watch carry HIGH, clears others."
+          },
+          {
+            "sequenceId": "sess-health-attention",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when personal_health_baseline asserts attention (ps[193] ≥ 0.5). Sets last_attention carry HIGH, clears others."
+          }
+        ]
+      }
     },
-    "arbiterRule": "OR",
+    "arbiterRule": "PASSTHROUGH",
     "matchAlgorithm": "gte",
     "perceptualMapping": {
-      "input":  { "offset": 190, "length": 4 },
-      "output": { "offset": 202, "length": 4 }
+      "input": {
+        "offset": 190,
+        "length": 4
+      },
+      "output": {
+        "offset": 202,
+        "length": 4
+      },
+      "bitsPerElement": 8
     },
     "sequences": [
       {
@@ -35,16 +114,39 @@
             "isInitial": true,
             "nextVectorIds": [],
             "elements": [
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "outputVectors": [
               {
                 "id": "out-sess-health-thriving",
-                "vector": [1.0, 0.0, 0.0, 0.0],
-                "metadata": { "description": "last_thriving=1, last_balanced=0, last_watch=0, last_attention=0", "carry": "thriving" }
+                "vector": [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "last_thriving=1, last_balanced=0, last_watch=0, last_attention=0",
+                  "carry": "thriving"
+                }
               }
             ],
             "metadata": {
@@ -68,16 +170,39 @@
             "isInitial": true,
             "nextVectorIds": [],
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "outputVectors": [
               {
                 "id": "out-sess-health-balanced",
-                "vector": [0.0, 1.0, 0.0, 0.0],
-                "metadata": { "description": "last_thriving=0, last_balanced=1, last_watch=0, last_attention=0", "carry": "balanced" }
+                "vector": [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "last_thriving=0, last_balanced=1, last_watch=0, last_attention=0",
+                  "carry": "balanced"
+                }
               }
             ],
             "metadata": {
@@ -101,16 +226,39 @@
             "isInitial": true,
             "nextVectorIds": [],
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "outputVectors": [
               {
                 "id": "out-sess-health-watch",
-                "vector": [0.0, 0.0, 1.0, 0.0],
-                "metadata": { "description": "last_thriving=0, last_balanced=0, last_watch=1, last_attention=0", "carry": "watch" }
+                "vector": [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "last_thriving=0, last_balanced=0, last_watch=1, last_attention=0",
+                  "carry": "watch"
+                }
               }
             ],
             "metadata": {
@@ -134,16 +282,39 @@
             "isInitial": true,
             "nextVectorIds": [],
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              }
             ],
             "outputVectors": [
               {
                 "id": "out-sess-health-attention",
-                "vector": [0.0, 0.0, 0.0, 1.0],
-                "metadata": { "description": "last_thriving=0, last_balanced=0, last_watch=0, last_attention=1", "carry": "attention" }
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "metadata": {
+                  "description": "last_thriving=0, last_balanced=0, last_watch=0, last_attention=1",
+                  "carry": "attention"
+                }
               }
             ],
             "metadata": {
@@ -159,22 +330,52 @@
         "name": "Thriving push — carry latches thriving",
         "pattern": "thriving=1.0, balanced=0, watch=0, attention=0",
         "description": "personal_health_baseline fired thriving this cycle. sess-health-thriving fires, writing [1,0,0,0] to carry. On the next push with no health sensors active, no sequence fires and PE carry-forward holds [1,0,0,0].",
-        "vectors": [ [1.0, 0.0, 0.0, 0.0] ],
-        "metadata": { "expectedOutput": "[1, 0, 0, 0]", "activeSequence": "sess-health-thriving" }
+        "vectors": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[1, 0, 0, 0]",
+          "activeSequence": "sess-health-thriving"
+        }
       },
       {
         "name": "Watch push — carry latches watch",
         "pattern": "thriving=0, balanced=0, watch=1.0, attention=0",
         "description": "personal_health_baseline fired watch. sess-health-watch fires. Carry persists as [0,0,1,0] until the next health push.",
-        "vectors": [ [0.0, 0.0, 1.0, 0.0] ],
-        "metadata": { "expectedOutput": "[0, 0, 1, 0]", "activeSequence": "sess-health-watch" }
+        "vectors": [
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0, 0, 1, 0]",
+          "activeSequence": "sess-health-watch"
+        }
       },
       {
         "name": "Bistable hold — between health pushes",
         "pattern": "all zeros (no health push this cycle)",
         "description": "No health state signals active — the API is processing a chat or agent turn with no health sensor update. None of the four sequences fires. OR arbiter produces no output. PE carry-forward preserves whichever carry was last written.",
-        "vectors": [ [0.0, 0.0, 0.0, 0.0] ],
-        "metadata": { "expectedOutput": "no output (PE carry-forward preserves prior state)", "activeSequence": "none — bistable hold" }
+        "vectors": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "no output (PE carry-forward preserves prior state)",
+          "activeSequence": "none — bistable hold"
+        }
       }
     ]
   }
