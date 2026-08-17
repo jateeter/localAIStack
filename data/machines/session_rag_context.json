@@ -11,13 +11,80 @@
       "eventSpace": "4D routing signal vector at [60:64]: [generate, rewrite, abort, _]",
       "outputSpace": "4D carry vector at [112:116]: [last_generate, last_rewrite, last_abort, _]",
       "bistableNote": "SET: one of three sequences fires → writes 1.0 to the matching carry element and 0.0 to the others. HOLD: no sequence fires (no RAG call this cycle) → PE carry-forward preserves the output region unchanged. The three guards partition [0,1]^3 routing-signal space; mutual exclusivity is guaranteed by rag_corrective_cycle upstream.",
-      "sequenceCount": 3
+      "sequenceCount": 3,
+      "machineClass": "signal-monitor",
+      "governance": {
+        "schemaVersion": "1.0.0",
+        "ownerTeam": "localaistack",
+        "runbook": "https://runbooks.example.org/localai/session-rag-context",
+        "escalationPolicy": "slack:#localaistack",
+        "contact": {
+          "primary": "localaistack-primary@example.org",
+          "secondary": "localaistack-secondary@example.org"
+        },
+        "sla": {
+          "ok": null,
+          "info": null,
+          "warning": null,
+          "error": null
+        },
+        "notes": "localAIStack integration machine, registered into the RE at runtime by the reality bridge rather than loaded from the corpus."
+      },
+      "triggerConfig": {
+        "processId": "SESSIONRAGCONTEXT",
+        "processName": "LocalAI Session RAG Context",
+        "rules": [
+          {
+            "sequenceId": "sess-rag-generate",
+            "outputMatches": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when rag_corrective_cycle asserts generate (ps[60] >= 0.5). Sets last_generate carry HIGH, clears rewrite/abort carry. PE carry-forward maintains this until the next RAG grading cycle fires a different sequence."
+          },
+          {
+            "sequenceId": "sess-rag-rewrite",
+            "outputMatches": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when rag_corrective_cycle asserts rewrite (ps[61] >= 0.5). Sets last_rewrite carry HIGH, clears generate/abort carry."
+          },
+          {
+            "sequenceId": "sess-rag-abort",
+            "outputMatches": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when rag_corrective_cycle asserts abort (ps[62] >= 0.5). Sets last_abort carry HIGH — signals downstream consumers that the prior RAG call exhausted its rewrite budget."
+          }
+        ]
+      }
     },
-    "arbiterRule": "OR",
+    "arbiterRule": "PASSTHROUGH",
     "matchAlgorithm": "gte",
     "perceptualMapping": {
-      "input":  { "offset": 60, "length": 4 },
-      "output": { "offset": 112, "length": 4 }
+      "input": {
+        "offset": 60,
+        "length": 4
+      },
+      "output": {
+        "offset": 112,
+        "length": 4
+      },
+      "bitsPerElement": 8
     },
     "sequences": [
       {
@@ -33,16 +100,36 @@
             "id": "vec-sess-rag-generate",
             "isInitial": true,
             "elements": [
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "out-sess-rag-generate",
-                "vector": [1.0, 0.0, 0.0, 0.0],
+                "vector": [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "last_generate=1, last_rewrite=0, last_abort=0",
                   "carry": "generate"
@@ -69,16 +156,36 @@
             "id": "vec-sess-rag-rewrite",
             "isInitial": true,
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "out-sess-rag-rewrite",
-                "vector": [0.0, 1.0, 0.0, 0.0],
+                "vector": [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "last_generate=0, last_rewrite=1, last_abort=0",
                   "carry": "rewrite"
@@ -105,16 +212,36 @@
             "id": "vec-sess-rag-abort",
             "isInitial": true,
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "out-sess-rag-abort",
-                "vector": [0.0, 0.0, 1.0, 0.0],
+                "vector": [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "last_generate=0, last_rewrite=0, last_abort=1",
                   "carry": "abort"
@@ -135,7 +262,12 @@
         "pattern": "generate=0.9, rewrite=0.0, abort=0.0",
         "description": "rag_corrective_cycle fired generate this cycle. sess-rag-generate fires, writing last_generate carry HIGH. On the next push with no RAG call, no sequence fires and PE carry-forward holds [1,0,0,0].",
         "vectors": [
-          [0.9, 0.0, 0.0, 0.0]
+          [
+            0.9,
+            0.0,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[1, 0, 0, 0]",
@@ -148,7 +280,12 @@
         "pattern": "generate=0.0, rewrite=0.9, abort=0.0",
         "description": "rag_corrective_cycle fired rewrite. sess-rag-rewrite fires. Carry persists as [0,1,0,0] until the follow-up cycle produces a generate or abort.",
         "vectors": [
-          [0.0, 0.9, 0.0, 0.0]
+          [
+            0.0,
+            0.9,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[0, 1, 0, 0]",
@@ -161,7 +298,12 @@
         "pattern": "generate=0.0, rewrite=0.0, abort=0.9",
         "description": "rag_corrective_cycle fired abort after 2 rewrites. Carry holds [0,0,1,0] — a persistent signal that the prior session turn could not find sufficient context.",
         "vectors": [
-          [0.0, 0.0, 0.9, 0.0]
+          [
+            0.0,
+            0.0,
+            0.9,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[0, 0, 1, 0]",
@@ -174,7 +316,12 @@
         "pattern": "all signals 0.0 (no RAG call this push cycle)",
         "description": "No routing signals are present — the agent is idle or only topology signals are active. None of the three sequences fires. OR arbiter produces no output. PE carry-forward preserves whichever carry was last written. This is the bistable HOLD state.",
         "vectors": [
-          [0.0, 0.0, 0.0, 0.0]
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "no output (PE carry-forward preserves prior state)",

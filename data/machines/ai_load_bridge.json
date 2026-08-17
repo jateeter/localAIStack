@@ -10,20 +10,152 @@
       "pattern": "fan-out-projection",
       "eventSpace": "8D session vector at [112:120]: [last_generate, last_rewrite, last_abort, _, agent_ever_engaged, tools_ever_used, _, _]",
       "outputSpace": "24D composite at [120:144]: 6 × 4-byte AI input patterns (PowerEfficiency, CoolingRegulator, CapacityThrottler, SecurityMonitor, ModelWellness, HardwareResilience)",
-      "tags": ["ai-pipeline", "localai", "bridge", "ai-load"],
+      "tags": [
+        "ai-pipeline",
+        "localai",
+        "bridge",
+        "ai-load"
+      ],
       "routingLogic": {
-        "nominal":  "last_generate HIGH  → write efficient-tier vector [0.15,0.3,0.2,0.1] × 6",
+        "nominal": "last_generate HIGH  → write efficient-tier vector [0.15,0.3,0.2,0.1] × 6",
         "elevated": "last_rewrite HIGH   → write elevated-tier vector [0.62,0.65,0.58,0.6] × 6",
         "critical": "last_abort HIGH     → write critical-tier vector [0.92,0.95,0.88,0.91] × 6",
         "mutualExclusivity": "session_rag upstream asserts exactly one of last_generate/last_rewrite/last_abort per RAG cycle (rag_corrective_cycle mutexes them), so at most one sequence fires per push"
       },
-      "sequenceCount": 3
+      "sequenceCount": 3,
+      "machineClass": "bridge",
+      "governance": {
+        "schemaVersion": "1.0.0",
+        "ownerTeam": "localaistack",
+        "runbook": "https://runbooks.example.org/localai/ai-load-bridge",
+        "escalationPolicy": "slack:#localaistack",
+        "contact": {
+          "primary": "localaistack-primary@example.org",
+          "secondary": "localaistack-secondary@example.org"
+        },
+        "sla": {
+          "ok": null,
+          "info": null,
+          "warning": null,
+          "error": null
+        },
+        "notes": "localAIStack integration machine, registered into the RE at runtime by the reality bridge rather than loaded from the corpus."
+      },
+      "triggerConfig": {
+        "processId": "AILOADBRIDGE",
+        "processName": "LocalAI Load Bridge",
+        "rules": [
+          {
+            "sequenceId": "ailb-generate-nominal",
+            "outputMatches": [
+              0.15,
+              0.3,
+              0.2,
+              0.1,
+              0.15,
+              0.3,
+              0.2,
+              0.1,
+              0.15,
+              0.3,
+              0.2,
+              0.1,
+              0.15,
+              0.3,
+              0.2,
+              0.1,
+              0.15,
+              0.3,
+              0.2,
+              0.1,
+              0.15,
+              0.3,
+              0.2,
+              0.1
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when session_rag.last_generate is HIGH (ps[112] >= 0.5). Writes the PUE-efficient tier pattern across all six AI machine inputs so AIPowerEfficiency, AICoolingRegulator, etc. produce their OPTIMAL / INFO outputs."
+          },
+          {
+            "sequenceId": "ailb-rewrite-elevated",
+            "outputMatches": [
+              0.62,
+              0.65,
+              0.58,
+              0.6,
+              0.62,
+              0.65,
+              0.58,
+              0.6,
+              0.62,
+              0.65,
+              0.58,
+              0.6,
+              0.62,
+              0.65,
+              0.58,
+              0.6,
+              0.62,
+              0.65,
+              0.58,
+              0.6,
+              0.62,
+              0.65,
+              0.58,
+              0.6
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when session_rag.last_rewrite is HIGH (ps[113] >= 0.5). Rewrites indicate the retrieval pipeline is working harder (extra query reformulation) — project the PUE-elevated tier pattern so AIPowerEfficiency/AICoolingRegulator respond with WARNING outputs."
+          },
+          {
+            "sequenceId": "ailb-abort-critical",
+            "outputMatches": [
+              0.92,
+              0.95,
+              0.88,
+              0.91,
+              0.92,
+              0.95,
+              0.88,
+              0.91,
+              0.92,
+              0.95,
+              0.88,
+              0.91,
+              0.92,
+              0.95,
+              0.88,
+              0.91,
+              0.92,
+              0.95,
+              0.88,
+              0.91,
+              0.92,
+              0.95,
+              0.88,
+              0.91
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when session_rag.last_abort is HIGH (ps[114] >= 0.5). Abort means the RAG pipeline exhausted its rewrite budget — surface as AI-domain CRITICAL load so AISecurityMonitor / AIHardwareResilience and the PUE-critical tier outputs fire."
+          }
+        ]
+      }
     },
-    "arbiterRule": "OR",
+    "arbiterRule": "PASSTHROUGH",
     "matchAlgorithm": "gte",
     "perceptualMapping": {
-      "input":  { "offset": 112, "length": 8 },
-      "output": { "offset": 120, "length": 24 }
+      "input": {
+        "offset": 112,
+        "length": 8
+      },
+      "output": {
+        "offset": 120,
+        "length": 24
+      },
+      "bitsPerElement": 8
     },
     "sequences": [
       {
@@ -40,25 +172,74 @@
             "isInitial": true,
             "nextVectorIds": [],
             "elements": [
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "outputVectors": [
               {
                 "id": "out-ailb-nominal",
                 "vector": [
-                  0.15, 0.30, 0.20, 0.10,
-                  0.15, 0.30, 0.20, 0.10,
-                  0.15, 0.30, 0.20, 0.10,
-                  0.15, 0.30, 0.20, 0.10,
-                  0.15, 0.30, 0.20, 0.10,
-                  0.15, 0.30, 0.20, 0.10
+                  0.15,
+                  0.3,
+                  0.2,
+                  0.1,
+                  0.15,
+                  0.3,
+                  0.2,
+                  0.1,
+                  0.15,
+                  0.3,
+                  0.2,
+                  0.1,
+                  0.15,
+                  0.3,
+                  0.2,
+                  0.1,
+                  0.15,
+                  0.3,
+                  0.2,
+                  0.1,
+                  0.15,
+                  0.3,
+                  0.2,
+                  0.1
                 ],
                 "metadata": {
                   "description": "AI load NOMINAL: efficient PUE-tier pattern projected to all six AI machine inputs",
@@ -84,25 +265,74 @@
             "isInitial": true,
             "nextVectorIds": [],
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "outputVectors": [
               {
                 "id": "out-ailb-elevated",
                 "vector": [
-                  0.62, 0.65, 0.58, 0.60,
-                  0.62, 0.65, 0.58, 0.60,
-                  0.62, 0.65, 0.58, 0.60,
-                  0.62, 0.65, 0.58, 0.60,
-                  0.62, 0.65, 0.58, 0.60,
-                  0.62, 0.65, 0.58, 0.60
+                  0.62,
+                  0.65,
+                  0.58,
+                  0.6,
+                  0.62,
+                  0.65,
+                  0.58,
+                  0.6,
+                  0.62,
+                  0.65,
+                  0.58,
+                  0.6,
+                  0.62,
+                  0.65,
+                  0.58,
+                  0.6,
+                  0.62,
+                  0.65,
+                  0.58,
+                  0.6,
+                  0.62,
+                  0.65,
+                  0.58,
+                  0.6
                 ],
                 "metadata": {
                   "description": "AI load ELEVATED: PUE-elevated pattern projected — rewrite storm signals workload pressure",
@@ -128,25 +358,74 @@
             "isInitial": true,
             "nextVectorIds": [],
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "outputVectors": [
               {
                 "id": "out-ailb-critical",
                 "vector": [
-                  0.92, 0.95, 0.88, 0.91,
-                  0.92, 0.95, 0.88, 0.91,
-                  0.92, 0.95, 0.88, 0.91,
-                  0.92, 0.95, 0.88, 0.91,
-                  0.92, 0.95, 0.88, 0.91,
-                  0.92, 0.95, 0.88, 0.91
+                  0.92,
+                  0.95,
+                  0.88,
+                  0.91,
+                  0.92,
+                  0.95,
+                  0.88,
+                  0.91,
+                  0.92,
+                  0.95,
+                  0.88,
+                  0.91,
+                  0.92,
+                  0.95,
+                  0.88,
+                  0.91,
+                  0.92,
+                  0.95,
+                  0.88,
+                  0.91,
+                  0.92,
+                  0.95,
+                  0.88,
+                  0.91
                 ],
                 "metadata": {
                   "description": "AI load CRITICAL: PUE-critical pattern — aborted RAG rewrite cycle propagates as datacenter emergency",
@@ -164,19 +443,52 @@
         "name": "Generate carry → nominal AI projection",
         "pattern": "[1,0,0,0,0,0,0,0] → AI nominal",
         "description": "session_rag last_generate HIGH fires ailb-generate-nominal.",
-        "vectors": [[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
+        "vectors": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
       },
       {
         "name": "Rewrite carry → elevated AI projection",
         "pattern": "[0,1,0,0,0,0,0,0] → AI elevated",
         "description": "session_rag last_rewrite HIGH fires ailb-rewrite-elevated.",
-        "vectors": [[0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
+        "vectors": [
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
       },
       {
         "name": "Abort carry → critical AI projection",
         "pattern": "[0,0,1,0,0,0,0,0] → AI critical",
         "description": "session_rag last_abort HIGH fires ailb-abort-critical.",
-        "vectors": [[0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
+        "vectors": [
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
       }
     ]
   }

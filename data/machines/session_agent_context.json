@@ -13,13 +13,92 @@
       "bistableNote": "SET: a sequence fires when a node-active signal is present, writing the correct combined carry to [116:120]. HOLD: when no node fires (no agent activity this cycle), no sequence fires and PE carry-forward preserves the output. Carries only increase — there is no CLEAR path, matching the semantic 'ever engaged in this session'.",
       "carryFeedback": "Elements [12:14] of the input region mirror the machine's own output from the prior push cycle (ps[116:118]). This allows each sequence to read the existing agent/tools carry state and produce the correct non-regressive combined output.",
       "mutualExclusivity": "Seq 1/2 require element[0] HIGH (agent_active, ps[104]); Seq 3/4 require element[2] HIGH (tools_active, ps[106]). Both cannot be HIGH in the same push because push_node_signal sets exactly one node signal at a time. Within each pair, sequences are exclusive on the tools_carry (Seq 1/3) vs agent_carry (Seq 2/4) feedback bit.",
-      "sequenceCount": 4
+      "sequenceCount": 4,
+      "machineClass": "signal-monitor",
+      "governance": {
+        "schemaVersion": "1.0.0",
+        "ownerTeam": "localaistack",
+        "runbook": "https://runbooks.example.org/localai/session-agent-context",
+        "escalationPolicy": "slack:#localaistack",
+        "contact": {
+          "primary": "localaistack-primary@example.org",
+          "secondary": "localaistack-secondary@example.org"
+        },
+        "sla": {
+          "ok": null,
+          "info": null,
+          "warning": null,
+          "error": null
+        },
+        "notes": "localAIStack integration machine, registered into the RE at runtime by the reality bridge rather than loaded from the corpus."
+      },
+      "triggerConfig": {
+        "processId": "SESSIONAGENTCONTEXT",
+        "processName": "LocalAI Session Agent Context",
+        "rules": [
+          {
+            "sequenceId": "sess-agent-and-prior-tools",
+            "outputMatches": [
+              1.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when the agent node is executing (ps[104] HIGH) and the tools_used carry is already set (ps[117] HIGH). Writes [1,1,0,0] — both carries remain HIGH."
+          },
+          {
+            "sequenceId": "sess-agent-first",
+            "outputMatches": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when the agent node is executing (ps[104] HIGH) and the tools_used carry is not yet set (ps[117] LOW). Writes [1,0,0,0] — sets agent carry, preserves tools carry at 0."
+          },
+          {
+            "sequenceId": "sess-tools-after-agent",
+            "outputMatches": [
+              1.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Fires when the tools node is executing (ps[106] HIGH) and the agent_engaged carry is already set (ps[116] HIGH). Writes [1,1,0,0] — preserves agent carry and sets tools carry."
+          },
+          {
+            "sequenceId": "sess-tools-first",
+            "outputMatches": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Defensive path: fires when tools node is executing but the agent_engaged carry is not yet set (ps[116] LOW). In normal ReAct flow the agent always runs before tools, so this path handles cold-start or carry-cleared edge cases."
+          }
+        ]
+      }
     },
-    "arbiterRule": "OR",
+    "arbiterRule": "PASSTHROUGH",
     "matchAlgorithm": "gte",
     "perceptualMapping": {
-      "input":  { "offset": 104, "length": 16 },
-      "output": { "offset": 116, "length": 4 }
+      "input": {
+        "offset": 104,
+        "length": 16
+      },
+      "output": {
+        "offset": 116,
+        "length": 4
+      },
+      "bitsPerElement": 8
     },
     "sequences": [
       {
@@ -35,28 +114,95 @@
             "id": "vec-sess-agent-prior-tools",
             "isInitial": true,
             "elements": [
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "out-sess-agent-prior-tools",
-                "vector": [1.0, 1.0, 0.0, 0.0],
+                "vector": [
+                  1.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "agent_ever_engaged=1, tools_ever_used=1",
                   "carry": "agent+tools"
@@ -83,28 +229,95 @@
             "id": "vec-sess-agent-first",
             "isInitial": true,
             "elements": [
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "out-sess-agent-first",
-                "vector": [1.0, 0.0, 0.0, 0.0],
+                "vector": [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "agent_ever_engaged=1, tools_ever_used=0",
                   "carry": "agent only"
@@ -131,28 +344,95 @@
             "id": "vec-sess-tools-after-agent",
             "isInitial": true,
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "out-sess-tools-after-agent",
-                "vector": [1.0, 1.0, 0.0, 0.0],
+                "vector": [
+                  1.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "agent_ever_engaged=1, tools_ever_used=1",
                   "carry": "agent+tools"
@@ -179,28 +459,95 @@
             "id": "vec-sess-tools-first",
             "isInitial": true,
             "elements": [
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 1.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.0, "threshold": 0.5 },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" },
-              { "value": 0.5, "threshold": 0.5, "comparatorType": "threshold" }
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
             ],
             "nextVectorIds": [],
             "outputVectors": [
               {
                 "id": "out-sess-tools-first",
-                "vector": [0.0, 1.0, 0.0, 0.0],
+                "vector": [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
                 "metadata": {
                   "description": "agent_ever_engaged=0, tools_ever_used=1",
                   "carry": "tools only (defensive)"
@@ -221,7 +568,24 @@
         "pattern": "agent_active=0.9, all others=0 (fresh session, no prior carry)",
         "description": "Agent node begins executing. No prior carry. sess-agent-first fires → agent_ever_engaged=1, tools_ever_used=0. Carry persists to next push.",
         "vectors": [
-          [0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+          [
+            0.9,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[1, 0, 0, 0]",
@@ -234,7 +598,24 @@
         "pattern": "tools_active=0.9, agent_carry=1.0 (feedback), tools_carry=0.0",
         "description": "Agent already ran (carry set), now tools node is executing. sess-tools-after-agent fires → both agent_ever_engaged=1 and tools_ever_used=1 written. Carry does not regress.",
         "vectors": [
-          [0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+          [
+            0.0,
+            0.0,
+            0.9,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[1, 1, 0, 0]",
@@ -247,7 +628,24 @@
         "pattern": "agent_active=0.9, both carries already set (agent=1.0, tools=1.0)",
         "description": "A second LLM step in the same ReAct loop. Both carries already HIGH. sess-agent-and-prior-tools fires → [1,1,0,0] — no regression in tools carry.",
         "vectors": [
-          [0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
+          [
+            0.9,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "[1, 1, 0, 0]",
@@ -260,7 +658,24 @@
         "pattern": "all signals 0.0 (no agent node active this push cycle)",
         "description": "No agent or tools node is executing this cycle (e.g., RAG-only push). No sequence fires. PE carry-forward holds whatever carry was written in the prior agent cycle.",
         "vectors": [
-          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
         ],
         "metadata": {
           "expectedOutput": "no output (PE carry-forward preserves prior state)",
