@@ -42,8 +42,10 @@ Perceptual space layout (256-element vector):
   [108:112] agent topology output       — [agent, tools, 0, 0]
   [112:116] session_rag_context         — bistable carry: [last_generate, last_rewrite, last_abort, _]
   [116:120] session_agent_context       — bistable carry: [agent_ever_engaged, tools_ever_used, _, _]
-  [120:144] ai_load_bridge              — 6 × 4-byte AI machine input patterns projected
-                                          from session carries (nominal/elevated/critical)
+  [272:280] ai_load_bridge              — 2 × 4-byte AI machine input patterns projected
+                                          from session carries (nominal/elevated/critical),
+                                          feeding AIModelWellness [272:276] and
+                                          AIHardwareResilience [276:280]
   (topology offsets computed dynamically by topology_builder.compute_bindings())
 
   Chunks A [52:64] and B [104:120] are carved from space freed by relocating
@@ -167,9 +169,17 @@ _AGENT_ACT_PRODUCTIVE = 68
 _AGENT_ACT_NORMAL = 69
 _AGENT_ACT_STRUGGLING = 70
 
-# ai_load_bridge writes the same 4-byte tier vector six times starting at 120.
+# ai_load_bridge writes the same 4-byte tier vector twice starting at 272.
 # A single 4-byte probe at the first window is enough to decode the tier.
-_AI_LOAD_TIER_OFFSET = 120
+#
+# Was six times at 120. The AI machine inputs moved to [256:280] and the first
+# four are now written by corpus machines (AGX051-054), so projecting across all
+# six would contend with deterministic corpus writers on cells no arbitration
+# registry declares — and `localai` has no ranked provider declaration, so such a
+# contribution could not resolve. Narrowed to the two inputs no corpus machine
+# feeds. See jateeter/localAIStack#48; expected to be revisited when the full
+# localAIStack interconnect is wired in, in the manner of the OpenClaw path.
+_AI_LOAD_TIER_OFFSET = 272
 
 # personal_health_baseline machine — [186:190] input, [190:194] output.
 # Free region: AI DC machine outputs end at 186; next allocation starts here.
@@ -238,7 +248,7 @@ _EXPECTED_MACHINE_OFFSETS = [
     {
         "path": _MACHINES_DIR / "ai_load_bridge.json",
         "input": {"offset": 112, "length": 8},
-        "output": {"offset": 120, "length": 24},
+        "output": {"offset": 272, "length": 8},
     },
     {
         "path": _MACHINES_DIR / "agent_activity_classifier.json",
@@ -477,8 +487,9 @@ def import_session_machines() -> bool:
       - session_rag_context   (bistable carry: last RAG routing decision)
       - session_agent_context (bistable carry: agent engagement flags)
       - ai_load_bridge        (projects session carries to AI machine inputs
-                               at [120:144], fanning one of three PUE-tier
-                               patterns across all six AI machine input windows)
+                               at [272:280], fanning one of three PUE-tier
+                               patterns across the two AI machine input windows
+                               no corpus machine feeds)
     """
     ok = True
     try:
@@ -593,7 +604,7 @@ def get_session_context(ps: list) -> dict:
       agent_activity — "productive" | "normal" | "struggling" | None
                        (output of agent_activity_classifier at [68:72])
       ai_load_tier   — "nominal" | "elevated" | "critical" | None
-                       (decoded from the ai_load_bridge projection at [120:124])
+                       (decoded from the ai_load_bridge projection at [272:276])
       health_state   — "thriving" | "balanced" | "watch" | "attention" | None
                        (from session_health_context carry at [202:206]; None
                         until the first health push this RE session)
@@ -648,7 +659,7 @@ def _decode_agent_activity(ps: list) -> str | None:
 def get_ai_load_tier(ps: list) -> str | None:
     """
     Decode which tier ai_load_bridge projected this push by inspecting the
-    first 4-byte window it writes (all six windows are identical). Patterns:
+    first 4-byte window it writes (both windows are identical). Patterns:
       nominal  → [0.15, 0.30, 0.20, 0.10]
       elevated → [0.62, 0.65, 0.58, 0.60]
       critical → [0.92, 0.95, 0.88, 0.91]

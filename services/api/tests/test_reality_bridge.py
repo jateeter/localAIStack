@@ -61,44 +61,78 @@ def test_verify_machine_offsets_catches_drift(tmp_path, monkeypatch):
     )
 
 
-def test_ai_load_bridge_output_window_covers_all_ai_machine_inputs():
-    """
-    Every AI example machine reads from a 4-byte window inside
-    ai_load_bridge's 24-byte output region [120:144]. If any AI machine's
-    input drifts outside that window, ai_load_bridge cannot drive it.
-    """
-    ai_dir = (
-        pathlib.Path(__file__).resolve().parents[4] / "RealityEngine_AI" / "examples" / "machines"
-    )
-    if not ai_dir.exists():
-        pytest.skip(f"AI example machines not present at {ai_dir}")
+# The canonical AI machines live in the corpus. This used to read
+# RealityEngine_AI/examples/machines — a repo outside the focus set that CI never
+# checks out, so the test skipped everywhere except a workstation that happened
+# to have it, and the drift in jateeter/localAIStack#48 went unseen for as long
+# as it did. RealityEngine_Machines is a focus repo and is checked out by the
+# local regression lane.
+_AI_MACHINE_DIR = (
+    pathlib.Path(__file__).resolve().parents[4]
+    / "RealityEngine_Machines"
+    / "machines"
+    / "domains"
+    / "ai-services"
+)
 
-    ai_files = [
-        "AIPowerEfficiency.json",
-        "AICoolingRegulator.json",
-        "AICapacityThrottler.json",
-        "AISecurityMonitor.json",
-        "AIModelWellness.json",
-        "AIHardwareResilience.json",
-    ]
-    bridge_spec = next(
+# ai_load_bridge feeds only these two. The other four AI machines
+# (AIPowerEfficiency, AICoolingRegulator, AICapacityThrottler, AISecurityMonitor)
+# are written by corpus machines AGX051-054, so projecting across all six would
+# contend with deterministic corpus writers on cells no arbitration registry
+# declares — see jateeter/localAIStack#48.
+_BRIDGE_FED = ["AIModelWellness.json", "AIHardwareResilience.json"]
+_CORPUS_FED = [
+    "AIPowerEfficiency.json",
+    "AICoolingRegulator.json",
+    "AICapacityThrottler.json",
+    "AISecurityMonitor.json",
+]
+
+
+def _bridge_output_window() -> tuple[int, int]:
+    spec = next(
         s
         for s in reality_bridge._EXPECTED_MACHINE_OFFSETS
         if s["path"].name == "ai_load_bridge.json"
     )
-    out_start = bridge_spec["output"]["offset"]
-    out_end = out_start + bridge_spec["output"]["length"]
+    start = spec["output"]["offset"]
+    return start, start + spec["output"]["length"]
 
-    for fname in ai_files:
-        p = ai_dir / fname
-        if not p.exists():
-            pytest.skip(f"{fname} missing from this checkout")
-        inp = json.loads(p.read_text())["machine"]["perceptualMapping"]["input"]
+
+def _ai_input(fname: str) -> dict:
+    path = _AI_MACHINE_DIR / fname
+    if not path.exists():
+        pytest.skip(f"{fname} not present at {_AI_MACHINE_DIR}")
+    return json.loads(path.read_text())["machine"]["perceptualMapping"]["input"]
+
+
+def test_ai_load_bridge_output_window_covers_the_machines_it_feeds():
+    """The two AI machines no corpus machine writes must sit inside the window."""
+    out_start, out_end = _bridge_output_window()
+    for fname in _BRIDGE_FED:
+        inp = _ai_input(fname)
         assert out_start <= inp["offset"], (
             f"{fname} input offset {inp['offset']} < ai_load_bridge output start {out_start}"
         )
         assert inp["offset"] + inp["length"] <= out_end, (
             f"{fname} input extends past ai_load_bridge output window [{out_start}:{out_end}]"
+        )
+
+
+def test_ai_load_bridge_does_not_write_corpus_fed_machine_inputs():
+    """The four AI machines AGX051-054 feed must sit outside the window.
+
+    This is the half of the contract that keeps the narrowing honest: widening
+    the window back over them would silently reintroduce undeclared contention
+    with deterministic corpus writers, which is what #48 was filed about.
+    """
+    out_start, out_end = _bridge_output_window()
+    for fname in _CORPUS_FED:
+        inp = _ai_input(fname)
+        in_start, in_end = inp["offset"], inp["offset"] + inp["length"]
+        assert in_end <= out_start or out_end <= in_start, (
+            f"{fname} input [{in_start}:{in_end}] overlaps ai_load_bridge output "
+            f"[{out_start}:{out_end}] — that cell is written by a corpus machine"
         )
 
 
@@ -145,12 +179,17 @@ class _FakePEREClient:
             #   session_rag_context latched the carry,
             #   agent_activity_classifier asserted 'productive',
             #   ai_load_bridge projected the nominal tier.
-            ps = [0.0] * 256
+            # Sized and indexed from the module constant rather than a literal:
+            # the vector has to reach ai_load_bridge's window, and hardcoding
+            # that offset here is how this fixture silently stopped covering it
+            # when the window moved (jateeter/localAIStack#48).
+            tier_offset = reality_bridge._AI_LOAD_TIER_OFFSET
+            ps = [0.0] * (tier_offset + 8)
             ps[60] = 1.0  # rag_corrective_cycle.generate
             ps[68] = 1.0  # agent_activity_classifier.productive
             ps[112] = 1.0  # session_rag.last_generate carry
-            for i in range(6):
-                base = 120 + i * 4
+            for i in range(2):  # ai_load_bridge writes two 4-byte windows
+                base = tier_offset + i * 4
                 ps[base + 0] = 0.15
                 ps[base + 1] = 0.30
                 ps[base + 2] = 0.20
@@ -351,8 +390,9 @@ def test_push_agent_activity_signal_returns_defaults_on_bridge_failure(monkeypat
 )
 def test_get_ai_load_tier_classifies_first_window(v0, expected):
     """The first element of ai_load_bridge's output window decides the tier."""
-    ps = [0.0] * 256
-    ps[120] = v0
+    tier_offset = reality_bridge._AI_LOAD_TIER_OFFSET
+    ps = [0.0] * (tier_offset + 8)
+    ps[tier_offset] = v0
     assert reality_bridge.get_ai_load_tier(ps) == expected
 
 
