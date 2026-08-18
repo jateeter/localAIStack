@@ -60,7 +60,7 @@ import pathlib
 import httpx
 import structlog
 
-from core.registry_resolver import resolve_bridge_targets
+from core.registry_resolver import resolve_all_bridge_targets, resolve_bridge_targets
 
 log = structlog.get_logger()
 
@@ -414,7 +414,9 @@ def verify_machine_offsets() -> list[str]:
 # ── Startup: sensor registration (RAG + health) ──────────────────────────────
 
 
-def _register_sensor_list(client: "httpx.Client", sensors: list, existing_ids: set) -> None:
+def _register_sensor_list(
+    client: "httpx.Client", sensors: list, existing_ids: set, pe_url: str | None = None
+) -> None:
     """Register a list of sensor defs; idempotent (skips existing sensorIds)."""
     for sensor in sensors:
         sid = sensor["sensorId"]
@@ -431,32 +433,48 @@ def _register_sensor_list(client: "httpx.Client", sensors: list, existing_ids: s
             "lastUpdated": None,
             "ttlMs": sensor["ttlMs"],
         }
-        r = client.post(f"{_pe_url()}/api/sources", json=payload)
+        r = client.post(f"{pe_url or _pe_url()}/api/sources", json=payload)
         r.raise_for_status()
         log.info("reality_bridge.sensor_registered", sensor_id=sid, region=sensor["region"])
 
 
 def register_sensors() -> bool:
-    """Create RAG, personal health, and CareKit sensor sources in the PE."""
-    try:
-        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
-            existing_ids = _get_existing_sensor_ids(client)
-            _register_sensor_list(client, _RAG_SENSORS, existing_ids)
-            _register_sensor_list(client, _HEALTH_SENSORS, existing_ids)
-            _register_sensor_list(client, _CAREKIT_SENSORS, existing_ids)
-            return True
-    except Exception as exc:
-        log.warning(
-            "reality_bridge.register_failed",
-            error=str(exc),
-            pe_url=_pe_url(),
-            note="RAG pipeline runs normally without RE telemetry",
-        )
+    """Create the RAG, health and CareKit sensor sources in every running PE (#50).
+
+    Sensors were registered into one PE for the same reason machines were
+    imported into one RE, and with the same consequence: the engines ran on
+    different input. Reported per instance so a partial fan-out is visible.
+    """
+    targets = _re_targets()
+    if not targets:
+        log.warning("reality_bridge.no_targets", label="sensors")
         return False
+
+    overall = True
+    for target in targets:
+        pe_url = target["pe_url"]
+        instance = target.get("instance") or "env"
+        try:
+            with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
+                existing_ids = _get_existing_sensor_ids(client, pe_url)
+                _register_sensor_list(client, _RAG_SENSORS, existing_ids, pe_url)
+                _register_sensor_list(client, _HEALTH_SENSORS, existing_ids, pe_url)
+                _register_sensor_list(client, _CAREKIT_SENSORS, existing_ids, pe_url)
+            log.info("reality_bridge.sensors_registered", instance=instance, pe_url=pe_url)
+        except Exception as exc:
+            overall = False
+            log.warning(
+                "reality_bridge.register_failed",
+                error=str(exc),
+                instance=instance,
+                pe_url=pe_url,
+                note="RAG pipeline runs normally without RE telemetry",
+            )
+    return overall
 
 
 def import_machine_if_missing() -> bool:
-    """Import the rag_corrective_cycle machine into the RE if not already loaded."""
+    """Import rag_corrective_cycle into every running RE (#50)."""
     try:
         machine_json = json.loads(_MACHINE_JSON_PATH.read_text())
     except Exception as exc:
@@ -464,68 +482,35 @@ def import_machine_if_missing() -> bool:
             "reality_bridge.machine_json_not_found", path=str(_MACHINE_JSON_PATH), error=str(exc)
         )
         return False
-
-    try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-            existing = _get_existing_machine_names(client)
-            if _MACHINE_NAME in existing:
-                log.info("reality_bridge.machine_exists", name=_MACHINE_NAME)
-                return True
-            r = client.post(f"{_re_url()}/api/machines", json=machine_json)
-            r.raise_for_status()
-            machine_id = r.json().get("machine", {}).get("id", "unknown")
-            log.info("reality_bridge.machine_imported", name=_MACHINE_NAME, machine_id=machine_id)
-            return True
-    except Exception as exc:
-        log.warning("reality_bridge.machine_import_failed", error=str(exc), re_url=_re_url())
-        return False
+    return import_machines_everywhere([(_MACHINE_NAME, machine_json)], "rag_corrective_cycle")
 
 
 def import_session_machines() -> bool:
+    """Import the localAI session-side machines into every running RE (#50).
+
+    - session_rag_context   (bistable carry: last RAG routing decision)
+    - session_agent_context (bistable carry: agent engagement flags)
+    - ai_load_bridge        (projects session carries to the AI machine inputs
+                             at [272:280] that no corpus machine feeds)
+    - agent_activity_classifier
     """
-    Import the localAI session-side machines into the RE if not already loaded:
-      - session_rag_context   (bistable carry: last RAG routing decision)
-      - session_agent_context (bistable carry: agent engagement flags)
-      - ai_load_bridge        (projects session carries to AI machine inputs
-                               at [272:280], fanning one of three PUE-tier
-                               patterns across the two AI machine input windows
-                               no corpus machine feeds)
-    """
-    ok = True
-    try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-            existing = _get_existing_machine_names(client)
-            for defn in _SESSION_MACHINE_DEFS:
-                name = defn["name"]
-                if name in existing:
-                    log.info("reality_bridge.session_machine_exists", name=name)
-                    continue
-                try:
-                    machine_json = json.loads(defn["path"].read_text())
-                except Exception as exc:
-                    log.warning(
-                        "reality_bridge.session_machine_json_not_found",
-                        path=str(defn["path"]),
-                        error=str(exc),
-                    )
-                    ok = False
-                    continue
-                r = client.post(f"{_re_url()}/api/machines", json=machine_json)
-                r.raise_for_status()
-                machine_id = r.json().get("machine", {}).get("id", "unknown")
-                log.info(
-                    "reality_bridge.session_machine_imported", name=name, machine_id=machine_id
-                )
-            return ok
-    except Exception as exc:
-        log.warning(
-            "reality_bridge.session_machine_import_failed", error=str(exc), re_url=_re_url()
-        )
+    machines: list[tuple[str, dict]] = []
+    for defn in _SESSION_MACHINE_DEFS:
+        try:
+            machines.append((defn["name"], json.loads(defn["path"].read_text())))
+        except Exception as exc:
+            log.warning(
+                "reality_bridge.session_machine_json_not_found",
+                path=str(defn["path"]),
+                error=str(exc),
+            )
+    if not machines:
         return False
+    return import_machines_everywhere(machines, "session")
 
 
 def import_carekit_machine() -> bool:
-    """Import medication_adherence into the RE if not already loaded."""
+    """Import medication_adherence into every running RE (#50)."""
     try:
         machine_json = json.loads(_CAREKIT_MACHINE_PATH.read_text())
     except Exception as exc:
@@ -535,31 +520,11 @@ def import_carekit_machine() -> bool:
             error=str(exc),
         )
         return False
-
-    try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-            existing = _get_existing_machine_names(client)
-            if _CAREKIT_MACHINE_NAME in existing:
-                log.info("reality_bridge.carekit_machine_exists", name=_CAREKIT_MACHINE_NAME)
-                return True
-            r = client.post(f"{_re_url()}/api/machines", json=machine_json)
-            r.raise_for_status()
-            machine_id = r.json().get("machine", {}).get("id", "unknown")
-            log.info(
-                "reality_bridge.carekit_machine_imported",
-                name=_CAREKIT_MACHINE_NAME,
-                machine_id=machine_id,
-            )
-            return True
-    except Exception as exc:
-        log.warning(
-            "reality_bridge.carekit_machine_import_failed", error=str(exc), re_url=_re_url()
-        )
-        return False
+    return import_machines_everywhere([(_CAREKIT_MACHINE_NAME, machine_json)], "carekit")
 
 
 def import_health_machines() -> bool:
-    """Import personal_health_baseline into the RE if not already loaded."""
+    """Import personal_health_baseline into every running RE (#50)."""
     try:
         machine_json = json.loads(_HEALTH_MACHINE_PATH.read_text())
     except Exception as exc:
@@ -569,28 +534,7 @@ def import_health_machines() -> bool:
             error=str(exc),
         )
         return False
-
-    try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-            existing = _get_existing_machine_names(client)
-            if _HEALTH_MACHINE_NAME in existing:
-                log.info("reality_bridge.health_machine_exists", name=_HEALTH_MACHINE_NAME)
-                return True
-            r = client.post(f"{_re_url()}/api/machines", json=machine_json)
-            r.raise_for_status()
-            machine_id = r.json().get("machine", {}).get("id", "unknown")
-            log.info(
-                "reality_bridge.health_machine_imported",
-                name=_HEALTH_MACHINE_NAME,
-                machine_id=machine_id,
-            )
-            return True
-    except Exception as exc:
-        log.warning("reality_bridge.health_machine_import_failed", error=str(exc), re_url=_re_url())
-        return False
-
-
-# ── Per-request: session context read-back ───────────────────────────────────
+    return import_machines_everywhere([(_HEALTH_MACHINE_NAME, machine_json)], "health")
 
 
 def get_session_context(ps: list) -> dict:
@@ -926,49 +870,36 @@ def bind_graph_topology() -> bool:
                         "lastUpdated": None,
                         "ttlMs": 10_000,  # short TTL — nodes complete in seconds
                     }
-                    r = pe_client.post(f"{_pe_url()}/api/sources", json=payload)
-                    r.raise_for_status()
+                    for _t in _re_targets():
+                        r = pe_client.post(f"{_t['pe_url']}/api/sources", json=payload)
+                        r.raise_for_status()
                     log.info(
                         "reality_bridge.topo_sensor_registered",
                         sensor_id=sid,
                         offset=node_info["offset"],
+                        instances=len(_re_targets()),
                     )
     except Exception as exc:
         log.warning("reality_bridge.topo_sensor_registration_failed", error=str(exc))
         ok = False
 
-    # Import topology machines into the RE
+    # Import topology machines into every running RE (#50). These are built
+    # from the live graphs rather than read from a file, so they go through the
+    # same fan-out primitive as the file-backed ones.
     try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as re_client:
-            existing_machine_names = _get_existing_machine_names(re_client)
-            for graph_name, graph_binding in bindings.items():
-                machine_name = f"localai/{graph_name}_topology"
-                if machine_name in existing_machine_names:
-                    log.info("reality_bridge.topo_machine_exists", name=machine_name)
-                    continue
-                from core.topology_builder import build_machine_json
+        from core.topology_builder import build_machine_json
 
-                machine_json = build_machine_json(graph_name, graph_binding)
-                r = re_client.post(f"{_re_url()}/api/machines", json=machine_json)
-                r.raise_for_status()
-                machine_id = r.json().get("machine", {}).get("id", "unknown")
-                log.info(
-                    "reality_bridge.topo_machine_imported",
-                    name=machine_name,
-                    machine_id=machine_id,
-                    nodes=graph_binding["node_order"],
-                    input_region=graph_binding["input_region"],
-                    output_region=graph_binding["output_region"],
-                )
+        topo: list[tuple[str, dict]] = []
+        for graph_name, graph_binding in bindings.items():
+            topo.append(
+                (f"localai/{graph_name}_topology", build_machine_json(graph_name, graph_binding))
+            )
+        if topo and not import_machines_everywhere(topo, "topology"):
+            ok = False
     except Exception as exc:
         log.warning("reality_bridge.topo_machine_import_failed", error=str(exc))
         ok = False
 
-    log.info(
-        "reality_bridge.topology_bound",
-        graphs=list(bindings.keys()),
-        total_sensors=sum(len(b["nodes"]) for b in bindings.values()),
-    )
     return ok
 
 
@@ -1077,9 +1008,9 @@ def push_node_signal(
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 
-def _get_existing_sensor_ids(client: httpx.Client) -> set:
+def _get_existing_sensor_ids(client: httpx.Client, pe_url: str | None = None) -> set:
     try:
-        resp = client.get(f"{_pe_url()}/api/sources")
+        resp = client.get(f"{pe_url or _pe_url()}/api/sources")
         resp.raise_for_status()
         return {
             s.get("sensorId") for s in resp.json().get("sources", []) if s.get("type") == "sensor"
@@ -1088,13 +1019,84 @@ def _get_existing_sensor_ids(client: httpx.Client) -> set:
         return set()
 
 
-def _get_existing_machine_names(client: httpx.Client) -> set:
+def _get_existing_machine_names(client: httpx.Client, re_url: str | None = None) -> set:
     try:
-        resp = client.get(f"{_re_url()}/api/machines")
+        resp = client.get(f"{re_url or _re_url()}/api/machines")
         resp.raise_for_status()
         return {m.get("name") for m in resp.json().get("machines", [])}
     except Exception:
         return set()
+
+
+def _re_targets() -> list[dict]:
+    """Every running engine, not just the selected one (#50)."""
+    return resolve_all_bridge_targets()
+
+
+def import_machines_everywhere(machines: list[tuple[str, dict]], label: str) -> bool:
+    """Import (name, json) pairs into every running Reality Engine.
+
+    The bridge used to write through a single resolved target, so on a
+    three-engine deployment the localai machines reached one engine and the
+    others ran a different corpus — which the universal-vector parity stage
+    reported as engine divergence for every event (#50, #46).
+
+    Per-instance results are returned rather than swallowed: a partial fan-out
+    is a different situation from a total failure, and reporting them the same
+    way is what let the asymmetry sit unnoticed.
+    """
+    targets = _re_targets()
+    if not targets:
+        log.warning("reality_bridge.no_targets", label=label)
+        return False
+
+    overall = True
+    for target in targets:
+        re_url = target["re_url"]
+        instance = target.get("instance") or "env"
+        imported = skipped = failed = 0
+        try:
+            with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+                existing = _get_existing_machine_names(client, re_url)
+                for name, machine_json in machines:
+                    if name in existing:
+                        skipped += 1
+                        continue
+                    try:
+                        r = client.post(f"{re_url}/api/machines", json=machine_json)
+                        r.raise_for_status()
+                        imported += 1
+                    except Exception as exc:
+                        failed += 1
+                        log.warning(
+                            "reality_bridge.machine_import_failed",
+                            label=label,
+                            name=name,
+                            instance=instance,
+                            re_url=re_url,
+                            error=str(exc),
+                        )
+        except Exception as exc:
+            log.warning(
+                "reality_bridge.instance_unreachable",
+                label=label,
+                instance=instance,
+                re_url=re_url,
+                error=str(exc),
+            )
+            overall = False
+            continue
+        log.info(
+            "reality_bridge.machines_imported",
+            label=label,
+            instance=instance,
+            imported=imported,
+            skipped=skipped,
+            failed=failed,
+        )
+        if failed:
+            overall = False
+    return overall
 
 
 def _write_sensor(sensor_id: str, values: list[float]) -> None:

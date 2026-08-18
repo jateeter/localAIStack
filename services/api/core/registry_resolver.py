@@ -122,3 +122,65 @@ def resolve_bridge_targets(force_refresh: bool = False) -> dict:
     _cache["at"] = now
     _cache["targets"] = targets
     return targets
+
+
+def resolve_all_bridge_targets(force_refresh: bool = False) -> list[dict]:
+    """Every running RE/PE instance, not just the one that wins selection.
+
+    resolve_bridge_targets returns a single pair, and the whole bridge wrote
+    through it — so on a three-engine deployment the ten localai machines
+    reached one engine and the parity stage failed every event on the resulting
+    machine-count asymmetry (#50).
+
+    Two properties this does not share with the single-target path:
+
+    * **The registry is read regardless of env-target liveness.** The single
+      resolver probes RE_URL/PE_URL first and only consults the registry when
+      they are dead; startUniverse pins those to one engine, so the registry —
+      the only thing that knows the others exist — was ignored on every healthy
+      run. Enumerating always is the whole point here.
+    * **No unhealthy fallback.** `running[0]` is reached only when no instance
+      passed its probes, so the single path deliberately targets one that just
+      failed. Here an unreachable instance is reported, not selected.
+
+    The env target is included when the registry does not name it, so a
+    registry-less deployment still works.
+    """
+    registry_url = os.getenv("RE_REGISTRY_URL", "")
+    registry = _fetch_registry(registry_url) if registry_url else None
+    instances = _running_instances(registry) if registry else []
+
+    targets: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for inst in instances:
+        key = (inst["re_url"], inst["pe_url"])
+        if key in seen:
+            continue
+        seen.add(key)
+        targets.append(
+            {
+                "re_url": inst["re_url"],
+                "pe_url": inst["pe_url"],
+                "source": "registry",
+                "instance": inst.get("id"),
+                "healthy": _probe_health(inst["re_url"]) and _probe_health(inst["pe_url"]),
+            }
+        )
+
+    s = get_settings()
+    if (s.re_url, s.pe_url) not in seen:
+        env_alive = _probe_health(s.re_url) and _probe_health(s.pe_url)
+        # Only when the registry named nothing, or it named nothing live: a
+        # configured env target that duplicates a registry instance under a
+        # different URL would otherwise double-write that engine.
+        if not targets or (env_alive and not any(t["healthy"] for t in targets)):
+            targets.append(
+                {
+                    "re_url": s.re_url,
+                    "pe_url": s.pe_url,
+                    "source": "env",
+                    "instance": None,
+                    "healthy": env_alive,
+                }
+            )
+    return targets
