@@ -937,9 +937,7 @@ def bind_graph_topology() -> bool:
                     pe_client, [n["sensor_id"] for n in node_infos], existing, pe_url
                 )
                 if quiesced:
-                    log.info(
-                        "reality_bridge.topo_sensors_quiesced", count=quiesced, pe_url=pe_url
-                    )
+                    log.info("reality_bridge.topo_sensors_quiesced", count=quiesced, pe_url=pe_url)
     except Exception as exc:
         log.warning("reality_bridge.topo_sensor_registration_failed", error=str(exc))
         ok = False
