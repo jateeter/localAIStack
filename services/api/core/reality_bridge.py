@@ -60,6 +60,13 @@ import pathlib
 import httpx
 import structlog
 
+from core.bridge_binding import bind
+from core.pe_sources import (
+    activate_sensor_source,
+    clear_activation_memo,
+    get_sensor_sources,
+    quiesce_valueless_sensors,
+)
 from core.registry_resolver import resolve_all_bridge_targets, resolve_bridge_targets
 
 log = structlog.get_logger()
@@ -415,19 +422,28 @@ def verify_machine_offsets() -> list[str]:
 
 
 def _register_sensor_list(
-    client: "httpx.Client", sensors: list, existing_ids: set, pe_url: str | None = None
+    client: "httpx.Client", sensors: list, existing: dict, pe_url: str | None = None
 ) -> None:
-    """Register a list of sensor defs; idempotent (skips existing sensorIds)."""
+    """Register a list of sensor defs; idempotent (skips existing sensorIds).
+
+    Registered inactive. An active source contributes its region to every
+    vector the PE assembles whether or not it has ever been fed, so registering
+    active meant the mere act of connecting localAIStack changed what each
+    engine perceived — on a three-engine deployment, nine sensors went active
+    carrying nothing and the engines' input vectors diverged before any localAI
+    traffic existed. `_write_sensor` activates a source once it carries a
+    value; until then it is declared but silent.
+    """
     for sensor in sensors:
         sid = sensor["sensorId"]
-        if sid in existing_ids:
+        if sid in existing:
             log.info("reality_bridge.sensor_exists", sensor_id=sid)
             continue
         payload = {
             "type": "sensor",
             "name": sensor["name"],
             "region": sensor["region"],
-            "active": True,
+            "active": False,
             "sensorId": sid,
             "lastValue": [],
             "lastUpdated": None,
@@ -444,23 +460,37 @@ def register_sensors() -> bool:
     Sensors were registered into one PE for the same reason machines were
     imported into one RE, and with the same consequence: the engines ran on
     different input. Reported per instance so a partial fan-out is visible.
+
+    Fan-out applies to *declaration* only. Every engine learns the same sensor
+    regions exist; none of them starts perceiving one until that engine's own
+    data flow begins.
     """
     targets = _re_targets()
     if not targets:
         log.warning("reality_bridge.no_targets", label="sensors")
         return False
 
+    all_sensor_ids = [s["sensorId"] for s in _RAG_SENSORS + _HEALTH_SENSORS + _CAREKIT_SENSORS]
+    # A PE that restarted or was pruned holds inactive sources again, so a memo
+    # carried over from the previous registration would suppress reactivation.
+    clear_activation_memo()
     overall = True
     for target in targets:
         pe_url = target["pe_url"]
         instance = target.get("instance") or "env"
         try:
             with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
-                existing_ids = _get_existing_sensor_ids(client, pe_url)
-                _register_sensor_list(client, _RAG_SENSORS, existing_ids, pe_url)
-                _register_sensor_list(client, _HEALTH_SENSORS, existing_ids, pe_url)
-                _register_sensor_list(client, _CAREKIT_SENSORS, existing_ids, pe_url)
-            log.info("reality_bridge.sensors_registered", instance=instance, pe_url=pe_url)
+                existing = get_sensor_sources(client, pe_url)
+                _register_sensor_list(client, _RAG_SENSORS, existing, pe_url)
+                _register_sensor_list(client, _HEALTH_SENSORS, existing, pe_url)
+                _register_sensor_list(client, _CAREKIT_SENSORS, existing, pe_url)
+                quiesced = quiesce_valueless_sensors(client, all_sensor_ids, existing, pe_url)
+            log.info(
+                "reality_bridge.sensors_registered",
+                instance=instance,
+                pe_url=pe_url,
+                quiesced=quiesced,
+            )
         except Exception as exc:
             overall = False
             log.warning(
@@ -748,24 +778,31 @@ def push_health_signal(
     hrv_ok = 1.0 if hrv_sdnn_ms >= _HRV_OK_MS else 0.0
     sleep_ok = 1.0 if sleep_hours >= _SLEEP_OK_HOURS else 0.0
 
-    _write_sensor("localai_health_hr_ok", [hr_ok])
-    _write_sensor("localai_health_hrv_ok", [hrv_ok])
-    _write_sensor("localai_health_sleep_ok", [sleep_ok])
+    target = bind()
+    _write_sensor("localai_health_hr_ok", [hr_ok], target)
+    _write_sensor("localai_health_hrv_ok", [hrv_ok], target)
+    _write_sensor("localai_health_sleep_ok", [sleep_ok], target)
 
-    return _trigger_push_and_read_health()
+    return _trigger_push_and_read_health(target)
 
 
-def _trigger_push_and_read_health() -> str:
+def _trigger_push_and_read_health(target: dict | None = None) -> str:
     """POST /api/push, read personal_health_baseline output at [190:194]."""
+    target = target or bind()
+    if target is None:
+        return "watch"
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-            r = client.post(f"{_pe_url()}/api/push")
+            r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
             data = r.json()
             ps = data.get("step", {}).get("perceptualSpace", [])
             state = get_health_state(ps)
             log.info(
-                "reality_bridge.health_state_read", state=state, global_step=data.get("globalStep")
+                "reality_bridge.health_state_read",
+                state=state,
+                global_step=data.get("globalStep"),
+                instance=target.get("instance"),
             )
             return state or "watch"
     except Exception as exc:
@@ -798,24 +835,31 @@ def push_carekit_signal(
     task = max(0.0, min(1.0, task_completion_ratio))
     symp = max(0.0, min(1.0, symptom_ok))
 
-    _write_sensor("localai_carekit_med_adherence", [med])
-    _write_sensor("localai_carekit_task_completion", [task])
-    _write_sensor("localai_carekit_symptom_ok", [symp])
+    target = bind()
+    _write_sensor("localai_carekit_med_adherence", [med], target)
+    _write_sensor("localai_carekit_task_completion", [task], target)
+    _write_sensor("localai_carekit_symptom_ok", [symp], target)
 
-    return _trigger_push_and_read_carekit()
+    return _trigger_push_and_read_carekit(target)
 
 
-def _trigger_push_and_read_carekit() -> str:
+def _trigger_push_and_read_carekit(target: dict | None = None) -> str:
     """POST /api/push, read medication_adherence output at [198:202]."""
+    target = target or bind()
+    if target is None:
+        return "partial"
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-            r = client.post(f"{_pe_url()}/api/push")
+            r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
             data = r.json()
             ps = data.get("step", {}).get("perceptualSpace", [])
             state = get_carekit_state(ps)
             log.info(
-                "reality_bridge.carekit_state_read", state=state, global_step=data.get("globalStep")
+                "reality_bridge.carekit_state_read",
+                state=state,
+                global_step=data.get("globalStep"),
+                instance=target.get("instance"),
             )
             return state or "partial"
     except Exception as exc:
@@ -850,12 +894,21 @@ def bind_graph_topology() -> bool:
     # Register PE sensors for every node in every graph
     try:
         with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as pe_client:
-            existing_ids = _get_existing_sensor_ids(pe_client)
-            for _graph_name, graph_binding in bindings.items():
-                for _node, node_info in graph_binding["nodes"].items():
+            node_infos = [
+                node_info
+                for graph_binding in bindings.values()
+                for node_info in graph_binding["nodes"].values()
+            ]
+            # Existence was checked against the default PE while the POSTs went
+            # to every target, so an engine missing a sensor the default already
+            # had never got it. Check each engine against its own sources.
+            for target in _re_targets():
+                pe_url = target["pe_url"]
+                existing = get_sensor_sources(pe_client, pe_url)
+                for node_info in node_infos:
                     sid = node_info["sensor_id"]
-                    if sid in existing_ids:
-                        log.info("reality_bridge.topo_sensor_exists", sensor_id=sid)
+                    if sid in existing:
+                        log.info("reality_bridge.topo_sensor_exists", sensor_id=sid, pe_url=pe_url)
                         continue
                     payload = {
                         "type": "sensor",
@@ -864,20 +917,28 @@ def bind_graph_topology() -> bool:
                             "offset": node_info["offset"],
                             "length": node_info["length"],
                         },
-                        "active": True,
+                        # Inactive until a node actually signals; see
+                        # _register_sensor_list.
+                        "active": False,
                         "sensorId": sid,
                         "lastValue": [],
                         "lastUpdated": None,
                         "ttlMs": 10_000,  # short TTL — nodes complete in seconds
                     }
-                    for _t in _re_targets():
-                        r = pe_client.post(f"{_t['pe_url']}/api/sources", json=payload)
-                        r.raise_for_status()
+                    r = pe_client.post(f"{pe_url}/api/sources", json=payload)
+                    r.raise_for_status()
                     log.info(
                         "reality_bridge.topo_sensor_registered",
                         sensor_id=sid,
                         offset=node_info["offset"],
-                        instances=len(_re_targets()),
+                        pe_url=pe_url,
+                    )
+                quiesced = quiesce_valueless_sensors(
+                    pe_client, [n["sensor_id"] for n in node_infos], existing, pe_url
+                )
+                if quiesced:
+                    log.info(
+                        "reality_bridge.topo_sensors_quiesced", count=quiesced, pe_url=pe_url
                     )
     except Exception as exc:
         log.warning("reality_bridge.topo_sensor_registration_failed", error=str(exc))
@@ -945,8 +1006,9 @@ def push_grading_signal(
         0.0,
         0.0,
     ]
-    _write_sensor("localai_rag_grading", values)
-    return _trigger_push_and_read_routing()
+    target = bind()
+    _write_sensor("localai_rag_grading", values, target)
+    return _trigger_push_and_read_routing(target)
 
 
 def push_agent_activity_signal(
@@ -975,8 +1037,9 @@ def push_agent_activity_signal(
         min(reasoning_steps / 10.0, 1.0),
         0.0,
     ]
-    _write_sensor("localai_agent_activity", values)
-    return _trigger_push_and_read_session()
+    target = bind()
+    _write_sensor("localai_agent_activity", values, target)
+    return _trigger_push_and_read_session(target)
 
 
 # ── Per-request: node activity signals ───────────────────────────────────────
@@ -1000,23 +1063,13 @@ def push_node_signal(
     node_info = _TOPOLOGY_BINDINGS.get(graph_name, {}).get("nodes", {}).get(node_name)
     if not node_info:
         return
-    _write_sensor(node_info["sensor_id"], [value, 0.0])
+    target = bind()
+    _write_sensor(node_info["sensor_id"], [value, 0.0], target)
     if trigger_push:
-        _trigger_push_fire_and_forget()
+        _trigger_push_fire_and_forget(target)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
-
-
-def _get_existing_sensor_ids(client: httpx.Client, pe_url: str | None = None) -> set:
-    try:
-        resp = client.get(f"{pe_url or _pe_url()}/api/sources")
-        resp.raise_for_status()
-        return {
-            s.get("sensorId") for s in resp.json().get("sources", []) if s.get("type") == "sensor"
-        }
-    except Exception:
-        return set()
 
 
 def _get_existing_machine_names(client: httpx.Client, re_url: str | None = None) -> set:
@@ -1099,30 +1152,56 @@ def import_machines_everywhere(machines: list[tuple[str, dict]], label: str) -> 
     return overall
 
 
-def _write_sensor(sensor_id: str, values: list[float]) -> None:
+def _write_sensor(sensor_id: str, values: list[float], target: dict | None = None) -> None:
+    """Write a sensor value to the bound engine, activating the source on first write.
+
+    Value first, activation second, and never the other way round: activating
+    ahead of the write would leave the source active carrying an empty value
+    for the width of a round trip, which is the pre-data contribution this is
+    removing. Written-then-activated means a source is only ever active while
+    already holding data.
+    """
+    target = target or bind()
+    if target is None:
+        log.warning("reality_bridge.write_unbound", sensor_id=sensor_id)
+        return
+    pe_url = target["pe_url"]
     try:
         with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
             r = client.post(
-                f"{_pe_url()}/api/sensors/{sensor_id}",
+                f"{pe_url}/api/sensors/{sensor_id}",
                 json={"values": values},
             )
             if r.status_code == 404:
-                log.warning("reality_bridge.sensor_not_found", sensor_id=sensor_id)
+                log.warning("reality_bridge.sensor_not_found", sensor_id=sensor_id, pe_url=pe_url)
                 return
             r.raise_for_status()
-            log.debug("reality_bridge.sensor_written", sensor_id=sensor_id, values=values)
+            log.debug(
+                "reality_bridge.sensor_written",
+                sensor_id=sensor_id,
+                values=values,
+                instance=target.get("instance"),
+            )
+            activate_sensor_source(client, pe_url, sensor_id)
     except Exception as exc:
         log.debug("reality_bridge.write_skipped", sensor_id=sensor_id, error=str(exc))
 
 
-def _trigger_push_and_read_routing() -> str:
+def _trigger_push_and_read_routing(target: dict | None = None) -> str:
     """
     POST /api/push → PE assembles vector → RE runs machines → return routing.
     Reads perceptualSpace[60:63] to decode generate/rewrite/abort.
+
+    Takes the target the values were written to. Re-resolving here would let a
+    resolver-cache expiry decode one engine's routing from a vector written
+    into another's — the answer would look normal and be wrong.
     """
+    target = target or bind()
+    if target is None:
+        return "rewrite"
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-            r = client.post(f"{_pe_url()}/api/push")
+            r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
             data = r.json()
             ps = data.get("step", {}).get("perceptualSpace", [])
@@ -1142,6 +1221,7 @@ def _trigger_push_and_read_routing() -> str:
                     agent_activity=session["agent_activity"],
                     ai_load_tier=session["ai_load_tier"],
                     global_step=data.get("globalStep"),
+                    instance=target.get("instance"),
                 )
                 if generate >= 0.5:
                     return "generate"
@@ -1158,29 +1238,32 @@ def _trigger_push_and_read_routing() -> str:
     return "rewrite"
 
 
-def _trigger_push_and_read_session() -> dict:
+def _trigger_push_and_read_session(target: dict | None = None) -> dict:
     """
     POST /api/push then return the full session context dict. Used by
     push_agent_activity_signal — the caller wants classification + load tier,
     not a single routing decision. Degrades to all-None on bridge failure.
     """
-    try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-            r = client.post(f"{_pe_url()}/api/push")
-            r.raise_for_status()
-            data = r.json()
-            ps = data.get("step", {}).get("perceptualSpace", [])
-            session = get_session_context(ps)
-            log.info(
-                "reality_bridge.agent_activity_read",
-                agent_activity=session["agent_activity"],
-                ai_load_tier=session["ai_load_tier"],
-                session_rag=session["rag"],
-                global_step=data.get("globalStep"),
-            )
-            return session
-    except Exception as exc:
-        log.debug("reality_bridge.agent_push_skipped", error=str(exc))
+    target = target or bind()
+    if target is not None:
+        try:
+            with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+                r = client.post(f"{target['pe_url']}/api/push")
+                r.raise_for_status()
+                data = r.json()
+                ps = data.get("step", {}).get("perceptualSpace", [])
+                session = get_session_context(ps)
+                log.info(
+                    "reality_bridge.agent_activity_read",
+                    agent_activity=session["agent_activity"],
+                    ai_load_tier=session["ai_load_tier"],
+                    session_rag=session["rag"],
+                    global_step=data.get("globalStep"),
+                    instance=target.get("instance"),
+                )
+                return session
+        except Exception as exc:
+            log.debug("reality_bridge.agent_push_skipped", error=str(exc))
     return {
         "rag": None,
         "agent": {"ever_engaged": False, "tools_ever_used": False},
@@ -1189,11 +1272,14 @@ def _trigger_push_and_read_session() -> dict:
     }
 
 
-def _trigger_push_fire_and_forget() -> None:
+def _trigger_push_fire_and_forget(target: dict | None = None) -> None:
     """Trigger a PE push without reading the result — used for node signals."""
+    target = target or bind()
+    if target is None:
+        return
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-            r = client.post(f"{_pe_url()}/api/push")
+            r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
             log.debug("reality_bridge.node_push_ok", global_step=r.json().get("globalStep"))
     except Exception as exc:

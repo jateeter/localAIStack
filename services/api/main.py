@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
+from core.bridge_binding import EngineAffinityMiddleware
 from routers import chat, graph, health, models, patient_wellness, rag
 from routers.graphql_endpoint import events_router as graphql_events_router
 from routers.graphql_endpoint import graphql_app
@@ -86,6 +87,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Pins each request to the engine that initiated it (X-RE-Instance), so the
+# whole interaction — sensor writes, the push, and the perceptual space it is
+# normalized from — stays on one engine.
+app.add_middleware(EngineAffinityMiddleware)
 
 app.include_router(health.router)
 app.include_router(chat.router)

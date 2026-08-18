@@ -16,6 +16,12 @@ import httpx
 import structlog
 
 from config import get_settings
+from core.bridge_binding import bind
+from core.pe_sources import (
+    activate_sensor_source,
+    get_sensor_sources,
+    quiesce_valueless_sensors,
+)
 
 log = structlog.get_logger()
 
@@ -102,7 +108,14 @@ class WellnessFeedback:
 
 
 def _pe_url() -> str:
-    return get_settings().pe_url
+    """The PE this interaction is pinned to.
+
+    Binds to the initiating engine so a wellness assessment written into one
+    engine is never read back out of another. Falls back to the configured
+    target when nothing is bound (no registry, or a call outside a request).
+    """
+    target = bind()
+    return target["pe_url"] if target else get_settings().pe_url
 
 
 def _safe_slice(values: list[float], offset: int, length: int) -> list[float]:
@@ -111,42 +124,42 @@ def _safe_slice(values: list[float], offset: int, length: int) -> list[float]:
     return [float(v) for v in values[offset : offset + length]]
 
 
-def _get_existing_sensor_ids(client: httpx.Client) -> set[str]:
-    resp = client.get(f"{_pe_url()}/api/sources")
-    resp.raise_for_status()
-    return {
-        s.get("sensorId")
-        for s in resp.json().get("sources", [])
-        if s.get("type") == "sensor" and s.get("sensorId")
-    }
 
 
 def register_patient_wellness_sources() -> bool:
     """Idempotently create the PE sources used by the PatientWellness e2e flow."""
     try:
         with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
-            existing_ids = _get_existing_sensor_ids(client)
+            pe_url = _pe_url()
+            existing = get_sensor_sources(client, pe_url)
             for source in _PATIENT_WELLNESS_SOURCES:
                 sid = source["sensorId"]
-                if sid in existing_ids:
+                if sid in existing:
                     continue
                 payload = {
                     "type": "sensor",
                     "name": source["name"],
                     "region": source["region"],
-                    "active": True,
+                    # Declared, not perceived: activated by its first value.
+                    "active": False,
                     "sensorId": sid,
                     "lastValue": [],
                     "lastUpdated": None,
                     "ttlMs": source["ttlMs"],
                 }
-                resp = client.post(f"{_pe_url()}/api/sources", json=payload)
+                resp = client.post(f"{pe_url}/api/sources", json=payload)
                 resp.raise_for_status()
                 log.info(
                     "patient_wellness.source_registered",
                     sensor_id=sid,
                     region=source["region"],
                 )
+            quiesce_valueless_sensors(
+                client,
+                [s["sensorId"] for s in _PATIENT_WELLNESS_SOURCES],
+                existing,
+                pe_url,
+            )
             return True
     except Exception as exc:
         log.warning(
@@ -158,8 +171,11 @@ def register_patient_wellness_sources() -> bool:
 
 
 def _write_sensor(client: httpx.Client, sensor_id: str, values: list[float]) -> None:
-    resp = client.post(f"{_pe_url()}/api/sensors/{sensor_id}", json={"values": values})
+    pe_url = _pe_url()
+    resp = client.post(f"{pe_url}/api/sensors/{sensor_id}", json={"values": values})
     resp.raise_for_status()
+    # After the write, never before — see core.pe_sources.
+    activate_sensor_source(client, pe_url, sensor_id)
 
 
 def _trigger_push(client: httpx.Client) -> dict[str, Any]:
