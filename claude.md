@@ -51,6 +51,18 @@ make model-pull ID=<model-id>  # pull a registered model
   Note this is the *model* registry, distinct from the RE/PE instance registry
   resolved by `core/registry_resolver.py`.
 - Keep local AI bridge behavior separate from OpenClaw ACP integration evidence.
+- **PE sources are declared inactive and activated by their first value.** An
+  active source contributes its region to every vector the PE assembles, so
+  registering active changes what an engine perceives before any localAI data
+  exists. Declaration fans out to every engine; activation follows that
+  engine's own data flow. See `core/pe_sources.py`.
+- **One interaction, one engine.** `X-RE-Instance: <registry instance id>`
+  names the initiating engine; `core/bridge_binding.py` pins it for the whole
+  request, so the sensor write, the push, and the perceptual space the response
+  is normalized from all belong to that engine. A named engine that is not
+  running resolves to nothing — the call degrades to its safe default rather
+  than writing to a substitute. Without the header the bridge uses the
+  registry-selected target, as before.
 
 ## LSP Support
 
