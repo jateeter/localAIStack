@@ -124,8 +124,6 @@ def _safe_slice(values: list[float], offset: int, length: int) -> list[float]:
     return [float(v) for v in values[offset : offset + length]]
 
 
-
-
 def register_patient_wellness_sources() -> bool:
     """Idempotently create the PE sources used by the PatientWellness e2e flow."""
     try:
