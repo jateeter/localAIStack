@@ -209,3 +209,72 @@ def test_quiesce_clears_the_activation_memo():
     pe_sources.activate_sensor_source(client, CPP["pe_url"], "a")
 
     assert client.patches == [(f"{CPP['pe_url']}/api/sources/src-a", {"active": True})]
+
+
+# ── activation is not one-way (#54) ──────────────────────────────────────────
+
+
+def test_lapsed_activation_is_taken_back(monkeypatch):
+    """An expired sensor is not silent — it stamps zeros over its region.
+
+    `source_values` returns a zero vector once a sensor's TTL has passed, and
+    `assemble_vector` writes it because the source is still active. Silence and
+    an assertion of zero are different perceptions, so the activation has to
+    come back off.
+    """
+    sources = [_source("s1", False, [])]
+    client = FakeClient(sources)
+
+    clock = [1000.0]
+    monkeypatch.setattr(pe_sources.time, "monotonic", lambda: clock[0])
+
+    pe_sources.activate_sensor_source(client, CPP["pe_url"], "s1", ttl_ms=30_000)
+    assert client.patches[-1][1] == {"active": True}
+
+    clock[0] += 29.0  # still inside the TTL
+    assert pe_sources.deactivate_lapsed(client, CPP["pe_url"]) == 0
+
+    clock[0] += 2.0  # now past it
+    assert pe_sources.deactivate_lapsed(client, CPP["pe_url"]) == 1
+    assert client.patches[-1] == (f"{CPP['pe_url']}/api/sources/src-s1", {"active": False})
+
+
+def test_rewriting_a_sensor_refreshes_its_lease(monkeypatch):
+    """A fresh value behind an existing activation restarts the clock."""
+    sources = [_source("s1", False, [])]
+    client = FakeClient(sources)
+    clock = [1000.0]
+    monkeypatch.setattr(pe_sources.time, "monotonic", lambda: clock[0])
+
+    pe_sources.activate_sensor_source(client, CPP["pe_url"], "s1", ttl_ms=30_000)
+    clock[0] += 25.0
+    pe_sources.activate_sensor_source(client, CPP["pe_url"], "s1", ttl_ms=30_000)
+    clock[0] += 25.0  # 50s since first write, 25s since the most recent one
+
+    assert pe_sources.deactivate_lapsed(client, CPP["pe_url"]) == 0
+
+
+def test_lapse_sweep_is_per_engine(monkeypatch):
+    """One engine's lapse says nothing about another's."""
+    cpp_client = FakeClient([_source("s1", False, [])])
+    lsp_client = FakeClient([_source("s1", False, [])])
+    clock = [1000.0]
+    monkeypatch.setattr(pe_sources.time, "monotonic", lambda: clock[0])
+
+    pe_sources.activate_sensor_source(cpp_client, CPP["pe_url"], "s1", ttl_ms=10_000)
+    clock[0] += 20.0
+    pe_sources.activate_sensor_source(lsp_client, LSP["pe_url"], "s1", ttl_ms=10_000)
+
+    assert pe_sources.deactivate_lapsed(cpp_client, CPP["pe_url"]) == 1
+    assert pe_sources.deactivate_lapsed(lsp_client, LSP["pe_url"]) == 0
+
+
+def test_no_ttl_never_lapses(monkeypatch):
+    """A source with no declared TTL is not swept on a guess."""
+    client = FakeClient([_source("s1", False, [])])
+    clock = [1000.0]
+    monkeypatch.setattr(pe_sources.time, "monotonic", lambda: clock[0])
+
+    pe_sources.activate_sensor_source(client, CPP["pe_url"], "s1", ttl_ms=0)
+    clock[0] += 10_000.0
+    assert pe_sources.deactivate_lapsed(client, CPP["pe_url"]) == 0

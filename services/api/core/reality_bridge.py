@@ -64,6 +64,7 @@ from core.bridge_binding import bind
 from core.pe_sources import (
     activate_sensor_source,
     clear_activation_memo,
+    deactivate_lapsed,
     get_sensor_sources,
     quiesce_valueless_sensors,
 )
@@ -793,6 +794,7 @@ def _trigger_push_and_read_health(target: dict | None = None) -> str:
         return "watch"
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            deactivate_lapsed(client, target["pe_url"])
             r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
             data = r.json()
@@ -850,6 +852,7 @@ def _trigger_push_and_read_carekit(target: dict | None = None) -> str:
         return "partial"
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            deactivate_lapsed(client, target["pe_url"])
             r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
             data = r.json()
@@ -1199,6 +1202,7 @@ def _trigger_push_and_read_routing(target: dict | None = None) -> str:
         return "rewrite"
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            deactivate_lapsed(client, target["pe_url"])
             r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
             data = r.json()
@@ -1246,6 +1250,7 @@ def _trigger_push_and_read_session(target: dict | None = None) -> dict:
     if target is not None:
         try:
             with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+                deactivate_lapsed(client, target["pe_url"])
                 r = client.post(f"{target['pe_url']}/api/push")
                 r.raise_for_status()
                 data = r.json()
@@ -1277,6 +1282,7 @@ def _trigger_push_fire_and_forget(target: dict | None = None) -> None:
         return
     try:
         with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            deactivate_lapsed(client, target["pe_url"])
             r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
             log.debug("reality_bridge.node_push_ok", global_step=r.json().get("globalStep"))
