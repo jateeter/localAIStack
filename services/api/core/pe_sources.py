@@ -18,14 +18,18 @@ than in either one.
 
 from __future__ import annotations
 
+import time
+
 import httpx
 import structlog
 
 log = structlog.get_logger()
 
-# (pe_url, sensorId) pairs already activated by a write — a memo, not state:
-# activation is idempotent, this only avoids paying a GET+PATCH on every write.
-_activated: set[tuple[str, str]] = set()
+# (pe_url, sensorId) -> (written_at_monotonic, ttl_ms) for sources this bridge
+# activated. Doubles as the activation memo — activation is idempotent, so the
+# entry mainly avoids paying a GET+PATCH on every write — and as the record
+# needed to notice when the value behind an activation has lapsed.
+_activated: dict[tuple[str, str], tuple[float, float]] = {}
 
 
 def clear_activation_memo() -> None:
@@ -38,7 +42,7 @@ def clear_activation_memo() -> None:
 
 
 def forget_activation(pe_url: str, sensor_id: str) -> None:
-    _activated.discard((pe_url, sensor_id))
+    _activated.pop((pe_url, sensor_id), None)
 
 
 def get_sensor_sources(client: httpx.Client, pe_url: str) -> dict:
@@ -60,31 +64,87 @@ def get_sensor_sources(client: httpx.Client, pe_url: str) -> dict:
         return {}
 
 
-def activate_sensor_source(client: httpx.Client, pe_url: str, sensor_id: str) -> None:
+def activate_sensor_source(
+    client: httpx.Client, pe_url: str, sensor_id: str, ttl_ms: float | None = None
+) -> None:
     """Activate a sensor source, at most once per (engine, sensor).
 
     Call *after* writing the value, never before: activating first would leave
     the source active holding an empty value for the width of a round trip,
     which is the pre-data contribution this whole rule removes.
+
+    `ttl_ms` records how long the value stays good, so `deactivate_lapsed` can
+    take the activation back when it does not.
     """
     key = (pe_url, sensor_id)
-    if key in _activated:
+    already = key in _activated
+    # Refresh the write time on every call: the value behind the activation is
+    # new even when the activation itself is not.
+    _activated[key] = (time.monotonic(), float(ttl_ms) if ttl_ms else 0.0)
+    if already:
         return
     source = get_sensor_sources(client, pe_url).get(sensor_id)
     if not source:
+        _activated.pop(key, None)
         return
+    if ttl_ms is None and source.get("ttlMs"):
+        _activated[key] = (time.monotonic(), float(source["ttlMs"]))
     if source.get("active"):
-        _activated.add(key)
         return
     try:
         r = client.patch(f"{pe_url}/api/sources/{source['id']}", json={"active": True})
         r.raise_for_status()
-        _activated.add(key)
         log.info("pe_sources.activated", sensor_id=sensor_id, pe_url=pe_url)
     except Exception as exc:
+        _activated.pop(key, None)
         log.warning(
             "pe_sources.activate_failed", sensor_id=sensor_id, pe_url=pe_url, error=str(exc)
         )
+
+
+def deactivate_lapsed(client: httpx.Client, pe_url: str) -> int:
+    """Deactivate sources whose value has aged past its TTL.
+
+    Activation without this is one-way, and an expired sensor is not silent: the
+    PE returns a zero vector for it and `assemble_vector` writes those zeros
+    because the source is still active, so a lapsed sensor stamps zeros over its
+    region on every push. An inactive source leaves the region alone. Silence
+    and an assertion of zero are different perceptions (#54).
+
+    Lapse is computed from what this bridge wrote and when, so the common case —
+    nothing has lapsed — costs no HTTP at all.
+    """
+    now = time.monotonic()
+    lapsed = [
+        (key, sid)
+        for key, (written_at, ttl_ms) in _activated.items()
+        for (url, sid) in [key]
+        if url == pe_url and ttl_ms > 0 and (now - written_at) * 1000.0 > ttl_ms
+    ]
+    if not lapsed:
+        return 0
+
+    sources = get_sensor_sources(client, pe_url)
+    deactivated = 0
+    for key, sensor_id in lapsed:
+        source = sources.get(sensor_id)
+        if not source:
+            _activated.pop(key, None)
+            continue
+        try:
+            r = client.patch(f"{pe_url}/api/sources/{source['id']}", json={"active": False})
+            r.raise_for_status()
+            _activated.pop(key, None)
+            deactivated += 1
+            log.info("pe_sources.deactivated_lapsed", sensor_id=sensor_id, pe_url=pe_url)
+        except Exception as exc:
+            log.warning(
+                "pe_sources.deactivate_failed",
+                sensor_id=sensor_id,
+                pe_url=pe_url,
+                error=str(exc),
+            )
+    return deactivated
 
 
 def quiesce_valueless_sensors(
