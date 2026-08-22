@@ -39,6 +39,10 @@ make query
 make agent
 make models                    # registry + installed state
 make model-pull ID=<model-id>  # pull a registered model
+
+# Machine contract gates (need a sibling RealityEngine_Machines checkout)
+./scripts/validate-machines.sh       # data/machines/*.json vs the canonical schema
+./scripts/check_machine_regions.py   # regions vs domains/region-allocation.json
 ```
 
 ## Runtime Contract
@@ -51,6 +55,13 @@ make model-pull ID=<model-id>  # pull a registered model
   Note this is the *model* registry, distinct from the RE/PE instance registry
   resolved by `core/registry_resolver.py`.
 - Keep local AI bridge behavior separate from OpenClaw ACP integration evidence.
+- **`data/machines/*.json` are contracted here, not in the corpus.** They are
+  registered into the RE at runtime rather than loaded from the corpus, so the
+  corpus gates never see them. `docs/MACHINE_CONTRACT.md` records that decision
+  and the two CI gates that stand in for those gates: canonical-schema
+  validation, and region reconciliation against `region-allocation.json`. They
+  write `[52:280]`; the corpus footprint starts at 1731. Moving a region is a
+  contract change, not an edit.
 - **PE sources are declared inactive and activated by their first value.** An
   active source contributes its region to every vector the PE assembles, so
   registering active changes what an engine perceives before any localAI data
