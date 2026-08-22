@@ -63,37 +63,62 @@ eight under the schema, kept so the edit stays reproducible.
 ### 2. Region reconciliation
 
 `scripts/check_machine_regions.py` answers the question schema validation cannot: *do these machines
-write any cell the corpus already claims?*
+write any cell a corpus machine also writes?*
 
 | | cells |
 |---|---|
 | localAI occupies | `[52:280]` |
 | localAI claims (`LOCALAI_BAND`) | `[0:512]` |
-| corpus footprint begins at | `1731` |
+| corpus machine windows span | `[0:16944]`, first merged block `[0:2047]` contiguous |
 
-The two are not merely non-colliding, they are in different parts of the vector. The gate fails on:
+The gate fails on:
 
-- a localAI writer landing on any cell the allocation registry declares — the undeclared contention
-  the issue is about;
+- a localAI writer landing on a cell a **corpus machine writes** — genuine contention;
+- a localAI writer landing on a registry-declared lane;
 - two localAI writers overlapping each other;
-- any region escaping the claimed band.
+- any region escaping the claimed band;
+- a **stale baseline entry** — a frozen collision that no longer exists must be removed, so the
+  baseline can only shrink.
 
-Only **outputs** are checked for contention. Reading a cell another machine owns is ordinary
-composition — `ai_load_bridge` reads `[112:120]` deliberately. Writing one is contention.
+Only **outputs** are checked for contention. Write→read overlaps are ordinary composition and some
+are deliberate: `ai_load_bridge` writes `[272:280]` precisely so `AIModelWellness` and
+`AIHardwareResilience` read it. Those are reported, never failed.
 
-## Known gap: the band is claimed, not reserved
+> **Correction.** The first version of this gate reconciled against `region-allocation.json` alone
+> and reported no collisions. That was wrong. The registry records aggregate domain windows, service
+> lanes, buses and shared output lanes — it does **not** enumerate machine `perceptualMapping`
+> windows. Its lowest declared cell is 1731, which reads like "the corpus lives above 1731" and is
+> not what it means. Corpus machines start at cell **0**, right where these eight sit.
 
-`LOCALAI_BAND` is this repo's declared intent. It is **not** a reservation the corpus registry grants:
-`domains/region-allocation.json` has an empty `reservedBands` list, and nothing there records that
-`[0:512]` is spoken for.
+## Known gap 1: five live collisions, held at baseline
 
-Today that is harmless, because the corpus allocator has never assigned below 1731. It stops being
-harmless the moment it does. Closing it properly means a `reservedBands` entry emitted by
-`RealityEngine_Machines/scripts/build-region-allocation.py` — that file is generated and must not be
-hand-edited, so it is a change in that repo, tracked separately.
+Five localAI writers contend with corpus writers **today**:
 
-Until then `check_machine_regions.py` is the detector rather than the preventer: it will fail the
-build the first time the corpus allocates into this band, which is the outcome that matters.
+| localAI writer | corpus writer | cells |
+|---|---|---|
+| `agent_activity_classifier` | `AGX005_aquaculture-dissolved-oxygen-control` | `[68:72]` exact |
+| `session_rag_context` | `AGX013_aquaculture-algae-culture-balance` | `[112:116]` exact |
+| `medication_adherence` | `AGX027_indoor-grow-house-lighting-schedule-integrity` | `[198:200]` |
+| `personal_health_baseline` | `AGX026_indoor-grow-house-vpd-climate-management` | `[190:192]` |
+| `session_health_context` | `AGX028_indoor-grow-house-nutrient-reservoir-balance` | `[204:206]` |
+
+Two machines writing the same cells, with the cell arbiter resolving contention no registry
+declares — the condition #38 set out to prevent.
+
+They are frozen in `KNOWN_CORPUS_COLLISIONS` rather than fixed here, because remapping a machine's
+output changes what it writes at runtime and is reviewable work in its own right (#57). The set is
+frozen in both directions: a collision that gets fixed must be removed from the list, or the gate
+fails on the stale entry. **Do not add to that list to make a build pass.**
+
+## Known gap 2: the band is claimed, not reserved
+
+`LOCALAI_BAND` is this repo's declared intent, not a reservation. `domains/region-allocation.json`
+has an empty `reservedBands` list.
+
+It cannot simply be granted, either: `[0:512]` holds 215 corpus machine regions, so reserving it
+would fail the corpus's own `test_no_machine_lane_inside_reserved_band`. A real reservation means
+picking a genuinely free band — `[7440:13000]` is the only one with room — and migrating these
+machines into it. Tracked as jateeter/RealityEngine_Machines#96.
 
 ## Changing a machine
 

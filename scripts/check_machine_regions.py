@@ -12,26 +12,38 @@ exists to prevent.
 
 This script closes that half. It answers one question, mechanically:
 
-    do these machines write any cell the corpus already claims?
+    do these machines write any cell a corpus machine also writes?
 
-Today the answer is no, and not narrowly. The corpus footprint recorded in
-`domains/region-allocation.json` starts at cell 1731; these eight occupy
-[52:280]. The two do not merely fail to collide, they are in different parts of
-the vector entirely. That is worth pinning rather than rediscovering, because
-nothing reserves [52:280] on their behalf — the disjointness is a fact about
-today's allocations, not a guarantee the registry makes.
+The answer today is yes, five times, and the first version of this script said
+no. That is worth recording, because the mistake is easy to repeat.
 
-So the gate is deliberately two-sided:
+It reconciled against `domains/region-allocation.json` alone. That registry
+records aggregate domain windows, service lanes, buses and shared output lanes
+— it does NOT enumerate machine `perceptualMapping` windows. Its lowest declared
+cell is 1731, which reads like "the corpus lives above 1731" and is not what it
+means. Measured from the corpus directly: 2656 machine regions across 120 merged
+blocks, the first of them [0:2047] contiguous. Corpus machines start at cell 0,
+right where these eight sit.
 
-  * a localAI write landing on a corpus-declared cell is a FAILURE — that is
-    the undeclared contention the issue is about;
-  * a localAI write drifting outside the band this repo claims is a WARNING
-    surfaced as failure too, because the band is the only thing standing in
-    for a reservation the registry does not yet hold.
+So the reconciliation is against corpus machine windows, and the registry check
+is kept alongside it rather than in place of it.
 
-Only *outputs* are checked for contention. Reading a cell another machine owns
-is ordinary composition — `ai_load_bridge` reads [112:120] on purpose. Writing
-one is contention.
+What fails:
+
+  * a localAI write landing on a cell a CORPUS MACHINE writes — genuine
+    contention, the cell arbiter resolving a conflict no registry declares;
+  * a localAI write landing on a registry-declared lane;
+  * two localAI writers on one cell;
+  * a region escaping the band this repo claims.
+
+What does not fail:
+
+  * write -> read overlaps. Reading a cell another machine writes is ordinary
+    composition, and some of it is deliberate — `ai_load_bridge` writes
+    [272:280] precisely so AIModelWellness and AIHardwareResilience read it.
+    Reported for visibility, never failed.
+  * the five collisions in KNOWN_CORPUS_COLLISIONS, held at baseline so they
+    cannot grow while the remap is done as separate work (#57).
 
 Usage:
     ./scripts/check_machine_regions.py
@@ -55,6 +67,41 @@ MACHINE_DIR = REPO / "data" / "machines"
 # corpus registry grants — see the module docstring — but the declared intent
 # that makes drift visible.
 LOCALAI_BAND = (0, 512)
+
+# Collisions that exist today, frozen so they cannot grow.
+#
+# (localai file, corpus file, overlap start, overlap end)
+#
+# These are real: two machines writing the same cells, with the cell arbiter
+# resolving contention no registry declares. They are held rather than fixed
+# because remapping a machine's output changes what it writes at runtime and is
+# reviewable work in its own right — tracked in #57. The set is frozen in both
+# directions, so it can only shrink, and only on purpose.
+#
+# Do not add to this list to make a build pass. A new collision is the failure
+# this script exists to report.
+KNOWN_CORPUS_COLLISIONS: set[tuple[str, str, int, int]] = {
+    ("agent_activity_classifier.json", "AGX005_aquaculture-dissolved-oxygen-control.json", 68, 72),
+    (
+        "medication_adherence.json",
+        "AGX027_indoor-grow-house-lighting-schedule-integrity.json",
+        198,
+        200,
+    ),
+    (
+        "personal_health_baseline.json",
+        "AGX026_indoor-grow-house-vpd-climate-management.json",
+        190,
+        192,
+    ),
+    (
+        "session_health_context.json",
+        "AGX028_indoor-grow-house-nutrient-reservoir-balance.json",
+        204,
+        206,
+    ),
+    ("session_rag_context.json", "AGX013_aquaculture-algae-culture-balance.json", 112, 116),
+}
 
 
 class Span:
@@ -134,6 +181,35 @@ def collect_declared_spans(registry: dict) -> list[Span]:
     return spans
 
 
+def collect_corpus_machine_regions(corpus_root: pathlib.Path) -> tuple[list[Span], list[Span]]:
+    """The (inputs, outputs) every corpus machine actually declares.
+
+    This is the check that matters, and its absence is why the first version of
+    this script was wrong. `region-allocation.json` records aggregate domain
+    windows, service lanes, buses and shared output lanes — it does NOT enumerate
+    machine `perceptualMapping` windows. Its lowest declared cell is 1731, which
+    invites the conclusion that the corpus lives above 1731. It does not: 2656
+    machine regions span 120 merged blocks and the first is [0:2047] contiguous.
+
+    Reconciling against the registry alone therefore reported no contention while
+    five localAI writers sat on cells corpus machines write.
+    """
+    inputs: list[Span] = []
+    outputs: list[Span] = []
+    for path in sorted((corpus_root / "machines").rglob("*.json")):
+        try:
+            machine = json.loads(path.read_text(encoding="utf-8"))["machine"]
+        except (ValueError, KeyError, TypeError):
+            continue  # not a machine file; the corpus gate owns that judgement
+        mapping = machine.get("perceptualMapping") or {}
+        for key, bucket in (("input", inputs), ("output", outputs)):
+            region = mapping.get(key)
+            if not isinstance(region, dict) or not isinstance(region.get("offset"), int):
+                continue
+            bucket.append(Span(f"{path.name}:{key}", region["offset"], region["length"]))
+    return inputs, outputs
+
+
 def collect_localai_regions() -> tuple[list[Span], list[Span]]:
     """The (inputs, outputs) declared by this repo's machine definitions."""
     inputs: list[Span] = []
@@ -163,25 +239,33 @@ def main() -> int:
         print(f"[fail] no machine definitions at {MACHINE_DIR}", file=sys.stderr)
         return 1
 
+    corpus_root = registry_path.parent.parent
+
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
     declared = collect_declared_spans(registry)
+    corpus_inputs, corpus_outputs = collect_corpus_machine_regions(corpus_root)
     inputs, outputs = collect_localai_regions()
 
     if not outputs:
         print("[fail] no localAI machine outputs found — nothing to reconcile", file=sys.stderr)
         return 1
+    if not corpus_outputs:
+        print(
+            f"[fail] no corpus machine windows found under {corpus_root}/machines", file=sys.stderr
+        )
+        return 1
 
-    corpus_floor = min(span.offset for span in declared) if declared else None
     band_lo = min(span.offset for span in inputs + outputs)
     band_hi = max(span.end for span in inputs + outputs)
 
-    print(f"check-machine-regions: {len(outputs)} writer(s) against {registry_path}")
-    print(f"  corpus declares {len(declared)} span(s), lowest cell {corpus_floor}")
+    print(f"check-machine-regions: {len(outputs)} writer(s) against {corpus_root}")
+    print(f"  corpus: {len(corpus_outputs)} machine writer(s), {len(declared)} declared span(s)")
     print(
         f"  localAI occupies [{band_lo}:{band_hi}] (claimed band [{LOCALAI_BAND[0]}:{LOCALAI_BAND[1]}])"
     )
 
     failures: list[str] = []
+    seen_known: set[tuple[str, str, int, int]] = set()
 
     # 1. localAI writers must not contend with each other.
     for i, a in enumerate(outputs):
@@ -189,7 +273,25 @@ def main() -> int:
             if a.overlaps(b):
                 failures.append(f"localAI writers overlap: {a.label} {a} and {b.label} {b}")
 
-    # 2. localAI writers must not land on a cell the corpus already declares.
+    # 2. localAI writers must not land on a cell a CORPUS MACHINE writes. Two
+    #    writers on one cell leave the cell arbiter resolving contention that no
+    #    registry declares — the condition #38 exists to prevent.
+    for out in outputs:
+        for other in corpus_outputs:
+            if not out.overlaps(other):
+                continue
+            key = (
+                out.label.split(":")[0],
+                other.label.split(":")[0],
+                max(out.offset, other.offset),
+                min(out.end, other.end),
+            )
+            if key in KNOWN_CORPUS_COLLISIONS:
+                seen_known.add(key)
+                continue
+            failures.append(f"corpus contention: {out.label} {out} overlaps {other.label} {other}")
+
+    # 3. localAI writers must not land on a cell the registry declares as a lane.
     for out in outputs:
         for span in declared:
             if out.overlaps(span):
@@ -197,7 +299,7 @@ def main() -> int:
                     f"undeclared contention: {out.label} {out} overlaps {span.label} {span}"
                 )
 
-    # 3. Everything stays inside the band this repo claims.
+    # 4. Everything stays inside the band this repo claims.
     band = Span("localAI band", LOCALAI_BAND[0], LOCALAI_BAND[1] - LOCALAI_BAND[0])
     for region in inputs + outputs:
         if not (band.offset <= region.offset and region.end <= band.end):
@@ -206,13 +308,37 @@ def main() -> int:
                 "widen LOCALAI_BAND deliberately, or move the machine back"
             )
 
+    # The baseline is frozen in BOTH directions: an entry that no longer collides
+    # is reported too, so a fixed collision must be removed from the list rather
+    # than left to rot. The baseline can only shrink, and only deliberately.
+    stale = KNOWN_CORPUS_COLLISIONS - seen_known
+    for entry in sorted(stale):
+        failures.append(
+            f"stale baseline: {entry[0]} no longer collides with {entry[1]} at "
+            f"[{entry[2]}:{entry[3]}] — remove it from KNOWN_CORPUS_COLLISIONS"
+        )
+
+    # Write -> read overlaps are composition, not contention, and some are the
+    # whole point: ai_load_bridge writes [272:280] precisely so AIModelWellness
+    # and AIHardwareResilience read it. Reported, never failed.
+    feeds = [(out, reader) for out in outputs for reader in corpus_inputs if out.overlaps(reader)]
+
     if failures:
         print(f"\n[fail] {len(failures)} region violation(s):", file=sys.stderr)
         for failure in failures:
             print(f"  {failure}", file=sys.stderr)
         return 1
 
-    print("\n[ok]   no localAI writer contends with a corpus-declared cell")
+    if seen_known:
+        print(f"\n  {len(seen_known)} known collision(s) held at baseline (see #57):")
+        for entry in sorted(seen_known):
+            print(f"    {entry[0]} X {entry[1]} at [{entry[2]}:{entry[3]}]")
+    if feeds:
+        print(f"\n  {len(feeds)} write->read overlap(s), composition not contention:")
+        for out, reader in sorted(feeds, key=lambda f: f[0].label)[:6]:
+            print(f"    {out.label} {out} -> {reader.label} {reader}")
+
+    print("\n[ok]   no new contention between a localAI writer and a corpus writer")
     return 0
 
 
