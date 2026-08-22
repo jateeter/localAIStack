@@ -5,8 +5,8 @@ the Reality Engine alongside the corpus and write real positions in the universa
 vector — but they live outside RealityEngine_Machines, so the corpus gates never
 saw them (jateeter/localAIStack#38).
 
-`scripts/validate-machines.sh` covers the eight on disk and runs in the local
-regression lane. It cannot cover the topology machines: those are synthesized by
+`scripts/validate-machines.sh` covers the eight on disk and runs in CI as the
+`machine-contract` job. It cannot cover the topology machines: those are synthesized by
 `core.topology_builder.build_machine_json` from the live LangGraph graphs and do
 not exist as files, so they were 2 of the 10 `localai/*` machines the engine
 loads with nothing checking their shape. This module is where they get checked,
@@ -49,14 +49,34 @@ def machine_validator():
         pytest.skip("canonical machine.schema.json not found; set MACHINES_DIR")
     assert schema_dir is not None  # narrowing; pytest.skip above does not return
 
-    store = {}
+    # `referencing`, not the deprecated RefResolver. This is not tidying: the
+    # canonical schema cannot be resolved by RefResolver at all. `$defs/metadata`
+    # carries a `$ref` to machine-class.schema.json *alongside* sibling
+    # `properties`, which draft 2020-12 permits. RefResolver pushes the scope to
+    # machine-class.schema.json for the `$ref` and then evaluates the siblings in
+    # that pushed scope, so `properties/governance` -> `#/$defs/governance` is
+    # looked up in machine-class.schema.json, which has no such def:
+    #
+    #   _RefResolutionError: Unresolvable JSON pointer: '$defs/governance'
+    #
+    # Every machine failed on it. The failure was invisible because this module
+    # skipped for want of jsonschema and a corpus checkout (#38).
+    referencing = pytest.importorskip(
+        "referencing", reason="referencing not installed; ships with jsonschema >= 4.18"
+    )
+    from referencing.jsonschema import DRAFT202012
+
+    resources = []
     for path in schema_dir.glob("*.schema.json"):
         doc = json.loads(path.read_text(encoding="utf-8"))
         if "$id" in doc:
-            store[doc["$id"]] = doc
+            resources.append(
+                (doc["$id"], referencing.Resource(contents=doc, specification=DRAFT202012))
+            )
+    registry = referencing.Registry().with_resources(resources)
+
     schema = json.loads((schema_dir / "machine.schema.json").read_text(encoding="utf-8"))
-    resolver = jsonschema.RefResolver(base_uri=schema["$id"], referrer=schema, store=store)
-    return jsonschema.Draft202012Validator(schema, resolver=resolver)
+    return jsonschema.Draft202012Validator(schema, registry=registry)
 
 
 def machine_files() -> list[pathlib.Path]:

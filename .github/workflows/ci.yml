@@ -76,3 +76,62 @@ jobs:
 
       - name: Validate docker-compose.yml
         run: docker compose config --quiet
+
+  # ── Machine contract ────────────────────────────────────────────────────────
+  # data/machines/*.json load into the Reality Engine alongside the corpus and
+  # write real positions in the universal vector, but they live here rather than
+  # in RealityEngine_Machines, so the corpus gates never saw them (#38).
+  #
+  # Both gates below are hard: they fail rather than skip when the corpus
+  # checkout, Node, Ajv or the registry is missing. That is deliberate. The
+  # pytest module covering the same files skipped silently in the `unit` job for
+  # exactly that reason — jsonschema was absent and no corpus was checked out —
+  # so the gate reported success while checking nothing.
+  machine-contract:
+    name: Machine contract (schema + regions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out the canonical corpus
+        uses: actions/checkout@v7
+        with:
+          repository: jateeter/RealityEngine_Machines
+          path: .corpus
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+
+      # The validator and the schema both come from the corpus repo on purpose,
+      # so "validate against the canonical schema" cannot drift into a second
+      # implementation of validation.
+      - name: Install the canonical validator's Ajv
+        working-directory: .corpus
+        run: npm ci
+
+      - name: Validate against the canonical machine schema
+        env:
+          MACHINES_DIR: ${{ github.workspace }}/.corpus
+        run: ./scripts/validate-machines.sh
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Reconcile regions against the allocation registry
+        env:
+          MACHINES_DIR: ${{ github.workspace }}/.corpus
+        run: ./scripts/check_machine_regions.py
+
+      # The two gates above cover the eight definitions on disk. The runtime
+      # topology machines exist only as objects built from the live graphs, so
+      # they need the API dependencies importable to be checked at all.
+      - name: Install test dependencies
+        run: pip install -r services/api/requirements.txt -r services/api/requirements-dev.txt
+
+      - name: Schema-check the static and synthesized machines
+        working-directory: services/api
+        env:
+          MACHINES_DIR: ${{ github.workspace }}/.corpus
+        run: pytest tests/test_machine_schema.py -v -rs
