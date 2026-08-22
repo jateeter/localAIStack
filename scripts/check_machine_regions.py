@@ -66,7 +66,21 @@ MACHINE_DIR = REPO / "data" / "machines"
 # The band this repo claims for its integration machines. Not a reservation the
 # corpus registry grants — see the module docstring — but the declared intent
 # that makes drift visible.
-LOCALAI_BAND = (0, 512)
+LOCALAI_BAND = (7440, 7952)
+
+# Regions deliberately outside the reserved band.
+#
+# ai_load_bridge writes [272:280] so AIModelWellness [272:276] and
+# AIHardwareResilience [276:280] read it. That is the machine's whole purpose, so
+# the write has to land in the corpus's AI input window rather than in this
+# repo's band. No corpus machine WRITES those cells, so it is a bridge, not
+# contention.
+BRIDGE_LANES: set[tuple[str, str]] = {("ai_load_bridge.json", "output")}
+
+# The corpus registry's reserved band FOR these machines. It is a reservation on
+# their behalf, not a competing claim, so writing inside it is the intended state
+# rather than contention — the one declared span this repo is allowed to occupy.
+OUR_RESERVED_BAND_ID = "localaistack-integration"
 
 # Collisions that exist today, frozen so they cannot grow.
 #
@@ -80,28 +94,7 @@ LOCALAI_BAND = (0, 512)
 #
 # Do not add to this list to make a build pass. A new collision is the failure
 # this script exists to report.
-KNOWN_CORPUS_COLLISIONS: set[tuple[str, str, int, int]] = {
-    ("agent_activity_classifier.json", "AGX005_aquaculture-dissolved-oxygen-control.json", 68, 72),
-    (
-        "medication_adherence.json",
-        "AGX027_indoor-grow-house-lighting-schedule-integrity.json",
-        198,
-        200,
-    ),
-    (
-        "personal_health_baseline.json",
-        "AGX026_indoor-grow-house-vpd-climate-management.json",
-        190,
-        192,
-    ),
-    (
-        "session_health_context.json",
-        "AGX028_indoor-grow-house-nutrient-reservoir-balance.json",
-        204,
-        206,
-    ),
-    ("session_rag_context.json", "AGX013_aquaculture-algae-culture-balance.json", 112, 116),
-}
+KNOWN_CORPUS_COLLISIONS: set[tuple[str, str, int, int]] = set()
 
 
 class Span:
@@ -255,8 +248,13 @@ def main() -> int:
         )
         return 1
 
-    band_lo = min(span.offset for span in inputs + outputs)
-    band_hi = max(span.end for span in inputs + outputs)
+    banded = [
+        span
+        for span in inputs + outputs
+        if (span.label.partition(":")[0], span.label.partition(":")[2]) not in BRIDGE_LANES
+    ]
+    band_lo = min(span.offset for span in banded)
+    band_hi = max(span.end for span in banded)
 
     print(f"check-machine-regions: {len(outputs)} writer(s) against {corpus_root}")
     print(f"  corpus: {len(corpus_outputs)} machine writer(s), {len(declared)} declared span(s)")
@@ -291,9 +289,13 @@ def main() -> int:
                 continue
             failures.append(f"corpus contention: {out.label} {out} overlaps {other.label} {other}")
 
-    # 3. localAI writers must not land on a cell the registry declares as a lane.
+    # 3. localAI writers must not land on a cell the registry declares as a lane,
+    #    except the band reserved for this repo, which they are meant to occupy.
+    ours = f"reservedBand:{OUR_RESERVED_BAND_ID}"
     for out in outputs:
         for span in declared:
+            if span.label == ours:
+                continue
             if out.overlaps(span):
                 failures.append(
                     f"undeclared contention: {out.label} {out} overlaps {span.label} {span}"
@@ -302,6 +304,9 @@ def main() -> int:
     # 4. Everything stays inside the band this repo claims.
     band = Span("localAI band", LOCALAI_BAND[0], LOCALAI_BAND[1] - LOCALAI_BAND[0])
     for region in inputs + outputs:
+        name, _, kind = region.label.partition(":")
+        if (name, kind) in BRIDGE_LANES:
+            continue
         if not (band.offset <= region.offset and region.end <= band.end):
             failures.append(
                 f"outside the claimed band: {region.label} {region} escapes {band} — "

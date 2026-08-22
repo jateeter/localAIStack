@@ -2,8 +2,8 @@
 Phase 4 tests — CareKit machine, health session carry, PE integrations registry.
 
 Covers the three Phase 4 PE implementations:
-  (a) medication_adherence CES machine at [194:198]→[198:202]
-  (b) session_health_context bistable carry at [190:194]→[202:206]
+  (a) medication_adherence CES machine at [7582:7586]→[7586:7590]
+  (b) session_health_context bistable carry at [7578:7582]→[7590:7594]
   (c) config/pe-integrations.json structure (PE registry for HealthKit + CareKit)
 
 Sections:
@@ -14,7 +14,7 @@ Sections:
   (5)  get_health_state_from_carry() decoder — all four states + None + short ps
   (6)  push_carekit_signal() end-to-end — all 4 output states, clamping, fallback
   (7)  import_carekit_machine() idempotency — skip if exists, POST when missing
-  (8)  session_health_context.json offsets — input [190:194], output [202:206]
+  (8)  session_health_context.json offsets — input [7578:7582], output [7590:7594]
   (9)  get_session_context() — health_state key present and uses carry
   (10) get_current_health_state() — carry fallback when live output is silent
   (11) verify_machine_offsets() — covers all three sensor lists (bug-fix validation)
@@ -55,7 +55,7 @@ class _FakeCareKitClient:
     set at carekit_state_offset (198=adherent, 199=partial, 200=lapsed, 201=concern).
     """
 
-    def __init__(self, carekit_state_offset: int = 198):
+    def __init__(self, carekit_state_offset: int = 7586):
         self.posts: list[dict] = []
         self._carekit_state_offset = carekit_state_offset
 
@@ -75,7 +75,7 @@ class _FakeCareKitClient:
     def post(self, url: str, json: dict | None = None, **_):
         self.posts.append({"url": url, "json": json})
         if "/api/push" in url:
-            ps = [0.0] * 256
+            ps = [0.0] * 7680
             ps[self._carekit_state_offset] = 1.0
             return _FakeResponse(
                 200,
@@ -90,7 +90,7 @@ class _FakeCareKitClient:
 @pytest.fixture
 def fake_carekit_client(monkeypatch):
     """Default fake: returns adherent state (offset 198)."""
-    fake = _FakeCareKitClient(carekit_state_offset=198)
+    fake = _FakeCareKitClient(carekit_state_offset=7586)
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
     return fake
 
@@ -189,11 +189,11 @@ def test_carekit_machine_has_five_sequences():
 
 
 def test_carekit_machine_perceptual_mapping():
-    """medication_adherence.json input [194:198] and output [198:202]."""
+    """medication_adherence.json input [7582:7586] and output [7586:7590]."""
     machine = _load_carekit_machine()
     pm = machine["perceptualMapping"]
-    assert pm["input"] == {"offset": 194, "length": 4}
-    assert pm["output"] == {"offset": 198, "length": 4}
+    assert pm["input"] == {"offset": 7582, "length": 4}
+    assert pm["output"] == {"offset": 7586, "length": 4}
 
 
 def test_carekit_machine_arbiter_is_passthrough():
@@ -317,7 +317,7 @@ def test_carekit_sensors_are_registered_in_sensor_to_machine():
 def test_carekit_sensors_are_inside_carekit_machine_input_window():
     """
     Each CareKit sensor's region must lie inside medication_adherence.json's
-    input window [194:198]. Sensor drift outside this window means the machine
+    input window [7582:7586]. Sensor drift outside this window means the machine
     cannot read the sensor — this must be caught by the drift guard.
     """
     spec = next(
@@ -341,9 +341,9 @@ def test_carekit_sensors_are_inside_carekit_machine_input_window():
 def test_carekit_sensors_have_correct_offsets():
     """med_adherence→194, task_completion→195, symptom_ok→196."""
     by_id = {s["sensorId"]: s for s in reality_bridge._CAREKIT_SENSORS}
-    assert by_id["localai_carekit_med_adherence"]["region"]["offset"] == 194
-    assert by_id["localai_carekit_task_completion"]["region"]["offset"] == 195
-    assert by_id["localai_carekit_symptom_ok"]["region"]["offset"] == 196
+    assert by_id["localai_carekit_med_adherence"]["region"]["offset"] == 7582
+    assert by_id["localai_carekit_task_completion"]["region"]["offset"] == 7583
+    assert by_id["localai_carekit_symptom_ok"]["region"]["offset"] == 7584
 
 
 # ── (4) get_carekit_state() decoder ──────────────────────────────────────────
@@ -352,20 +352,20 @@ def test_carekit_sensors_have_correct_offsets():
 @pytest.mark.parametrize(
     ("offset", "expected"),
     [
-        (198, "adherent"),
-        (199, "partial"),
-        (200, "lapsed"),
-        (201, "concern"),
+        (7586, "adherent"),
+        (7587, "partial"),
+        (7588, "lapsed"),
+        (7589, "concern"),
     ],
 )
 def test_get_carekit_state_decodes_each_state(offset, expected):
-    ps = [0.0] * 256
+    ps = [0.0] * 7680
     ps[offset] = 1.0
     assert reality_bridge.get_carekit_state(ps) == expected
 
 
 def test_get_carekit_state_returns_none_when_machine_silent():
-    ps = [0.0] * 256
+    ps = [0.0] * 7680
     assert reality_bridge.get_carekit_state(ps) is None
 
 
@@ -376,20 +376,20 @@ def test_get_carekit_state_none_on_short_ps():
 
 def test_get_carekit_state_first_match_wins():
     """When multiple bits are HIGH (shouldn't happen in practice), adherent wins."""
-    ps = [0.0] * 256
-    ps[198] = 1.0  # adherent
-    ps[199] = 1.0  # partial — must not override adherent
+    ps = [0.0] * 7680
+    ps[7586] = 1.0  # adherent
+    ps[7587] = 1.0  # partial — must not override adherent
     assert reality_bridge.get_carekit_state(ps) == "adherent"
 
 
 def test_get_carekit_state_threshold_is_point_five():
     """The ≥ 0.5 threshold must apply: 0.49 → None, 0.5 → adherent."""
-    ps_below = [0.0] * 256
-    ps_below[198] = 0.49
+    ps_below = [0.0] * 7680
+    ps_below[7586] = 0.49
     assert reality_bridge.get_carekit_state(ps_below) is None
 
-    ps_at = [0.0] * 256
-    ps_at[198] = 0.5
+    ps_at = [0.0] * 7680
+    ps_at[7586] = 0.5
     assert reality_bridge.get_carekit_state(ps_at) == "adherent"
 
 
@@ -399,44 +399,44 @@ def test_get_carekit_state_threshold_is_point_five():
 @pytest.mark.parametrize(
     ("offset", "expected"),
     [
-        (202, "thriving"),
-        (203, "balanced"),
-        (204, "watch"),
-        (205, "attention"),
+        (7590, "thriving"),
+        (7591, "balanced"),
+        (7592, "watch"),
+        (7593, "attention"),
     ],
 )
 def test_get_health_state_from_carry_decodes_each_state(offset, expected):
-    ps = [0.0] * 256
+    ps = [0.0] * 7680
     ps[offset] = 1.0
     assert reality_bridge.get_health_state_from_carry(ps) == expected
 
 
 def test_get_health_state_from_carry_returns_none_when_cold():
-    ps = [0.0] * 256
+    ps = [0.0] * 7680
     assert reality_bridge.get_health_state_from_carry(ps) is None
 
 
 def test_get_health_state_from_carry_none_on_short_ps():
     assert reality_bridge.get_health_state_from_carry([]) is None
-    assert reality_bridge.get_health_state_from_carry([0.0] * 202) is None
+    assert reality_bridge.get_health_state_from_carry([0.0] * 7590) is None
 
 
 def test_get_health_state_from_carry_first_match_wins():
     """When multiple carry bits are HIGH, thriving wins."""
-    ps = [0.0] * 256
-    ps[202] = 1.0  # thriving
-    ps[203] = 1.0  # balanced — must not override
+    ps = [0.0] * 7680
+    ps[7590] = 1.0  # thriving
+    ps[7591] = 1.0  # balanced — must not override
     assert reality_bridge.get_health_state_from_carry(ps) == "thriving"
 
 
-def test_carry_reads_202_not_190():
-    """Carry decoder must read [202:206], not the live output at [190:194]."""
-    ps = [0.0] * 256
-    ps[190] = 1.0  # live output: thriving
-    ps[203] = 1.0  # carry: balanced
+def test_carry_reads_7590_not_7578():
+    """Carry decoder must read [7590:7594], not the live output at [7578:7582]."""
+    ps = [0.0] * 7680
+    ps[7578] = 1.0  # live output: thriving
+    ps[7591] = 1.0  # carry: balanced
     # get_health_state reads [190] → thriving
     assert reality_bridge.get_health_state(ps) == "thriving"
-    # get_health_state_from_carry reads [202:206] → balanced
+    # get_health_state_from_carry reads [7590:7594] → balanced
     assert reality_bridge.get_health_state_from_carry(ps) == "balanced"
 
 
@@ -446,10 +446,10 @@ def test_carry_reads_202_not_190():
 @pytest.mark.parametrize(
     ("carekit_state_offset", "expected_state"),
     [
-        (198, "adherent"),
-        (199, "partial"),
-        (200, "lapsed"),
-        (201, "concern"),
+        (7586, "adherent"),
+        (7587, "partial"),
+        (7588, "lapsed"),
+        (7589, "concern"),
     ],
 )
 def test_push_carekit_signal_returns_correct_state(
@@ -609,11 +609,11 @@ def _load_health_carry_machine() -> dict:
 
 
 def test_session_health_context_perceptual_mapping():
-    """session_health_context: input [190:194] (health output), output [202:206] (carry)."""
+    """session_health_context: input [7578:7582] (health output), output [7590:7594] (carry)."""
     machine = _load_health_carry_machine()
     pm = machine["perceptualMapping"]
-    assert pm["input"] == {"offset": 190, "length": 4}
-    assert pm["output"] == {"offset": 202, "length": 4}
+    assert pm["input"] == {"offset": 7578, "length": 4}
+    assert pm["output"] == {"offset": 7590, "length": 4}
 
 
 def test_session_health_context_has_four_sequences():
@@ -632,7 +632,7 @@ def test_session_health_context_all_sequences_are_initial():
 
 
 def test_session_health_context_sequence_outputs_are_one_hot():
-    """Each carry sequence writes a distinct one-hot to [202:206]."""
+    """Each carry sequence writes a distinct one-hot to [7590:7594]."""
     machine = _load_health_carry_machine()
     expected = {
         "sess-health-thriving": [1.0, 0.0, 0.0, 0.0],
@@ -661,22 +661,22 @@ def test_session_health_context_is_in_session_machine_defs():
 
 def test_get_session_context_includes_health_state_key():
     """get_session_context() must always include the 'health_state' key."""
-    ps = [0.0] * 256
+    ps = [0.0] * 7680
     ctx = reality_bridge.get_session_context(ps)
     assert "health_state" in ctx, "health_state key missing from get_session_context()"
 
 
 def test_get_session_context_health_state_from_carry():
-    """When carry [202:206] is set, health_state must reflect the carry."""
-    ps = [0.0] * 256
-    ps[203] = 1.0  # carry: balanced
+    """When carry [7590:7594] is set, health_state must reflect the carry."""
+    ps = [0.0] * 7680
+    ps[7591] = 1.0  # carry: balanced
     ctx = reality_bridge.get_session_context(ps)
     assert ctx["health_state"] == "balanced"
 
 
 def test_get_session_context_health_state_none_when_carry_cold():
-    """When [202:206] is all zeros and [190:194] is all zeros, health_state is None."""
-    ps = [0.0] * 256
+    """When [7590:7594] is all zeros and [7578:7582] is all zeros, health_state is None."""
+    ps = [0.0] * 7680
     ctx = reality_bridge.get_session_context(ps)
     assert ctx["health_state"] is None
 
@@ -692,16 +692,16 @@ def test_get_session_context_health_state_on_short_ps():
 
 def test_get_current_health_state_uses_carry_when_live_is_silent(monkeypatch):
     """
-    When [190:194] is all zero (personal_health_baseline not yet fired) but
-    [202:206] has a state (carry from a prior push), get_current_health_state()
+    When [7578:7582] is all zero (personal_health_baseline not yet fired) but
+    [7590:7594] has a state (carry from a prior push), get_current_health_state()
     must return the carry state rather than None.
     """
 
     class _CarryOnly(_FakeCareKitClient):
         def get(self, url, **_):
             if "/api/perceptual-simulation/state" in url:
-                ps = [0.0] * 256
-                ps[204] = 1.0  # carry: watch — live [190:194] is all-zero
+                ps = [0.0] * 7680
+                ps[7592] = 1.0  # carry: watch — live [7578:7582] is all-zero
                 return _FakeResponse(200, {"state": {"perceptualSpace": ps}})
             return super().get(url)
 
@@ -712,16 +712,16 @@ def test_get_current_health_state_uses_carry_when_live_is_silent(monkeypatch):
 
 def test_get_current_health_state_prefers_live_over_carry(monkeypatch):
     """
-    When both [190:194] (live) and [202:206] (carry) are set, the live output
+    When both [7578:7582] (live) and [7590:7594] (carry) are set, the live output
     must win — it is the most recent machine classification.
     """
 
     class _Both(_FakeCareKitClient):
         def get(self, url, **_):
             if "/api/perceptual-simulation/state" in url:
-                ps = [0.0] * 256
-                ps[190] = 1.0  # live: thriving
-                ps[203] = 1.0  # carry: balanced (must be overridden)
+                ps = [0.0] * 7680
+                ps[7578] = 1.0  # live: thriving
+                ps[7591] = 1.0  # carry: balanced (must be overridden)
                 return _FakeResponse(200, {"state": {"perceptualSpace": ps}})
             return super().get(url)
 
@@ -757,7 +757,7 @@ def test_drift_guard_checks_carekit_sensors_not_just_rag(monkeypatch, tmp_path):
         {
             "sensorId": "localai_carekit_fake_sensor",
             "name": "localai/carekit/fake",
-            "region": {"offset": 194, "length": 1},
+            "region": {"offset": 7582, "length": 1},
             "ttlMs": 3_600_000,
         }
     ]
@@ -780,7 +780,7 @@ def test_drift_guard_checks_health_sensors_not_just_rag(monkeypatch):
         {
             "sensorId": "localai_health_fake_sensor",
             "name": "localai/health/fake",
-            "region": {"offset": 186, "length": 1},
+            "region": {"offset": 7574, "length": 1},
             "ttlMs": 300_000,
         }
     ]
@@ -873,9 +873,9 @@ def test_pe_integrations_healthkit_source_mappings():
     assert hk_hrv is not None, "HK HRV source mapping missing"
     assert hk_sl is not None, "HK Sleep source mapping missing"
 
-    assert hk_hr["region"]["offset"] == 186
-    assert hk_hrv["region"]["offset"] == 187
-    assert hk_sl["region"]["offset"] == 188
+    assert hk_hr["region"]["offset"] == 7574
+    assert hk_hrv["region"]["offset"] == 7575
+    assert hk_sl["region"]["offset"] == 7576
 
 
 def test_pe_integrations_carekit_source_mappings():
@@ -890,9 +890,9 @@ def test_pe_integrations_carekit_source_mappings():
     assert ck_task is not None, "CareKit task source mapping missing"
     assert ck_symp is not None, "CareKit symptom source mapping missing"
 
-    assert ck_med["region"]["offset"] == 194
-    assert ck_task["region"]["offset"] == 195
-    assert ck_symp["region"]["offset"] == 196
+    assert ck_med["region"]["offset"] == 7582
+    assert ck_task["region"]["offset"] == 7583
+    assert ck_symp["region"]["offset"] == 7584
 
 
 def test_pe_integrations_source_mapping_regions_match_sensor_constants():

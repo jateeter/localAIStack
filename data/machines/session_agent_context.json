@@ -91,11 +91,11 @@
     "matchAlgorithm": "gte",
     "perceptualMapping": {
       "input": {
-        "offset": 104,
+        "offset": 7492,
         "length": 16
       },
       "output": {
-        "offset": 116,
+        "offset": 7504,
         "length": 4
       },
       "bitsPerElement": 8

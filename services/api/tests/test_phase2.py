@@ -42,7 +42,7 @@ class _FakeREResponse:
 class _FakeREClient:
     """httpx.Client stand-in that returns a canned RE /api/perceptual-simulation/state."""
 
-    def __init__(self, health_offset: int | None = 190):
+    def __init__(self, health_offset: int | None = 7578):
         self._health_offset = health_offset
 
     def __enter__(self):
@@ -53,7 +53,7 @@ class _FakeREClient:
 
     def get(self, url: str, **_):
         if "/api/perceptual-simulation/state" in url:
-            ps = [0.0] * 256
+            ps = [0.0] * 7680
             if self._health_offset is not None:
                 ps[self._health_offset] = 1.0
             return _FakeREResponse(200, {"state": {"perceptualSpace": ps}})
@@ -98,10 +98,10 @@ def test_config_health_context_enabled_via_env(monkeypatch):
 @pytest.mark.parametrize(
     ("offset", "expected"),
     [
-        (190, "thriving"),
-        (191, "balanced"),
-        (192, "watch"),
-        (193, "attention"),
+        (7578, "thriving"),
+        (7579, "balanced"),
+        (7580, "watch"),
+        (7581, "attention"),
     ],
 )
 def test_get_current_health_state_decodes_each_state(monkeypatch, offset, expected):
@@ -165,8 +165,8 @@ def test_get_current_health_state_calls_re_not_pe(monkeypatch):
 
         def get(self, url, **_):
             called_urls.append(url)
-            ps = [0.0] * 256
-            ps[190] = 1.0
+            ps = [0.0] * 7680
+            ps[7578] = 1.0
             return _FakeREResponse(200, {"state": {"perceptualSpace": ps}})
 
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: _Tracker())
@@ -437,7 +437,7 @@ def test_healthkit_config_regions_match_health_sensors(healthkit_config):
 
 def test_healthkit_config_target_region_is_health_input_window(healthkit_config):
     target = healthkit_config["targetPerceptualRegion"]
-    assert target["offset"] == 186
+    assert target["offset"] == 7574
     assert target["length"] == 4
 
 

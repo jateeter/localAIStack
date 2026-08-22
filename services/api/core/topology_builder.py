@@ -14,24 +14,24 @@ Region layout (per-graph base offsets in GRAPH_BASE_OFFSETS):
   output region where the topology machine writes which node is currently active.
 
 Layout for default graphs (rag=4 nodes, agent=2 nodes):
-  [76:84]   rag node signals     (4 nodes × 2 bytes)
-  [84:88]   rag topology output  (4 bytes: [retrieve, grade_documents, generate, rewrite_query])
-  [104:108] agent node signals   (2 nodes × 2 bytes)
-  [108:112] agent topology output (4 bytes: [agent, tools, 0, 0])
+  [7464:7472]   rag node signals     (4 nodes × 2 bytes)
+  [7472:7476]   rag topology output  (4 bytes: [retrieve, grade_documents, generate, rewrite_query])
+  [7492:7496] agent node signals   (2 nodes × 2 bytes)
+  [7496:7500] agent topology output (4 bytes: [agent, tools, 0, 0])
 
 The gap between the rag region (ends at 88) and agent region (starts at 104) is
-required because DC machines occupy several bytes in [88:104]; the agent region
-sits immediately before the session_rag/session_agent outputs at [112:120] so
-session_agent_context can read its 16-byte input contiguously from [104:120].
+required because DC machines occupy several bytes in [7476:7492]; the agent region
+sits immediately before the session_rag/session_agent outputs at [7500:7508] so
+session_agent_context can read its 16-byte input contiguously from [7492:7508].
 """
 
 from __future__ import annotations
 
-# Per-graph base offsets.  rag stays at 76 (no conflicts), agent starts at 104
-# where DC alert FF outputs used to live (now relocated to [144:150]).
+# Per-graph base offsets.  rag stays at 7464 (no conflicts), agent starts at 7492
+# where DC alert FF outputs used to live (now relocated to [7532:7538]).
 GRAPH_BASE_OFFSETS: dict[str, int] = {
-    "rag": 76,
-    "agent": 104,
+    "rag": 7464,
+    "agent": 7492,
 }
 # Legacy constant kept for any external consumers that still reference it;
 # equivalent to GRAPH_BASE_OFFSETS["rag"].

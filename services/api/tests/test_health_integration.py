@@ -6,7 +6,7 @@ Mirrors the structure of test_reality_bridge.py:
   (1) Offset-drift guard — verifies personal_health_baseline.json offsets
       match the Python constants added to reality_bridge.
 
-  (2) Decoder unit tests — get_health_state() maps perceptualSpace[190:194]
+  (2) Decoder unit tests — get_health_state() maps perceptualSpace[7578:7582]
       to the correct string for each of the four health states.
 
   (3) End-to-end push cycle — exercises push_health_signal() with a fake
@@ -79,7 +79,7 @@ def test_health_sensors_are_registered_in_sensor_to_machine():
 def test_health_sensors_are_inside_health_machine_input_window():
     """
     Each health sensor's region must lie inside personal_health_baseline.json's
-    input window [186:190]. If sensor offsets drift outward, the machine cannot
+    input window [7574:7578]. If sensor offsets drift outward, the machine cannot
     read them — the drift guard must catch this.
     """
     spec = next(
@@ -106,33 +106,33 @@ def test_health_sensors_are_inside_health_machine_input_window():
 @pytest.mark.parametrize(
     ("offset", "expected"),
     [
-        (190, "thriving"),
-        (191, "balanced"),
-        (192, "watch"),
-        (193, "attention"),
+        (7578, "thriving"),
+        (7579, "balanced"),
+        (7580, "watch"),
+        (7581, "attention"),
     ],
 )
 def test_get_health_state_decodes_each_state(offset, expected):
-    ps = [0.0] * 256
+    ps = [0.0] * 7680
     ps[offset] = 1.0
     assert reality_bridge.get_health_state(ps) == expected
 
 
 def test_get_health_state_returns_none_when_machine_silent():
-    ps = [0.0] * 256
+    ps = [0.0] * 7680
     assert reality_bridge.get_health_state(ps) is None
 
 
 def test_get_health_state_none_on_short_ps():
     assert reality_bridge.get_health_state([]) is None
-    assert reality_bridge.get_health_state([0.0] * 190) is None
+    assert reality_bridge.get_health_state([0.0] * 7578) is None
 
 
 def test_get_health_state_first_match_wins():
     """When multiple bits are set (shouldn't happen in practice), thriving wins."""
-    ps = [0.0] * 256
-    ps[190] = 1.0  # thriving
-    ps[191] = 1.0  # balanced — should not override thriving
+    ps = [0.0] * 7680
+    ps[7578] = 1.0  # thriving
+    ps[7579] = 1.0  # balanced — should not override thriving
     assert reality_bridge.get_health_state(ps) == "thriving"
 
 
@@ -155,7 +155,7 @@ class _FakeResponse:
 class _FakeHealthClient:
     """httpx.Client stand-in for health sensor tests. Records every POST."""
 
-    def __init__(self, health_state_offset: int = 190):
+    def __init__(self, health_state_offset: int = 7578):
         self.posts: list[dict] = []
         self._health_state_offset = health_state_offset
 
@@ -175,7 +175,7 @@ class _FakeHealthClient:
     def post(self, url: str, json: dict | None = None, **_):
         self.posts.append({"url": url, "json": json})
         if "/api/push" in url:
-            ps = [0.0] * 256
+            ps = [0.0] * 7680
             ps[self._health_state_offset] = 1.0
             return _FakeResponse(
                 200,
@@ -189,7 +189,7 @@ class _FakeHealthClient:
 
 @pytest.fixture
 def fake_health_client(monkeypatch):
-    fake = _FakeHealthClient(health_state_offset=190)  # thriving
+    fake = _FakeHealthClient(health_state_offset=7578)  # thriving
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
     return fake
 
@@ -237,7 +237,7 @@ def test_push_health_signal_band_values_hrv_threshold():
 
 def test_push_health_signal_attention_writes_hr_low(monkeypatch):
     """HR=105 (above 100 ceiling) must write hr.ok=0.0, returning 'attention'."""
-    fake = _FakeHealthClient(health_state_offset=193)  # attention
+    fake = _FakeHealthClient(health_state_offset=7581)  # attention
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
 
     state = reality_bridge.push_health_signal(
@@ -253,7 +253,7 @@ def test_push_health_signal_attention_writes_hr_low(monkeypatch):
 
 def test_push_health_signal_watch_writes_hrv_low(monkeypatch):
     """HR in range but HRV=18ms (<30ms) must write hrv.ok=0.0, returning 'watch'."""
-    fake = _FakeHealthClient(health_state_offset=192)  # watch
+    fake = _FakeHealthClient(health_state_offset=7580)  # watch
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
 
     state = reality_bridge.push_health_signal(
@@ -269,7 +269,7 @@ def test_push_health_signal_watch_writes_hrv_low(monkeypatch):
 
 def test_push_health_signal_balanced_sleep_low(monkeypatch):
     """HR and HRV nominal but sleep=5.5h (<6.5h) → sleep.ok=0.0 → 'balanced'."""
-    fake = _FakeHealthClient(health_state_offset=191)  # balanced
+    fake = _FakeHealthClient(health_state_offset=7579)  # balanced
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
 
     state = reality_bridge.push_health_signal(

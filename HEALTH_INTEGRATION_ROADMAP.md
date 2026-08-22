@@ -13,8 +13,8 @@
 | Graph topology | `topology_builder.py` — binds LangGraph nodes to perceptual space | ✅ |
 | GraphQL receiver | `routers/graphql_endpoint.py` — machine → localAI upstream trigger | ✅ |
 | Bridge unit tests | `tests/test_reality_bridge.py` — 20 tests, all passing | ✅ |
-| Perceptual space | [0:186] fully allocated, [186:256] free (health + future) | ✅ |
-| **Health machine** | `data/machines/personal_health_baseline.json` — [186:190]→[190:194] | ✅ Phase 1 |
+| Perceptual space | [0:186] fully allocated, [7574:256] free (health + future) | ✅ |
+| **Health machine** | `data/machines/personal_health_baseline.json` — [7574:7578]→[7578:7582] | ✅ Phase 1 |
 | **Health bridge** | `push_health_signal()`, `get_health_state()`, `get_current_health_state()`, startup | ✅ Phase 1+2 |
 | **Health sim** | `scripts/simulate_health_push.py` — Yuma/MQTT analog | ✅ Phase 1 |
 | **Health tests** | 58 tests across `test_health_integration.py` + `test_phase2.py` | ✅ Phase 1+2 |
@@ -41,23 +41,23 @@
 ```
 [0:12]    Legacy machines (MultiStep, RSFlipFlop, KleeneStar …)
 [12:60]   DC sensor inputs
-[60:80]   DC control signals / rag topology
-[76:84]   RAG topology nodes  (4 nodes × 2 bytes)
-[84:88]   RAG topology output
-[88:104]  DC machines
-[104:108] Agent topology nodes (2 × 2 bytes)
-[108:112] Agent topology output
-[112:116] session_rag_context output  [last_generate, last_rewrite, last_abort, _]
-[116:120] session_agent_context output [agent_ever_engaged, tools_ever_used, _, _]
-[120:144] ai_load_bridge output (6 × 4D nominal/elevated/critical patterns)
-[144:150] DC terminal FF outputs (relocated)
-[150:186] AI DC machine outputs (6 machines × 6D)
-[186:190] Personal health sensors (hr.ok, hrv.ok, sleep.ok, reserved)   Phase 1
-[190:194] personal_health_baseline output (thriving, balanced, watch, attention)   Phase 1
-[194:198] CareKit sensors (med_adherence, task_completion, symptom_ok, reserved)   Phase 4a
-[198:202] medication_adherence output (adherent, partial, lapsed, concern)   Phase 4a
-[202:206] session_health_context carry (thriving, balanced, watch, attention)   Phase 4b
-[206:256] Free (50 bytes) — stress index, activity level, medication side-effects …
+[7448:7468]   DC control signals / rag topology
+[7464:7472]   RAG topology nodes  (4 nodes × 2 bytes)
+[7472:7476]   RAG topology output
+[7476:7492]  DC machines
+[7492:7496] Agent topology nodes (2 × 2 bytes)
+[7496:7500] Agent topology output
+[7500:7504] session_rag_context output  [last_generate, last_rewrite, last_abort, _]
+[7504:7508] session_agent_context output [agent_ever_engaged, tools_ever_used, _, _]
+[7508:7532] ai_load_bridge output (6 × 4D nominal/elevated/critical patterns)
+[7532:7538] DC terminal FF outputs (relocated)
+[7538:7574] AI DC machine outputs (6 machines × 6D)
+[7574:7578] Personal health sensors (hr.ok, hrv.ok, sleep.ok, reserved)   Phase 1
+[7578:7582] personal_health_baseline output (thriving, balanced, watch, attention)   Phase 1
+[7582:7586] CareKit sensors (med_adherence, task_completion, symptom_ok, reserved)   Phase 4a
+[7586:7590] medication_adherence output (adherent, partial, lapsed, concern)   Phase 4a
+[7590:7594] session_health_context carry (thriving, balanced, watch, attention)   Phase 4b
+[7594:256] Free (50 bytes) — stress index, activity level, medication side-effects …
 ```
 
 ---
@@ -80,10 +80,10 @@ yuma.lateraledge.cloud:1883 (MQTT broker)
 ```
 Apple Watch / iPhone (HealthKit)  OR  scripts/simulate_health_push.py
   → band normalization (HR [60,100], HRV ≥30ms, Sleep ≥6.5h → 0.0/1.0)
-  → PE sensor sources: localai_health_{hr,hrv,sleep}_ok  [186:189]
+  → PE sensor sources: localai_health_{hr,hrv,sleep}_ok  [7574:7577]
   → PE /api/push → RE /api/perceive
   → personal_health_baseline machine fires (thriving/balanced/watch/attention)
-  → perceptualSpace[190:194] decoded by get_health_state()
+  → perceptualSpace[7578:7582] decoded by get_health_state()
   → POST /graphql  updateProcessState  (GREEN/AMBER/RED)
   → localAI ring buffer, Grafana logs
 ```
@@ -94,7 +94,7 @@ Key structural parallels:
 |---|---|
 | MQTT broker | iOS HealthKit / simulate_health_push.py |
 | Band normalization rules (JSON) | Band thresholds in reality_bridge.py |
-| 16 sensor regions | 3 sensor regions [186:189] |
+| 16 sensor regions | 3 sensor regions [7574:7577] |
 | AGX001 … AGX032 machines | personal_health_baseline machine |
 | GREEN/AMBER/RED governance | thriving→GREEN, watch→AMBER, attention→RED |
 | Prometheus paging decisions | GraphQL events ring buffer → Loki/Grafana |
@@ -143,7 +143,7 @@ cd services/api && python -m pytest tests/test_health_integration.py -v
 
 2. **HealthKit ingest registration** ✅
    - `config/integrations.healthkit-localai.json` created — maps 3 HK type identifiers
-     (HeartRate, HRV SDNN, SleepAnalysis) to PE sensors at [186:188].
+     (HeartRate, HRV SDNN, SleepAnalysis) to PE sensors at [7574:7576].
    - Primary sourceMappings use `normalize.mode = "passthrough"` for TS PE compatibility.
    - `cppLspRuntimeConfig` block documents native `band` mode for CPP/LSP runtimes.
    - All `bandThresholds` are locked to the Python constants in `reality_bridge.py`
@@ -200,7 +200,7 @@ curl -s http://localhost:4000/graph/agent \
 1. **`/health` endpoint — PE/RE bridge status** ✅
    - New `pe` and `re` sub-objects in `services` response
    - `pe`: `status`, `sensor_count`, `health_sensors` count
-   - `re`: `status`, `health_state` (live decode from perceptualSpace[190:194]), `machine_count`, `ps_length`
+   - `re`: `status`, `health_state` (live decode from perceptualSpace[7578:7582]), `machine_count`, `ps_length`
    - New top-level `bridge` field: `"ok"` | `"degraded"` (PE/RE optional — their status doesn't affect `status`)
    - PE and RE checks run in parallel via `asyncio.gather`
 
@@ -254,21 +254,21 @@ python scripts/ingest_health_docs.py
 **Perceptual space allocation (post-Phase 4):**
 
 ```
-[186:190]  personal health sensors — hr.ok, hrv.ok, sleep.ok, reserved   (Phase 1)
-[190:194]  personal_health_baseline output — thriving, balanced, watch, attention   (Phase 1)
-[194:198]  CareKit sensors — med_adherence, task_completion, symptom_ok, reserved  (4a NEW)
-[198:202]  medication_adherence output — adherent, partial, lapsed, concern        (4a NEW)
-[202:206]  session_health_context carry — thriving, balanced, watch, attention      (4b NEW)
-[206:256]  free — 50 bytes for stress index, activity classification, future        
+[7574:7578]  personal health sensors — hr.ok, hrv.ok, sleep.ok, reserved   (Phase 1)
+[7578:7582]  personal_health_baseline output — thriving, balanced, watch, attention   (Phase 1)
+[7582:7586]  CareKit sensors — med_adherence, task_completion, symptom_ok, reserved  (4a NEW)
+[7586:7590]  medication_adherence output — adherent, partial, lapsed, concern        (4a NEW)
+[7590:7594]  session_health_context carry — thriving, balanced, watch, attention      (4b NEW)
+[7594:256]  free — 50 bytes for stress index, activity classification, future        
 ```
 
 ---
 
-#### 4a — CareKit machine at [194:202]
+#### 4a — CareKit machine at [7582:7590]
 
 **What CareKit tracks:** Apple CareKit manages structured care plans — scheduled medication doses, daily activity tasks, and symptom check-ins. Each scheduled event produces an `OCKOutcome` when completed. The bridge aggregates these into three normalised scalars before sending to the PE.
 
-**Sensor layout [194:198]:**
+**Sensor layout [7582:7586]:**
 
 | Offset | Sensor | Range | Source |
 |---|---|---|---|
@@ -325,7 +325,7 @@ def push_carekit_signal(
     """
 
 def get_carekit_state(ps: list) -> str | None:
-    """One-hot decode of medication_adherence output at [198:202]."""
+    """One-hot decode of medication_adherence output at [7586:7590]."""
 ```
 
 **Drift guard additions** (`_EXPECTED_MACHINE_OFFSETS`):
@@ -339,7 +339,7 @@ def get_carekit_state(ps: list) -> str | None:
 **HealthKit config extension (`config/integrations.healthkit-localai.json`):** add CareKit source mappings under a new `"carekitSourceMappings"` key mirroring the HealthKit section — HK types map to `localai_carekit_*` sensor IDs with `normalize.mode = "passthrough"`.
 
 **Tests (`tests/test_phase4.py`):**
-- `test_carekit_sensor_layout_matches_machine_input_window` — verifies [194:198] ⊂ machine input
+- `test_carekit_sensor_layout_matches_machine_input_window` — verifies [7582:7586] ⊂ machine input
 - `test_carekit_machine_json_four_sequences_mutually_exclusive`
 - `test_push_carekit_signal_returns_correct_state[adherent/partial/lapsed/concern]`
 - `test_get_carekit_state_decodes_onehot_correctly`
@@ -350,7 +350,7 @@ def get_carekit_state(ps: list) -> str | None:
 
 #### 4b — Health session carry
 
-**The problem:** `personal_health_baseline` writes [190:194] when a HealthKit push arrives. Between pushes — during a conversation that may span minutes — the RE perceptual space holds those values via PE carry-forward semantics. However, downstream machines (e.g., a future RAG re-rank machine) need to consume a stable health-state signal as part of their *input* window, not read it out-of-band via `get_current_health_state()`. A bistable carry machine provides that.
+**The problem:** `personal_health_baseline` writes [7578:7582] when a HealthKit push arrives. Between pushes — during a conversation that may span minutes — the RE perceptual space holds those values via PE carry-forward semantics. However, downstream machines (e.g., a future RAG re-rank machine) need to consume a stable health-state signal as part of their *input* window, not read it out-of-band via `get_current_health_state()`. A bistable carry machine provides that.
 
 **Machine: `data/machines/session_health_context.json`**
 
@@ -369,9 +369,9 @@ Four sequences (one per health state), all isInitial, same OR-arbiter bistable p
 | `sess-health-watch`    | ps[192] ≥ 0.5 | `[0,0,1,0]` |
 | `sess-health-attention`| ps[193] ≥ 0.5 | `[0,0,0,1]` |
 
-When no health push occurs in a cycle (agent tool call, RAG step) none of the four sequences fire and PE carry-forward holds [202:206] unchanged — the health state persists across the entire conversation without re-querying the RE.
+When no health push occurs in a cycle (agent tool call, RAG step) none of the four sequences fire and PE carry-forward holds [7590:7594] unchanged — the health state persists across the entire conversation without re-querying the RE.
 
-**Why this is necessary vs. just reading [190:194] directly:** `get_current_health_state()` makes an HTTP call to the RE on every chat request. The carry machine removes that synchronous call from the request path entirely — the health state is available as part of the assembled perceptual space on every push and can be read from the push response body.
+**Why this is necessary vs. just reading [7578:7582] directly:** `get_current_health_state()` makes an HTTP call to the RE on every chat request. The carry machine removes that synchronous call from the request path entirely — the health state is available as part of the assembled perceptual space on every push and can be read from the push response body.
 
 **Python additions (`core/reality_bridge.py`):**
 
@@ -386,11 +386,11 @@ _HEALTH_CARRY_OFFSET = 202   # [thriving, balanced, watch, attention] carry
  "input": {"offset": 190, "length": 4}, "output": {"offset": 202, "length": 4}},
 
 # Extend get_session_context() return dict:
-"health_state": get_health_state_from_carry(ps),   # reads [202:206]
+"health_state": get_health_state_from_carry(ps),   # reads [7590:7594]
 
 def get_health_state_from_carry(ps: list) -> str | None:
-    """Decode health state from the session carry at [202:206].
-    Differs from get_health_state() which reads the live classifier output [190:194].
+    """Decode health state from the session carry at [7590:7594].
+    Differs from get_health_state() which reads the live classifier output [7578:7582].
     Returns None until the first health push this RE session."""
 ```
 
@@ -434,7 +434,7 @@ PE (perception-engine, port 3004)
   ↓  calls /api/push → RE evaluates machines
 RE (reality-engine, port 3000)
   ↓  personal_health_baseline + medication_adherence fire
-  ↓  perceptualSpace[190:202] updated
+  ↓  perceptualSpace[7578:7590] updated
 localAI API (port 4000)
   ↓  chat.py reads health_state via get_current_health_state() or carry
 ```

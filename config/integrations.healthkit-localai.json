@@ -15,7 +15,7 @@
     "  'minmax'      — scales linearly: out = (value - min) / (max - min), clamped [0,1].",
     "    Available in all PE runtimes but does NOT produce a binary 0/1 output.",
     "",
-    "Band offset layout (personal_health_baseline.json input window [186:190]):",
+    "Band offset layout (personal_health_baseline.json input window [7574:7578]):",
     "  [186] hr.ok    — 1.0 if HR is in nominal range [60, 100] bpm, else 0.0",
     "  [187] hrv.ok   — 1.0 if SDNN HRV >= 30 ms, else 0.0",
     "  [188] sleep.ok — 1.0 if sleep duration >= 6.5 h, else 0.0",
@@ -25,7 +25,7 @@
     "and send them with normalize.mode='passthrough'. The bridge logic is in:",
     "  localHealthkitBridge/Sources/HealthKitBridge/BandNormalizer.swift",
     "",
-    "Machine output window: personal_health_baseline.json at [190:194]",
+    "Machine output window: personal_health_baseline.json at [7578:7582]",
     "  [190] thriving  — all three metrics in nominal range",
     "  [191] balanced  — HR+HRV ok, sleep below target",
     "  [192] watch     — HR ok, HRV low (poor recovery)",
@@ -34,16 +34,16 @@
   "integrationId": "healthkit-localai-v1",
   "description": "Apple HealthKit → localAIStack personal health domain",
   "targetPerceptualRegion": {
-    "offset": 186,
+    "offset": 7574,
     "length": 4,
-    "note": "personal_health_baseline.json input window [186:190]"
+    "note": "personal_health_baseline.json input window [7574:7578]"
   },
   "sourceMappings": [
     {
       "hkTypeIdentifier": "HKQuantityTypeIdentifierHeartRate",
       "sensorId": "localai_health_hr_ok",
       "description": "Resting heart rate — band [60, 100] bpm",
-      "region": { "offset": 186, "length": 1 },
+      "region": { "offset": 7574, "length": 1 },
       "ttlMs": 300000,
       "normalize": {
         "mode": "passthrough",
@@ -54,7 +54,7 @@
       "hkTypeIdentifier": "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
       "sensorId": "localai_health_hrv_ok",
       "description": "HRV SDNN — threshold >= 30 ms",
-      "region": { "offset": 187, "length": 1 },
+      "region": { "offset": 7575, "length": 1 },
       "ttlMs": 900000,
       "normalize": {
         "mode": "passthrough",
@@ -65,7 +65,7 @@
       "hkTypeIdentifier": "HKCategoryTypeIdentifierSleepAnalysis",
       "sensorId": "localai_health_sleep_ok",
       "description": "Sleep duration — threshold >= 6.5 hours",
-      "region": { "offset": 188, "length": 1 },
+      "region": { "offset": 7576, "length": 1 },
       "ttlMs": 86400000,
       "normalize": {
         "mode": "passthrough",

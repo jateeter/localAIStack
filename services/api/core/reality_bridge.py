@@ -15,11 +15,11 @@ Startup responsibilities (called once from main.py lifespan):
                                import topology-tracking machines for each graph
 
 Per-request responsibilities (called from graph node functions):
-  push_retrieval_signal()      — write retrieve() output to PE sensor [52:56]
+  push_retrieval_signal()      — write retrieve() output to PE sensor [7440:7444]
   push_grading_signal()        — write grade_documents() output, trigger RE push,
                                  return "generate"|"rewrite"|"abort" decision
   push_agent_activity_signal() — write tool-call / error / reasoning metrics to
-                                 PE sensor [64:68], trigger RE push, return the
+                                 PE sensor [7452:7456], trigger RE push, return the
                                  enriched session context dict
   push_node_signal()           — write a node-activity signal to its sensor region
   get_session_context()        — read current carry state from perceptual space
@@ -30,26 +30,26 @@ All network calls use short timeouts and suppress exceptions; the bridge is
 always optional — a missing or slow PE/RE never blocks graph execution.
 
 Perceptual space layout (256-element vector):
-  [52:56]   localai_rag_retrieval       — doc_count_norm, avg_score
-  [56:60]   localai_rag_grading         — kept_ratio, rewrite_count_norm
-  [60:64]   rag_corrective_cycle        — [generate, rewrite, abort, _] output
-  [64:68]   localai_agent_activity      — [tool_calls_norm, tool_errors_norm,
+  [7440:7444]   localai_rag_retrieval       — doc_count_norm, avg_score
+  [7444:7448]   localai_rag_grading         — kept_ratio, rewrite_count_norm
+  [7448:7452]   rag_corrective_cycle        — [generate, rewrite, abort, _] output
+  [7452:7456]   localai_agent_activity      — [tool_calls_norm, tool_errors_norm,
                                            reasoning_depth_norm, _] sensor
-  [68:72]   agent_activity_classifier   — [productive, normal, struggling, _] output
-  [76:84]   rag topology nodes          — 4 nodes × 2 bytes (see topology_builder)
-  [84:88]   rag topology output         — [retrieve, grade_documents, generate, rewrite_query]
-  [104:108] agent topology nodes        — 2 nodes × 2 bytes
-  [108:112] agent topology output       — [agent, tools, 0, 0]
-  [112:116] session_rag_context         — bistable carry: [last_generate, last_rewrite, last_abort, _]
-  [116:120] session_agent_context       — bistable carry: [agent_ever_engaged, tools_ever_used, _, _]
+  [7456:7460]   agent_activity_classifier   — [productive, normal, struggling, _] output
+  [7464:7472]   rag topology nodes          — 4 nodes × 2 bytes (see topology_builder)
+  [7472:7476]   rag topology output         — [retrieve, grade_documents, generate, rewrite_query]
+  [7492:7496] agent topology nodes        — 2 nodes × 2 bytes
+  [7496:7500] agent topology output       — [agent, tools, 0, 0]
+  [7500:7504] session_rag_context         — bistable carry: [last_generate, last_rewrite, last_abort, _]
+  [7504:7508] session_agent_context       — bistable carry: [agent_ever_engaged, tools_ever_used, _, _]
   [272:280] ai_load_bridge              — 2 × 4-byte AI machine input patterns projected
                                           from session carries (nominal/elevated/critical),
                                           feeding AIModelWellness [272:276] and
                                           AIHardwareResilience [276:280]
   (topology offsets computed dynamically by topology_builder.compute_bindings())
 
-  Chunks A [52:64] and B [104:120] are carved from space freed by relocating
-  four terminal DC flip-flop outputs to [144:150]; see topology_builder
+  Chunks A [7440:7452] and B [7492:7508] are carved from space freed by relocating
+  four terminal DC flip-flop outputs to [7532:7538]; see topology_builder
   docstring and the DC machine JSONs for details.
 """
 
@@ -78,80 +78,80 @@ _SSL_VERIFY: bool | str = os.getenv("RE_SSL_VERIFY", "true").lower() not in ("fa
 
 # ── localAI sensor definitions ────────────────────────────────────────────────
 # RAG/agent PE sensors:
-#   - rag retrieval  (doc_count_norm, avg_score)        → [52:56]
-#   - rag grading    (kept_ratio,    rewrite_count_norm) → [56:60]
-#   - agent activity (tool_calls,    tool_errors,   reasoning_depth) → [64:68]
+#   - rag retrieval  (doc_count_norm, avg_score)        → [7440:7444]
+#   - rag grading    (kept_ratio,    rewrite_count_norm) → [7444:7448]
+#   - agent activity (tool_calls,    tool_errors,   reasoning_depth) → [7452:7456]
 # Health PE sensors (band values — 1.0 = in nominal range, 0.0 = out):
-#   - health.hr.ok   → [186:187]
-#   - health.hrv.ok  → [187:188]
-#   - health.sleep.ok → [188:189]
+#   - health.hr.ok   → [7574:7575]
+#   - health.hrv.ok  → [7575:7576]
+#   - health.sleep.ok → [7576:7577]
 # All sensors bypass auto-assembly and land directly in the named region.
 
 _RAG_SENSORS = [
     {
         "sensorId": "localai_rag_retrieval",
         "name": "localai/rag_retrieval",
-        "region": {"offset": 52, "length": 4},
+        "region": {"offset": 7440, "length": 4},
         "ttlMs": 30_000,
     },
     {
         "sensorId": "localai_rag_grading",
         "name": "localai/rag_grading",
-        "region": {"offset": 56, "length": 4},
+        "region": {"offset": 7444, "length": 4},
         "ttlMs": 30_000,
     },
     {
         "sensorId": "localai_agent_activity",
         "name": "localai/agent_activity",
-        "region": {"offset": 64, "length": 4},
+        "region": {"offset": 7452, "length": 4},
         "ttlMs": 30_000,
     },
 ]
 
-# Personal health band sensors — [186:189].  Each carries a 1-element region
+# Personal health band sensors — [7574:7577].  Each carries a 1-element region
 # (single byte) so the RE can read HR, HRV, and sleep independently.  All use
 # long TTLs matching the HealthKit delivery cadence for each data type.
 _HEALTH_SENSORS = [
     {
         "sensorId": "localai_health_hr_ok",
         "name": "localai/health/hr_ok",
-        "region": {"offset": 186, "length": 1},
+        "region": {"offset": 7574, "length": 1},
         "ttlMs": 300_000,  # 5 min — heart rate can change quickly
     },
     {
         "sensorId": "localai_health_hrv_ok",
         "name": "localai/health/hrv_ok",
-        "region": {"offset": 187, "length": 1},
+        "region": {"offset": 7575, "length": 1},
         "ttlMs": 900_000,  # 15 min — HRV is a slower-moving metric
     },
     {
         "sensorId": "localai_health_sleep_ok",
         "name": "localai/health/sleep_ok",
-        "region": {"offset": 188, "length": 1},
+        "region": {"offset": 7576, "length": 1},
         "ttlMs": 86_400_000,  # 24 h — sleep updates once per day
     },
 ]
 
-# CareKit compliance sensors — [194:197].  Pre-normalised ratios [0.0, 1.0].
+# CareKit compliance sensors — [7582:7585].  Pre-normalised ratios [0.0, 1.0].
 # Unlike health sensors (binary band normalization), CareKit scalars carry
 # ratio values directly: the iOS bridge computes them from OCKStore outcomes.
 _CAREKIT_SENSORS = [
     {
         "sensorId": "localai_carekit_med_adherence",
         "name": "localai/carekit/med_adherence",
-        "region": {"offset": 194, "length": 1},
+        "region": {"offset": 7582, "length": 1},
         "ttlMs": 3_600_000,  # 1 h — medication dose window
     },
     {
         "sensorId": "localai_carekit_task_completion",
         "name": "localai/carekit/task_completion",
-        "region": {"offset": 195, "length": 1},
+        "region": {"offset": 7583, "length": 1},
         "ttlMs": 86_400_000,  # 24 h — daily task schedule
     },
     {
         "sensorId": "localai_carekit_symptom_ok",
         "name": "localai/carekit/symptom_ok",
-        "region": {"offset": 196, "length": 1},
+        "region": {"offset": 7584, "length": 1},
         "ttlMs": 86_400_000,  # 24 h — symptom check-in cadence
     },
 ]
@@ -168,16 +168,18 @@ _MACHINES_DIR = pathlib.Path(
 _MACHINE_JSON_PATH = _MACHINES_DIR / "rag_corrective_cycle.json"
 _MACHINE_NAME = "localai/rag_corrective_cycle"
 
-_OUTPUT_GENERATE = 60
-_OUTPUT_REWRITE = 61
-_OUTPUT_ABORT = 62
+_OUTPUT_GENERATE = 7448
+_OUTPUT_REWRITE = 7449
+_OUTPUT_ABORT = 7450
 
-# agent_activity_classifier output, one-hot at [68:72]
-_AGENT_ACT_PRODUCTIVE = 68
-_AGENT_ACT_NORMAL = 69
-_AGENT_ACT_STRUGGLING = 70
+# agent_activity_classifier output, one-hot at [7456:7460]
+_AGENT_ACT_PRODUCTIVE = 7456
+_AGENT_ACT_NORMAL = 7457
+_AGENT_ACT_STRUGGLING = 7458
 
 # ai_load_bridge writes the same 4-byte tier vector twice starting at 272.
+# This is the one localAI write OUTSIDE the reserved band, deliberately: it is a
+# bridge into the corpus AI machine input window, not localAI internal state.
 # A single 4-byte probe at the first window is enough to decode the tier.
 #
 # Was six times at 120. The AI machine inputs moved to [256:280] and the first
@@ -189,11 +191,12 @@ _AGENT_ACT_STRUGGLING = 70
 # localAIStack interconnect is wired in, in the manner of the OpenClaw path.
 _AI_LOAD_TIER_OFFSET = 272
 
-# personal_health_baseline machine — [186:190] input, [190:194] output.
-# Free region: AI DC machine outputs end at 186; next allocation starts here.
+# personal_health_baseline machine — [7574:7578] input, [7578:7582] output.
+# Reserved band [7440:7952] — localaistack-integration, declared in
+# RealityEngine_Machines domains/domain-registry.json rangePolicy.reservedRanges.
 _HEALTH_MACHINE_PATH = _MACHINES_DIR / "personal_health_baseline.json"
 _HEALTH_MACHINE_NAME = "localai/personal_health_baseline"
-_HEALTH_OUTPUT_OFFSET = 190  # one-hot: [thriving, balanced, watch, attention]
+_HEALTH_OUTPUT_OFFSET = 7578  # one-hot: [thriving, balanced, watch, attention]
 
 # Band thresholds for push_health_signal() normalization — must stay aligned
 # with the sensor region descriptions in personal_health_baseline.json.
@@ -202,15 +205,15 @@ _HR_HIGH_BPM = 100.0
 _HRV_OK_MS = 30.0  # SDNN ≥ 30 ms = healthy recovery
 _SLEEP_OK_HOURS = 6.5
 
-# medication_adherence machine — [194:198] input, [198:202] output.
+# medication_adherence machine — [7582:7586] input, [7586:7590] output.
 _CAREKIT_MACHINE_PATH = _MACHINES_DIR / "medication_adherence.json"
 _CAREKIT_MACHINE_NAME = "localai/medication_adherence"
-_CAREKIT_OUTPUT_OFFSET = 198  # one-hot: [adherent, partial, lapsed, concern]
+_CAREKIT_OUTPUT_OFFSET = 7586  # one-hot: [adherent, partial, lapsed, concern]
 
-# session_health_context bistable carry — reads [190:194], writes [202:206].
+# session_health_context bistable carry — reads [7578:7582], writes [7590:7594].
 _HEALTH_CARRY_MACHINE_PATH = _MACHINES_DIR / "session_health_context.json"
 _HEALTH_CARRY_MACHINE_NAME = "localai/session_health_context"
-_HEALTH_CARRY_OFFSET = 202  # carry: [last_thriving, last_balanced, last_watch, last_attention]
+_HEALTH_CARRY_OFFSET = 7590  # carry: [last_thriving, last_balanced, last_watch, last_attention]
 
 # ── Session context carry machine definitions ─────────────────────────────────
 
@@ -222,13 +225,13 @@ _SESSION_MACHINE_DEFS = [
         "path": _MACHINES_DIR / "agent_activity_classifier.json",
         "name": "localai/agent_activity_classifier",
     },
-    # Phase 4b: health carry — reads personal_health_baseline output [190:194], writes carry [202:206]
+    # Phase 4b: health carry — reads personal_health_baseline output [7578:7582], writes carry [7590:7594]
     {"path": _HEALTH_CARRY_MACHINE_PATH, "name": _HEALTH_CARRY_MACHINE_NAME},
 ]
 
 # Perceptual space indices for session context carry read-back
-_SESSION_RAG_OFFSET = 112  # [last_generate, last_rewrite, last_abort, _]
-_SESSION_AGENT_OFFSET = 116  # [agent_ever_engaged, tools_ever_used, _, _]
+_SESSION_RAG_OFFSET = 7500  # [last_generate, last_rewrite, last_abort, _]
+_SESSION_AGENT_OFFSET = 7504  # [agent_ever_engaged, tools_ever_used, _, _]
 
 _SENSOR_TIMEOUT = httpx.Timeout(1.0)
 _PUSH_TIMEOUT = httpx.Timeout(2.0)
@@ -240,45 +243,45 @@ _PUSH_TIMEOUT = httpx.Timeout(2.0)
 _EXPECTED_MACHINE_OFFSETS = [
     {
         "path": _MACHINE_JSON_PATH,  # rag_corrective_cycle.json
-        "input": {"offset": 52, "length": 8},
-        "output": {"offset": 60, "length": 4},
+        "input": {"offset": 7440, "length": 8},
+        "output": {"offset": 7448, "length": 4},
     },
     {
         "path": _MACHINES_DIR / "session_rag_context.json",
-        "input": {"offset": 60, "length": 4},
-        "output": {"offset": 112, "length": 4},
+        "input": {"offset": 7448, "length": 4},
+        "output": {"offset": 7500, "length": 4},
     },
     {
         "path": _MACHINES_DIR / "session_agent_context.json",
-        "input": {"offset": 104, "length": 16},
-        "output": {"offset": 116, "length": 4},
+        "input": {"offset": 7492, "length": 16},
+        "output": {"offset": 7504, "length": 4},
     },
     {
         "path": _MACHINES_DIR / "ai_load_bridge.json",
-        "input": {"offset": 112, "length": 8},
+        "input": {"offset": 7500, "length": 8},
         "output": {"offset": 272, "length": 8},
     },
     {
         "path": _MACHINES_DIR / "agent_activity_classifier.json",
-        "input": {"offset": 64, "length": 4},
-        "output": {"offset": 68, "length": 4},
+        "input": {"offset": 7452, "length": 4},
+        "output": {"offset": 7456, "length": 4},
     },
     {
         "path": _HEALTH_MACHINE_PATH,  # personal_health_baseline.json
-        "input": {"offset": 186, "length": 4},
-        "output": {"offset": 190, "length": 4},
+        "input": {"offset": 7574, "length": 4},
+        "output": {"offset": 7578, "length": 4},
     },
     # Phase 4a: CareKit medication adherence classifier
     {
         "path": _CAREKIT_MACHINE_PATH,  # medication_adherence.json
-        "input": {"offset": 194, "length": 4},
-        "output": {"offset": 198, "length": 4},
+        "input": {"offset": 7582, "length": 4},
+        "output": {"offset": 7586, "length": 4},
     },
     # Phase 4b: health session carry (reads health output, writes carry)
     {
         "path": _HEALTH_CARRY_MACHINE_PATH,  # session_health_context.json
-        "input": {"offset": 190, "length": 4},
-        "output": {"offset": 202, "length": 4},
+        "input": {"offset": 7578, "length": 4},
+        "output": {"offset": 7590, "length": 4},
     },
 ]
 
@@ -386,20 +389,20 @@ def verify_machine_offsets() -> list[str]:
             )
 
     # Python readback constants must match the rag_corrective_cycle output region
-    if (_OUTPUT_GENERATE, _OUTPUT_REWRITE, _OUTPUT_ABORT) != (60, 61, 62):
+    if (_OUTPUT_GENERATE, _OUTPUT_REWRITE, _OUTPUT_ABORT) != (7448, 7449, 7450):
         mismatches.append(
             f"_OUTPUT_(GENERATE,REWRITE,ABORT)="
             f"({_OUTPUT_GENERATE},{_OUTPUT_REWRITE},{_OUTPUT_ABORT}) "
-            f"does not match rag_corrective_cycle output [60:64]"
+            f"does not match rag_corrective_cycle output [7448:7452]"
         )
-    if _SESSION_RAG_OFFSET != 112:
+    if _SESSION_RAG_OFFSET != 7500:
         mismatches.append(
-            f"_SESSION_RAG_OFFSET={_SESSION_RAG_OFFSET} != 112 (session_rag_context output offset)"
+            f"_SESSION_RAG_OFFSET={_SESSION_RAG_OFFSET} != 7500 (session_rag_context output offset)"
         )
-    if _SESSION_AGENT_OFFSET != 116:
+    if _SESSION_AGENT_OFFSET != 7504:
         mismatches.append(
             f"_SESSION_AGENT_OFFSET={_SESSION_AGENT_OFFSET} "
-            f"!= 116 (session_agent_context output offset)"
+            f"!= 7504 (session_agent_context output offset)"
         )
 
     if mismatches:
@@ -577,11 +580,11 @@ def get_session_context(ps: list) -> dict:
       rag            — "generate" | "rewrite" | "abort" | None
       agent          — {"ever_engaged": bool, "tools_ever_used": bool}
       agent_activity — "productive" | "normal" | "struggling" | None
-                       (output of agent_activity_classifier at [68:72])
+                       (output of agent_activity_classifier at [7456:7460])
       ai_load_tier   — "nominal" | "elevated" | "critical" | None
                        (decoded from the ai_load_bridge projection at [272:276])
       health_state   — "thriving" | "balanced" | "watch" | "attention" | None
-                       (from session_health_context carry at [202:206]; None
+                       (from session_health_context carry at [7590:7594]; None
                         until the first health push this RE session)
     """
 
@@ -614,7 +617,7 @@ def get_session_context(ps: list) -> dict:
 
 
 def _decode_agent_activity(ps: list) -> str | None:
-    """One-hot decode of agent_activity_classifier output at [68:72]."""
+    """One-hot decode of agent_activity_classifier output at [7456:7460]."""
 
     def _safe(idx: int) -> float:
         return ps[idx] if len(ps) > idx else 0.0
@@ -657,7 +660,7 @@ def get_ai_load_tier(ps: list) -> str | None:
 
 def get_health_state(ps: list) -> str | None:
     """
-    Decode the personal_health_baseline output from perceptualSpace[190:194].
+    Decode the personal_health_baseline output from perceptualSpace[7578:7582].
     The four states are one-hot and mutually exclusive; the first ≥ 0.5 wins.
 
     Returns "thriving" | "balanced" | "watch" | "attention" | None.
@@ -680,10 +683,10 @@ def get_health_state(ps: list) -> str | None:
 
 def get_health_state_from_carry(ps: list) -> str | None:
     """
-    Decode health state from the session carry at [202:206].
+    Decode health state from the session carry at [7590:7594].
 
     Differs from get_health_state() which reads the live classifier output at
-    [190:194]. The carry persists between health pushes via PE carry-forward
+    [7578:7582]. The carry persists between health pushes via PE carry-forward
     semantics, so this returns the last-seen health state even when no health
     sensor has been pushed in the current RE session cycle.
 
@@ -709,8 +712,8 @@ def get_current_health_state() -> str | None:
     """
     Read the current health state from the RE perceptual space without
     triggering a new PE push. Uses GET /api/perceptual-simulation/state on the
-    RE, reads the live classifier output at [190:194] first, then falls back
-    to the session carry at [202:206] (populated by session_health_context
+    RE, reads the live classifier output at [7578:7582] first, then falls back
+    to the session carry at [7590:7594] (populated by session_health_context
     bistable machine from prior pushes this RE session).
 
     Returns "thriving" | "balanced" | "watch" | "attention" | None.
@@ -732,7 +735,7 @@ def get_current_health_state() -> str | None:
 
 def get_carekit_state(ps: list) -> str | None:
     """
-    Decode the medication_adherence output from perceptualSpace[198:202].
+    Decode the medication_adherence output from perceptualSpace[7586:7590].
     The four states are one-hot and mutually exclusive; the first ≥ 0.5 wins.
 
     Returns "adherent" | "partial" | "lapsed" | "concern" | None.
@@ -788,7 +791,7 @@ def push_health_signal(
 
 
 def _trigger_push_and_read_health(target: dict | None = None) -> str:
-    """POST /api/push, read personal_health_baseline output at [190:194]."""
+    """POST /api/push, read personal_health_baseline output at [7578:7582]."""
     target = target or bind()
     if target is None:
         return "watch"
@@ -846,7 +849,7 @@ def push_carekit_signal(
 
 
 def _trigger_push_and_read_carekit(target: dict | None = None) -> str:
-    """POST /api/push, read medication_adherence output at [198:202]."""
+    """POST /api/push, read medication_adherence output at [7586:7590]."""
     target = target or bind()
     if target is None:
         return "partial"
@@ -970,7 +973,7 @@ def bind_graph_topology() -> bool:
 
 def push_retrieval_signal(doc_count: int, avg_score: float) -> None:
     """
-    Write retrieval outcome to PE sensor region [52:56] after retrieve() runs.
+    Write retrieval outcome to PE sensor region [7440:7444] after retrieve() runs.
       [0] doc_count normalized   min(count / 10, 1.0)
       [1] avg_relevance_score    clamped to [0, 1]
       [2–3] reserved 0.0
@@ -990,9 +993,9 @@ def push_grading_signal(
     rewrite_count: int,
 ) -> str:
     """
-    Write grading outcome to PE sensor region [56:60], trigger a PE push so
+    Write grading outcome to PE sensor region [7444:7448], trigger a PE push so
     the rag_corrective_cycle machine processes the assembled vector, then read
-    the machine's routing decision from perceptualSpace[60:64].
+    the machine's routing decision from perceptualSpace[7448:7452].
 
       [0] kept / retrieved ratio   [0, 1]
       [1] rewrite_count / 2        [0, 1]  (2 rewrites = max)
@@ -1019,7 +1022,7 @@ def push_agent_activity_signal(
 ) -> dict:
     """
     Agent-side analog of push_grading_signal. Writes an activity vector to the
-    localai_agent_activity sensor at [64:68], triggers a PE push so the
+    localai_agent_activity sensor at [7452:7456], triggers a PE push so the
     agent_activity_classifier can fire on the same cycle, then reads back the
     full session context from perceptualSpace.
 
@@ -1191,7 +1194,7 @@ def _write_sensor(sensor_id: str, values: list[float], target: dict | None = Non
 def _trigger_push_and_read_routing(target: dict | None = None) -> str:
     """
     POST /api/push → PE assembles vector → RE runs machines → return routing.
-    Reads perceptualSpace[60:63] to decode generate/rewrite/abort.
+    Reads perceptualSpace[7448:7451] to decode generate/rewrite/abort.
 
     Takes the target the values were written to. Re-resolving here would let a
     resolver-cache expiry decode one engine's routing from a vector written
