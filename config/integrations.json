@@ -10,7 +10,7 @@
     "and machine input windows in data/machines/. Update all three together.",
     "",
     "ACP completion lands at perceptual space [4210:4214] (4-element region).",
-    "Health sensors land at [186:197] (1-element each)."
+    "Health sensors land at [7574:7585] (1-element each)."
   ],
   "version": "1.0",
   "integrations": [
@@ -49,7 +49,7 @@
       "id": "healthkit:HKQuantityTypeIdentifierHeartRate",
       "sensorId": "localai_health_hr_ok",
       "name": "localai/health/hr_ok",
-      "region": { "offset": 186, "length": 1 },
+      "region": { "offset": 7574, "length": 1 },
       "ttlMs": 300000,
       "normalize": { "mode": "passthrough", "clamp": true },
       "_comment": "HR in [60,100] bpm → 1.0, else 0.0 (iOS bridge pre-computes band)"
@@ -58,7 +58,7 @@
       "id": "healthkit:HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
       "sensorId": "localai_health_hrv_ok",
       "name": "localai/health/hrv_ok",
-      "region": { "offset": 187, "length": 1 },
+      "region": { "offset": 7575, "length": 1 },
       "ttlMs": 900000,
       "normalize": { "mode": "passthrough", "clamp": true },
       "_comment": "SDNN >= 30 ms → 1.0, else 0.0 (iOS bridge pre-computes band)"
@@ -67,7 +67,7 @@
       "id": "healthkit:HKCategoryTypeIdentifierSleepAnalysis",
       "sensorId": "localai_health_sleep_ok",
       "name": "localai/health/sleep_ok",
-      "region": { "offset": 188, "length": 1 },
+      "region": { "offset": 7576, "length": 1 },
       "ttlMs": 86400000,
       "normalize": { "mode": "passthrough", "clamp": true },
       "_comment": "Total sleep >= 6.5 h → 1.0, else 0.0 (iOS bridge aggregates stages)"
@@ -76,7 +76,7 @@
       "id": "carekit-localai-med",
       "sensorId": "localai_carekit_med_adherence",
       "name": "localai/carekit/med_adherence",
-      "region": { "offset": 194, "length": 1 },
+      "region": { "offset": 7582, "length": 1 },
       "ttlMs": 3600000,
       "normalize": { "mode": "passthrough", "clamp": true },
       "extract": { "type": "json", "pointer": "/adherence" }
@@ -85,7 +85,7 @@
       "id": "carekit-localai-task",
       "sensorId": "localai_carekit_task_completion",
       "name": "localai/carekit/task_completion",
-      "region": { "offset": 195, "length": 1 },
+      "region": { "offset": 7583, "length": 1 },
       "ttlMs": 86400000,
       "normalize": { "mode": "passthrough", "clamp": true },
       "extract": { "type": "json", "pointer": "/completed" }
@@ -94,7 +94,7 @@
       "id": "carekit-localai-symptom",
       "sensorId": "localai_carekit_symptom_ok",
       "name": "localai/carekit/symptom_ok",
-      "region": { "offset": 196, "length": 1 },
+      "region": { "offset": 7584, "length": 1 },
       "ttlMs": 86400000,
       "normalize": { "mode": "passthrough", "clamp": true },
       "extract": { "type": "json", "pointer": "/symptomOk" }

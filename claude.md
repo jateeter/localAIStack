@@ -60,8 +60,11 @@ make model-pull ID=<model-id>  # pull a registered model
   corpus gates never see them. `docs/MACHINE_CONTRACT.md` records that decision
   and the two CI gates that stand in for those gates: canonical-schema
   validation, and region reconciliation against `region-allocation.json`. They
-  write `[52:280]`; the corpus footprint starts at 1731. Moving a region is a
-  contract change, not an edit.
+  write `[7440:7594]`, inside the `localaistack-integration` band reserved for
+  them in `RealityEngine_Machines domains/domain-registry.json`. The one
+  exception is `ai_load_bridge`'s output at `[272:280]`, a deliberate bridge into
+  the corpus AI machine input window. Moving a region is a contract change, not
+  an edit.
 - **PE sources are declared inactive and activated by their first value.** An
   active source contributes its region to every vector the PE assembles, so
   registering active changes what an engine perceives before any localAI data

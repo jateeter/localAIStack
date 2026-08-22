@@ -6,7 +6,7 @@ Two layers of coverage:
   (1) Offset-drift guard — verifies the machine JSON files checked into
       data/machines/ agree with the Python constants in reality_bridge.
       This is a pure structural check; any byte-offset move (like the one
-      in v1.6 relocating localAI to [52:64]/[104:120]) that forgets to update
+      in v1.6 relocating localAI to [7440:7452]/[7492:7508]) that forgets to update
       either side will fail here instead of silently producing wrong routing
       at runtime.
 
@@ -184,10 +184,13 @@ class _FakePEREClient:
             # that offset here is how this fixture silently stopped covering it
             # when the window moved (jateeter/localAIStack#48).
             tier_offset = reality_bridge._AI_LOAD_TIER_OFFSET
-            ps = [0.0] * (tier_offset + 8)
-            ps[60] = 1.0  # rag_corrective_cycle.generate
-            ps[68] = 1.0  # agent_activity_classifier.productive
-            ps[112] = 1.0  # session_rag.last_generate carry
+            # The vector must reach BOTH the bridge lane at [272:280] and the
+            # reserved band the rest of the machines moved into, and those are no
+            # longer the same end of the vector.
+            ps = [0.0] * max(tier_offset + 8, reality_bridge._HEALTH_CARRY_OFFSET + 4)
+            ps[reality_bridge._OUTPUT_GENERATE] = 1.0  # rag_corrective_cycle.generate
+            ps[reality_bridge._AGENT_ACT_PRODUCTIVE] = 1.0  # agent_activity_classifier.productive
+            ps[reality_bridge._SESSION_RAG_OFFSET] = 1.0  # session_rag.last_generate carry
             for i in range(2):  # ai_load_bridge writes two 4-byte windows
                 base = tier_offset + i * 4
                 ps[base + 0] = 0.15
@@ -216,16 +219,16 @@ def fake_client(monkeypatch):
 
 
 def test_get_session_context_decodes_rag_carry():
-    ps = [0.0] * 256
-    ps[112] = 1.0
+    ps = [0.0] * 7680
+    ps[7500] = 1.0
     assert reality_bridge.get_session_context(ps)["rag"] == "generate"
 
-    ps = [0.0] * 256
-    ps[113] = 1.0
+    ps = [0.0] * 7680
+    ps[7501] = 1.0
     assert reality_bridge.get_session_context(ps)["rag"] == "rewrite"
 
-    ps = [0.0] * 256
-    ps[114] = 1.0
+    ps = [0.0] * 7680
+    ps[7502] = 1.0
     assert reality_bridge.get_session_context(ps)["rag"] == "abort"
 
     # Short ps returns None without raising
@@ -233,14 +236,14 @@ def test_get_session_context_decodes_rag_carry():
 
 
 def test_get_session_context_decodes_agent_flags():
-    ps = [0.0] * 256
-    ps[116] = 1.0  # agent_ever_engaged
-    ps[117] = 0.0  # tools_ever_used
+    ps = [0.0] * 7680
+    ps[7504] = 1.0  # agent_ever_engaged
+    ps[7505] = 0.0  # tools_ever_used
     ctx = reality_bridge.get_session_context(ps)
     assert ctx["agent"]["ever_engaged"] is True
     assert ctx["agent"]["tools_ever_used"] is False
 
-    ps[117] = 1.0
+    ps[7505] = 1.0
     ctx = reality_bridge.get_session_context(ps)
     assert ctx["agent"]["tools_ever_used"] is True
 
@@ -404,19 +407,19 @@ def test_get_ai_load_tier_none_on_short_ps():
 @pytest.mark.parametrize(
     ("offset", "expected"),
     [
-        (68, "productive"),
-        (69, "normal"),
-        (70, "struggling"),
+        (7456, "productive"),
+        (7457, "normal"),
+        (7458, "struggling"),
     ],
 )
 def test_session_context_decodes_agent_activity(offset, expected):
-    ps = [0.0] * 256
+    ps = [0.0] * 7680
     ps[offset] = 1.0
     assert reality_bridge.get_session_context(ps)["agent_activity"] == expected
 
 
 def test_session_context_agent_activity_none_when_classifier_silent():
-    ps = [0.0] * 256
+    ps = [0.0] * 7680
     assert reality_bridge.get_session_context(ps)["agent_activity"] is None
 
 
@@ -434,7 +437,7 @@ def test_drift_guard_rejects_drifted_agent_sensor(monkeypatch):
     bad_sensors = [dict(s) for s in reality_bridge._RAG_SENSORS]
     for s in bad_sensors:
         if s["sensorId"] == "localai_agent_activity":
-            s["region"] = {"offset": 200, "length": 4}  # outside [64:68]
+            s["region"] = {"offset": 7588, "length": 4}  # outside [7452:7456]
     monkeypatch.setattr(reality_bridge, "_RAG_SENSORS", bad_sensors)
 
     mismatches = reality_bridge.verify_machine_offsets()
