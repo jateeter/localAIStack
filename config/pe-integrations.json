@@ -8,7 +8,7 @@
     "This file defines the PE source mappings that route iOS HealthKit and CareKit",
     "payloads to the correct perceptual space regions for localAIStack machines.",
     "",
-    "Wire format matches RealityEngine_AI TypeScript PE (server.ts integration registry).",
+    "Wire format matches the Manager TypeScript PE (server.ts integration registry).",
     "Source mapping IDs follow PE conventions:",
     "  HealthKit: 'healthkit:<HKTypeIdentifier>'",
     "  CareKit:   'carekit-localai-<metric>'",

@@ -83,11 +83,11 @@ services:
 
   # ── Vector Database (Unified) ────────────────────────────────────────────────
   # This Qdrant instance is the unified vector store for both localAIStack and
-  # RealityEngine_AI.  Exposed on host ports 4333 (REST) / 4334 (gRPC).
+  # the RealityEngine engines.  Exposed on host ports 4333 (REST) / 4334 (gRPC).
   # Collections:
   #   localai_docs     — document embeddings (dim = ${EMBED_DIM}, ternary-bonsai:4 by default)
   #   reality-vectors  — RE perceptual vectors, same dim (auto-created by RE on startup)
-  # RealityEngine_AI connects via host.docker.internal:4333 from its Docker network.
+  # Engines connect via host.docker.internal:4333 from their Docker network.
   qdrant:
     image: qdrant/qdrant:v1.14.1
     container_name: localai_qdrant

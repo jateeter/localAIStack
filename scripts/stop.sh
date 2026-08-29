@@ -10,9 +10,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 # ── Docker services ───────────────────────────────────────────────────────────
-# NOTE: This stops Qdrant, which is also the unified vector store for RealityEngine_AI.
+# NOTE: This stops Qdrant, which is also the unified vector store for the engines.
 #       Stop the Reality Engine first if it is running:
-#         cd ../RealityEngine_AI && ./scripts/stop.sh
+#         cd ../RealityEngine_CI && ./stopUniverse.sh
 info "Stopping Docker services (Qdrant, Redis, API, WebUI, Loki, Grafana)..."
 docker compose down
 ok "Docker services stopped"
@@ -39,5 +39,5 @@ echo ""
 echo -e "${GREEN}localAIStack stopped.${NC}"
 echo "  Data persists in ./volumes/  — run ./scripts/start.sh to resume."
 echo "  Qdrant (unified vector store) is now offline."
-echo "  If RealityEngine_AI is running, restart it after: cd ../RealityEngine_AI && ./scripts/start.sh"
+echo "  If the RealityEngine universe is running, restart it after: cd ../RealityEngine_CI && ./startUniverse.sh"
 echo ""

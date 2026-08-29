@@ -61,12 +61,12 @@ def test_verify_machine_offsets_catches_drift(tmp_path, monkeypatch):
     )
 
 
-# The canonical AI machines live in the corpus. This used to read
-# RealityEngine_AI/examples/machines — a repo outside the focus set that CI never
-# checks out, so the test skipped everywhere except a workstation that happened
-# to have it, and the drift in jateeter/localAIStack#48 went unseen for as long
-# as it did. RealityEngine_Machines is a focus repo and is checked out by the
-# local regression lane.
+# The canonical AI machines live in the corpus. This used to read a deprecated
+# TypeScript prototype's examples/machines — a repo outside the focus set that
+# CI never checks out, so the test skipped everywhere except a workstation that
+# happened to have it, and the drift in jateeter/localAIStack#48 went unseen for
+# as long as it did. RealityEngine_Machines is a focus repo and is checked out
+# by the local regression lane.
 _AI_MACHINE_DIR = (
     pathlib.Path(__file__).resolve().parents[4]
     / "RealityEngine_Machines"
