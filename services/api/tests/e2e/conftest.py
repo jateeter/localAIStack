@@ -137,7 +137,7 @@ def live_api(api_url: str, e2e_timeout: int) -> str:
 def live_pe(pe_url: str, e2e_timeout: int) -> str:
     """Skip the test if the Perception Engine is not reachable."""
     if not _wait_for_http(f"{pe_url}/api/sources", e2e_timeout, "PE"):
-        pytest.skip(f"PE not reachable at {pe_url} (set PE_URL or start RealityEngine_AI PE)")
+        pytest.skip(f"PE not reachable at {pe_url} (set PE_URL or start a PE)")
     return pe_url
 
 
@@ -145,7 +145,7 @@ def live_pe(pe_url: str, e2e_timeout: int) -> str:
 def live_re(re_url: str, e2e_timeout: int) -> str:
     """Skip the test if the Reality Engine is not reachable."""
     if not _wait_for_http(f"{re_url}/api/machines", e2e_timeout, "RE"):
-        pytest.skip(f"RE not reachable at {re_url} (set RE_URL or start RealityEngine_AI RE)")
+        pytest.skip(f"RE not reachable at {re_url} (set RE_URL or start an RE)")
     return re_url
 
 

@@ -15,7 +15,7 @@ Phase 4 additions (CareKit + health carry):
   → session_health_context carry persists health state at [202:206]
 
 Run locally (all services must be running):
-  # Start PE (port 3004) and RE (port 3000) from RealityEngine_AI
+  # Start PE (port 3004) and RE (port 3000) from RealityEngine_CI/startUniverse.sh
   # Start localAI stack: docker compose up -d  OR  uvicorn main:app ...
   pytest services/api/tests/e2e/test_health_pipeline.py --live -v
 
