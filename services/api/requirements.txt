@@ -34,4 +34,4 @@ strawberry-graphql[fastapi]==0.324.0
 httpx==0.28.1
 tenacity==9.1.4
 structlog==26.1.0
-python-dotenv==1.2.2
+python-dotenv==1.2.3
