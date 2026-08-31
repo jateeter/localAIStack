@@ -22,7 +22,7 @@ redis==7.4.1
 langgraph-checkpoint-redis==0.5.2
 
 # Document loaders
-pypdf==6.16.1
+pypdf==6.16.2
 unstructured==0.25.2
 python-docx==1.2.0
 markdown==3.10.3
