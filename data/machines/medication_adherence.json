@@ -157,11 +157,11 @@
           "description": "Fires when all three compliance metrics are in their good range. Full care plan adherence — no action needed.",
           "output": "[1,0,0,0] — adherent"
         },
-        "vectors": [
+        "events": [
           {
             "id": "carekit-adherent-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 1.0,
@@ -181,7 +181,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "carekit-adherent-out",
                 "vector": [
@@ -212,11 +212,11 @@
           "description": "Fires when medication is being taken but care plan tasks are falling behind. Symptom status is a wildcard — this is purely a task-adherence signal.",
           "output": "[0,1,0,0] — partial"
         },
-        "vectors": [
+        "events": [
           {
             "id": "carekit-partial-task-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 1.0,
@@ -237,7 +237,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "carekit-partial-task-out",
                 "vector": [
@@ -268,11 +268,11 @@
           "description": "Fires when medication is being taken and tasks are complete, but the user has reported symptoms. Strictly exclusive from partial-task (task is HIGH here).",
           "output": "[0,1,0,0] — partial"
         },
-        "vectors": [
+        "events": [
           {
             "id": "carekit-partial-symptom-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 1.0,
@@ -292,7 +292,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "carekit-partial-symptom-out",
                 "vector": [
@@ -323,11 +323,11 @@
           "description": "Fires when medication has been missed but the user has not reported symptoms — a missed-dose window without clinical escalation. Task completion is a wildcard.",
           "output": "[0,0,1,0] — lapsed"
         },
-        "vectors": [
+        "events": [
           {
             "id": "carekit-lapsed-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.0,
@@ -348,7 +348,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "carekit-lapsed-out",
                 "vector": [
@@ -379,11 +379,11 @@
           "description": "Fires when medication has been missed AND the user has reported symptoms — the highest-priority state. Task completion is a wildcard.",
           "output": "[0,0,0,1] — concern"
         },
-        "vectors": [
+        "events": [
           {
             "id": "carekit-concern-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.0,
@@ -404,7 +404,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "carekit-concern-out",
                 "vector": [
@@ -434,7 +434,7 @@
         "name": "Full adherence — adherent",
         "pattern": "med=1.0, task=1.0, symptom=1.0 → adherent",
         "description": "All three metrics in good range. carekit-adherent fires [1,0,0,0].",
-        "vectors": [
+        "events": [
           [
             1.0,
             1.0,
@@ -451,7 +451,7 @@
         "name": "Tasks incomplete — partial",
         "pattern": "med=1.0, task=0.2, symptom=1.0 → partial",
         "description": "Medication taken but task completion is 20%. carekit-partial-task fires [0,1,0,0].",
-        "vectors": [
+        "events": [
           [
             1.0,
             0.2,
@@ -468,7 +468,7 @@
         "name": "Symptoms reported — partial",
         "pattern": "med=1.0, task=1.0, symptom=0.0 → partial",
         "description": "Medication and tasks compliant but symptom check-in flagged. carekit-partial-symptom fires [0,1,0,0].",
-        "vectors": [
+        "events": [
           [
             1.0,
             1.0,
@@ -485,7 +485,7 @@
         "name": "Missed doses, no symptoms — lapsed",
         "pattern": "med=0.2, task=any, symptom=1.0 → lapsed",
         "description": "Only 20% of doses taken but no symptom escalation. carekit-lapsed fires [0,0,1,0].",
-        "vectors": [
+        "events": [
           [
             0.2,
             0.5,
@@ -502,7 +502,7 @@
         "name": "Missed doses with symptoms — concern",
         "pattern": "med=0.0, task=any, symptom=0.0 → concern",
         "description": "No doses taken and symptoms reported. carekit-concern fires [0,0,0,1].",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.3,

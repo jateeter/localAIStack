@@ -142,11 +142,11 @@
           "description": "Fires when all three health band sensors are in their nominal range. The most positive state — no action warranted.",
           "output": "[1,0,0,0] — thriving"
         },
-        "vectors": [
+        "events": [
           {
             "id": "health-thriving-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 1.0,
@@ -166,7 +166,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "health-thriving-out",
                 "vector": [
@@ -197,11 +197,11 @@
           "description": "Fires when heart rate and HRV are both nominal but sleep duration is below target. Vitals are healthy but rest is lacking — a gentle nudge toward better sleep hygiene.",
           "output": "[0,1,0,0] — balanced"
         },
-        "vectors": [
+        "events": [
           {
             "id": "health-balanced-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 1.0,
@@ -221,7 +221,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "health-balanced-out",
                 "vector": [
@@ -252,11 +252,11 @@
           "description": "Fires when heart rate is nominal but HRV indicates poor recovery. Sleep may be anything. Suggests lighter activity and recovery focus today.",
           "output": "[0,0,1,0] — watch"
         },
-        "vectors": [
+        "events": [
           {
             "id": "health-watch-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 1.0,
@@ -277,7 +277,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "health-watch-out",
                 "vector": [
@@ -308,11 +308,11 @@
           "description": "Fires when heart rate is outside the nominal [60, 100] bpm band. This is the highest-priority state — cardiovascular signal warrants a health check-in regardless of HRV or sleep.",
           "output": "[0,0,0,1] — attention"
         },
-        "vectors": [
+        "events": [
           {
             "id": "health-attention-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.0,
@@ -334,7 +334,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "health-attention-out",
                 "vector": [
@@ -364,7 +364,7 @@
         "name": "All nominal — thriving",
         "pattern": "hr=in-range, hrv=good, sleep=sufficient → thriving",
         "description": "80 bpm (hr.ok=1.0), HRV=45ms (hrv.ok=1.0), sleep=7.5h (sleep.ok=1.0). All three sensors HIGH. Should assert thriving [1,0,0,0].",
-        "vectors": [
+        "events": [
           [
             1.0,
             1.0,
@@ -382,7 +382,7 @@
         "name": "Good vitals, poor sleep — balanced",
         "pattern": "hr=in-range, hrv=good, sleep=insufficient → balanced",
         "description": "75 bpm (hr.ok=1.0), HRV=38ms (hrv.ok=1.0), sleep=5.5h (sleep.ok=0.0). HR and HRV nominal but sleep below 6.5h target. Should assert balanced [0,1,0,0].",
-        "vectors": [
+        "events": [
           [
             1.0,
             1.0,
@@ -400,7 +400,7 @@
         "name": "HR nominal but poor recovery — watch",
         "pattern": "hr=in-range, hrv=low, sleep=any → watch",
         "description": "70 bpm (hr.ok=1.0), HRV=18ms (hrv.ok=0.0), sleep=6.0h (sleep.ok=0.0). HR fine but HRV signals poor recovery. Should assert watch [0,0,1,0].",
-        "vectors": [
+        "events": [
           [
             1.0,
             0.0,
@@ -418,7 +418,7 @@
         "name": "HR out of range — attention",
         "pattern": "hr=out-of-band, hrv=any, sleep=any → attention",
         "description": "105 bpm (hr.ok=0.0 — above 100bpm ceiling), HRV and sleep irrelevant. Heart rate flag is highest priority. Should assert attention [0,0,0,1].",
-        "vectors": [
+        "events": [
           [
             0.0,
             1.0,

@@ -118,11 +118,11 @@
           "trigger": "ps[112] HIGH",
           "aiLoadTier": "nominal"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-ailb-nominal",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 1.0,
@@ -164,7 +164,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "out-ailb-nominal",
                 "vector": [
@@ -195,11 +195,11 @@
           "trigger": "ps[113] HIGH",
           "aiLoadTier": "elevated"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-ailb-elevated",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.5,
@@ -241,7 +241,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "out-ailb-elevated",
                 "vector": [
@@ -272,11 +272,11 @@
           "trigger": "ps[114] HIGH",
           "aiLoadTier": "critical"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-ailb-critical",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.5,
@@ -318,7 +318,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "out-ailb-critical",
                 "vector": [
@@ -347,7 +347,7 @@
         "name": "Generate carry → nominal AI projection",
         "pattern": "[1,0,0,0,0,0,0,0] → AI nominal",
         "description": "session_rag last_generate HIGH fires ailb-generate-nominal.",
-        "vectors": [
+        "events": [
           [
             1.0,
             0.0,
@@ -364,7 +364,7 @@
         "name": "Rewrite carry → elevated AI projection",
         "pattern": "[0,1,0,0,0,0,0,0] → AI elevated",
         "description": "session_rag last_rewrite HIGH fires ailb-rewrite-elevated.",
-        "vectors": [
+        "events": [
           [
             0.0,
             1.0,
@@ -381,7 +381,7 @@
         "name": "Abort carry → critical AI projection",
         "pattern": "[0,0,1,0,0,0,0,0] → AI critical",
         "description": "session_rag last_abort HIGH fires ailb-abort-critical.",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.0,

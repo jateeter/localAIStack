@@ -109,7 +109,7 @@
           "trigger": "ps[104] HIGH AND ps[117] HIGH",
           "carryOutput": "[1, 1, 0, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-agent-prior-tools",
             "isInitial": true,
@@ -193,8 +193,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "out-sess-agent-prior-tools",
                 "vector": [
@@ -224,7 +224,7 @@
           "trigger": "ps[104] HIGH AND ps[117] LOW",
           "carryOutput": "[1, 0, 0, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-agent-first",
             "isInitial": true,
@@ -308,8 +308,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "out-sess-agent-first",
                 "vector": [
@@ -339,7 +339,7 @@
           "trigger": "ps[106] HIGH AND ps[116] HIGH",
           "carryOutput": "[1, 1, 0, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-tools-after-agent",
             "isInitial": true,
@@ -423,8 +423,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "out-sess-tools-after-agent",
                 "vector": [
@@ -454,7 +454,7 @@
           "trigger": "ps[106] HIGH AND ps[116] LOW",
           "carryOutput": "[0, 1, 0, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-tools-first",
             "isInitial": true,
@@ -538,8 +538,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "out-sess-tools-first",
                 "vector": [
@@ -567,7 +567,7 @@
         "name": "Agent starts for the first time",
         "pattern": "agent_active=0.9, all others=0 (fresh session, no prior carry)",
         "description": "Agent node begins executing. No prior carry. sess-agent-first fires → agent_ever_engaged=1, tools_ever_used=0. Carry persists to next push.",
-        "vectors": [
+        "events": [
           [
             0.9,
             0.0,
@@ -597,7 +597,7 @@
         "name": "Tools called after agent (normal ReAct turn)",
         "pattern": "tools_active=0.9, agent_carry=1.0 (feedback), tools_carry=0.0",
         "description": "Agent already ran (carry set), now tools node is executing. sess-tools-after-agent fires → both agent_ever_engaged=1 and tools_ever_used=1 written. Carry does not regress.",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.0,
@@ -627,7 +627,7 @@
         "name": "Agent fires again after tools (carry non-regression)",
         "pattern": "agent_active=0.9, both carries already set (agent=1.0, tools=1.0)",
         "description": "A second LLM step in the same ReAct loop. Both carries already HIGH. sess-agent-and-prior-tools fires → [1,1,0,0] — no regression in tools carry.",
-        "vectors": [
+        "events": [
           [
             0.9,
             0.0,
@@ -657,7 +657,7 @@
         "name": "Bistable hold — between agent turns",
         "pattern": "all signals 0.0 (no agent node active this push cycle)",
         "description": "No agent or tools node is executing this cycle (e.g., RAG-only push). No sequence fires. PE carry-forward holds whatever carry was written in the prior agent cycle.",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.0,
