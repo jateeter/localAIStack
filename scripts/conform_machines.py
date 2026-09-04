@@ -51,11 +51,6 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parents[1]
 MACHINE_DIR = REPO / "data" / "machines"
 
-# Both schema spellings resolve while RealityEngine_CI#220 layer 1 is in flight.
-# Shared with the API rather than restated, so the two cannot drift apart.
-sys.path.insert(0, str(REPO / "services" / "api"))
-from core.event_keys import output_events, sequence_events  # noqa: E402
-
 # machineClass is a closed enum in machine-class.schema.json. These assignments
 # follow what each machine does: ai_load_bridge projects one region's signals
 # into another and is the one true bridge; the rest observe a source and assert
@@ -107,11 +102,11 @@ def observed_values(machine: dict) -> set[float]:
     """Every value the machine's own vectors carry — elements and outputs."""
     seen: set[float] = set()
     for sequence in machine.get("sequences") or []:
-        for vector in sequence_events(sequence):
+        for vector in sequence.get("events") or []:
             for element in vector.get("elements") or []:
                 if isinstance(element.get("value"), (int, float)):
                     seen.add(float(element["value"]))
-            for ov in output_events(vector):
+            for ov in vector.get("outputEvents") or []:
                 for value in ov.get("vector") or []:
                     if isinstance(value, (int, float)):
                         seen.add(float(value))
@@ -143,8 +138,8 @@ def bits_per_element(machine: dict) -> int:
 
 def sequence_outputs(sequence: dict) -> list[list[float]]:
     out = []
-    for vector in sequence_events(sequence):
-        for ov in output_events(vector):
+    for vector in sequence.get("events") or []:
+        for ov in vector.get("outputEvents") or []:
             if ov.get("vector") is not None:
                 out.append(ov["vector"])
     return out
