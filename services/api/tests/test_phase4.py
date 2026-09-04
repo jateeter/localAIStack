@@ -221,7 +221,7 @@ def test_carekit_machine_all_sequences_are_initial():
     """All CareKit sequences must have a single isInitial vector (classifier pattern)."""
     machine = _load_carekit_machine()
     for seq in machine["sequences"]:
-        vecs = seq["vectors"]
+        vecs = seq["events"]
         assert len(vecs) == 1, f"{seq['id']}: expected 1 vector, got {len(vecs)}"
         assert vecs[0]["isInitial"] is True, f"{seq['id']}: vector must be isInitial"
 
@@ -243,7 +243,7 @@ def test_carekit_machine_sequences_emit_one_hot_outputs():
         sid = seq["id"]
         if sid not in expected_outputs:
             continue
-        out_vec = seq["vectors"][0]["outputVectors"][0]["vector"]
+        out_vec = seq["events"][0]["outputEvents"][0]["vector"]
         assert out_vec == expected_outputs[sid], (
             f"{sid}: expected output {expected_outputs[sid]}, got {out_vec}"
         )
@@ -256,7 +256,7 @@ def test_carekit_machine_adherent_guards_are_all_high():
     """
     machine = _load_carekit_machine()
     seq = next(s for s in machine["sequences"] if s["id"] == "carekit-adherent")
-    elements = seq["vectors"][0]["elements"]
+    elements = seq["events"][0]["elements"]
     assert elements[0]["value"] == 1.0
     assert elements[1]["value"] == 1.0
     assert elements[2]["value"] == 1.0
@@ -266,7 +266,7 @@ def test_carekit_machine_concern_guards_med_and_symptom_low():
     """carekit-concern: element[0]=LOW (med), element[2]=LOW (symptom)."""
     machine = _load_carekit_machine()
     seq = next(s for s in machine["sequences"] if s["id"] == "carekit-concern")
-    elements = seq["vectors"][0]["elements"]
+    elements = seq["events"][0]["elements"]
     assert elements[0]["value"] == 0.0  # med LOW
     assert elements[2]["value"] == 0.0  # symptom LOW
 
@@ -275,7 +275,7 @@ def test_carekit_machine_lapsed_guards_med_low_symptom_high():
     """carekit-lapsed: element[0]=LOW (med), element[2]=HIGH (symptom_ok)."""
     machine = _load_carekit_machine()
     seq = next(s for s in machine["sequences"] if s["id"] == "carekit-lapsed")
-    elements = seq["vectors"][0]["elements"]
+    elements = seq["events"][0]["elements"]
     assert elements[0]["value"] == 0.0  # med LOW
     assert elements[2]["value"] == 1.0  # symptom HIGH (no symptoms = ok)
 
@@ -284,7 +284,7 @@ def test_carekit_machine_partial_task_guards_med_high_task_low():
     """carekit-partial-task: element[0]=HIGH (med), element[1]=LOW (task)."""
     machine = _load_carekit_machine()
     seq = next(s for s in machine["sequences"] if s["id"] == "carekit-partial-task")
-    elements = seq["vectors"][0]["elements"]
+    elements = seq["events"][0]["elements"]
     assert elements[0]["value"] == 1.0  # med HIGH
     assert elements[1]["value"] == 0.0  # task LOW
 
@@ -293,7 +293,7 @@ def test_carekit_machine_partial_symptom_guards_med_task_high_symptom_low():
     """carekit-partial-symptom: med=HIGH, task=HIGH, symptom=LOW."""
     machine = _load_carekit_machine()
     seq = next(s for s in machine["sequences"] if s["id"] == "carekit-partial-symptom")
-    elements = seq["vectors"][0]["elements"]
+    elements = seq["events"][0]["elements"]
     assert elements[0]["value"] == 1.0  # med HIGH
     assert elements[1]["value"] == 1.0  # task HIGH
     assert elements[2]["value"] == 0.0  # symptom LOW
@@ -626,7 +626,7 @@ def test_session_health_context_all_sequences_are_initial():
     """All carry sequences must be isInitial (bistable flip-flop pattern)."""
     machine = _load_health_carry_machine()
     for seq in machine["sequences"]:
-        vecs = seq["vectors"]
+        vecs = seq["events"]
         assert len(vecs) == 1, f"{seq['id']}: expected 1 vector"
         assert vecs[0]["isInitial"] is True, f"{seq['id']}: must be isInitial"
 
@@ -644,7 +644,7 @@ def test_session_health_context_sequence_outputs_are_one_hot():
         sid = seq["id"]
         if sid not in expected:
             continue
-        out_vec = seq["vectors"][0]["outputVectors"][0]["vector"]
+        out_vec = seq["events"][0]["outputEvents"][0]["vector"]
         assert out_vec == expected[sid], (
             f"{sid}: expected carry output {expected[sid]}, got {out_vec}"
         )

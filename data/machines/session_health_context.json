@@ -108,11 +108,11 @@
           "trigger": "ps[190] HIGH",
           "carryOutput": "[1, 0, 0, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-health-thriving",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 1.0,
@@ -134,7 +134,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "out-sess-health-thriving",
                 "vector": [
@@ -164,11 +164,11 @@
           "trigger": "ps[191] HIGH",
           "carryOutput": "[0, 1, 0, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-health-balanced",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.5,
@@ -190,7 +190,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "out-sess-health-balanced",
                 "vector": [
@@ -220,11 +220,11 @@
           "trigger": "ps[192] HIGH",
           "carryOutput": "[0, 0, 1, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-health-watch",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.5,
@@ -246,7 +246,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "out-sess-health-watch",
                 "vector": [
@@ -276,11 +276,11 @@
           "trigger": "ps[193] HIGH",
           "carryOutput": "[0, 0, 0, 1]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-health-attention",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.5,
@@ -302,7 +302,7 @@
                 "threshold": 0.5
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "out-sess-health-attention",
                 "vector": [
@@ -330,7 +330,7 @@
         "name": "Thriving push — carry latches thriving",
         "pattern": "thriving=1.0, balanced=0, watch=0, attention=0",
         "description": "personal_health_baseline fired thriving this cycle. sess-health-thriving fires, writing [1,0,0,0] to carry. On the next push with no health sensors active, no sequence fires and PE carry-forward holds [1,0,0,0].",
-        "vectors": [
+        "events": [
           [
             1.0,
             0.0,
@@ -347,7 +347,7 @@
         "name": "Watch push — carry latches watch",
         "pattern": "thriving=0, balanced=0, watch=1.0, attention=0",
         "description": "personal_health_baseline fired watch. sess-health-watch fires. Carry persists as [0,0,1,0] until the next health push.",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.0,
@@ -364,7 +364,7 @@
         "name": "Bistable hold — between health pushes",
         "pattern": "all zeros (no health push this cycle)",
         "description": "No health state signals active — the API is processing a chat or agent turn with no health sensor update. None of the four sequences fires. OR arbiter produces no output. PE carry-forward preserves whichever carry was last written.",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.0,

@@ -95,7 +95,7 @@
           "trigger": "ps[60] HIGH",
           "carryOutput": "[1, 0, 0, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-rag-generate",
             "isInitial": true,
@@ -120,8 +120,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "out-sess-rag-generate",
                 "vector": [
@@ -151,7 +151,7 @@
           "trigger": "ps[61] HIGH",
           "carryOutput": "[0, 1, 0, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-rag-rewrite",
             "isInitial": true,
@@ -176,8 +176,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "out-sess-rag-rewrite",
                 "vector": [
@@ -207,7 +207,7 @@
           "trigger": "ps[62] HIGH",
           "carryOutput": "[0, 0, 1, 0]"
         },
-        "vectors": [
+        "events": [
           {
             "id": "vec-sess-rag-abort",
             "isInitial": true,
@@ -232,8 +232,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "out-sess-rag-abort",
                 "vector": [
@@ -261,7 +261,7 @@
         "name": "Direct hit — first-attempt generate",
         "pattern": "generate=0.9, rewrite=0.0, abort=0.0",
         "description": "rag_corrective_cycle fired generate this cycle. sess-rag-generate fires, writing last_generate carry HIGH. On the next push with no RAG call, no sequence fires and PE carry-forward holds [1,0,0,0].",
-        "vectors": [
+        "events": [
           [
             0.9,
             0.0,
@@ -279,7 +279,7 @@
         "name": "Rewrite needed — poor initial retrieval",
         "pattern": "generate=0.0, rewrite=0.9, abort=0.0",
         "description": "rag_corrective_cycle fired rewrite. sess-rag-rewrite fires. Carry persists as [0,1,0,0] until the follow-up cycle produces a generate or abort.",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.9,
@@ -297,7 +297,7 @@
         "name": "Abort — max rewrites exhausted",
         "pattern": "generate=0.0, rewrite=0.0, abort=0.9",
         "description": "rag_corrective_cycle fired abort after 2 rewrites. Carry holds [0,0,1,0] — a persistent signal that the prior session turn could not find sufficient context.",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.0,
@@ -315,7 +315,7 @@
         "name": "Bistable hold — between RAG calls",
         "pattern": "all signals 0.0 (no RAG call this push cycle)",
         "description": "No routing signals are present — the agent is idle or only topology signals are active. None of the three sequences fires. OR arbiter produces no output. PE carry-forward preserves whichever carry was last written. This is the bistable HOLD state.",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.0,

@@ -110,7 +110,7 @@
           "description": "Fires [1,0,0,0] when enough documents were retrieved AND the grader kept the majority. The doc_count guard (threshold 0.1) prevents firing on empty retrieval; the kept_ratio guard (threshold 0.5) ensures most retrieved docs survived grading.",
           "output": "[1,0,0,0] — proceed to generate"
         },
-        "vectors": [
+        "events": [
           {
             "id": "rag-gen-check",
             "isInitial": true,
@@ -154,8 +154,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "rag-gen-output",
                 "vector": [
@@ -184,7 +184,7 @@
           "description": "Fires [0,0,1,0] when the grader rejected most docs AND we have already rewritten the query at least once. Signals the graph to generate with whatever context exists rather than looping further.",
           "output": "[0,0,1,0] — abort rewrite loop"
         },
-        "vectors": [
+        "events": [
           {
             "id": "rag-abort-check",
             "isInitial": true,
@@ -228,8 +228,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "rag-abort-output",
                 "vector": [
@@ -258,7 +258,7 @@
           "description": "Fires [0,1,0,0] when the grader rejected most docs and we have not yet rewritten the query. The query should be rephrased to improve retrieval on the next cycle.",
           "output": "[0,1,0,0] — rewrite query"
         },
-        "vectors": [
+        "events": [
           {
             "id": "rag-rewrite-check",
             "isInitial": true,
@@ -302,8 +302,8 @@
                 "comparatorType": "threshold"
               }
             ],
-            "nextVectorIds": [],
-            "outputVectors": [
+            "nextEventIds": [],
+            "outputEvents": [
               {
                 "id": "rag-rewrite-output",
                 "vector": [
@@ -331,7 +331,7 @@
         "name": "Happy Path — good retrieval, no rewrites",
         "pattern": "doc_count=5, all_kept, rewrite=0 → generate",
         "description": "5 docs retrieved (norm=0.5), all 5 kept (ratio=1.0), first attempt (rewrite_norm=0). Should assert generate [1,0,0,0].",
-        "vectors": [
+        "events": [
           [
             0.5,
             0.7,
@@ -353,7 +353,7 @@
         "name": "Rewrite Path — poor grading, first attempt",
         "pattern": "doc_count=3, none_kept, rewrite=0 → rewrite",
         "description": "3 docs retrieved (norm=0.3) but none passed keyword grading (ratio=0.0), first attempt (rewrite_norm=0). Should assert rewrite [0,1,0,0].",
-        "vectors": [
+        "events": [
           [
             0.3,
             0.6,
@@ -375,7 +375,7 @@
         "name": "Abort Path — poor grading, already rewritten",
         "pattern": "doc_count=2, none_kept, rewrite=1 → abort",
         "description": "2 docs retrieved (norm=0.2), none kept (ratio=0.0), already rewritten once (rewrite_norm=0.5). Should assert abort [0,0,1,0].",
-        "vectors": [
+        "events": [
           [
             0.2,
             0.5,
@@ -397,7 +397,7 @@
         "name": "Generate After Rewrite — docs improved post-rephrase",
         "pattern": "doc_count=4, 80%_kept, rewrite=1 → generate",
         "description": "After one rewrite the revised query found 4 docs (norm=0.4) with 80% passing grading (ratio=0.8). Rewrite_norm=0.5 (1 rewrite done). Should still assert generate — good docs win over rewrite count.",
-        "vectors": [
+        "events": [
           [
             0.4,
             0.75,

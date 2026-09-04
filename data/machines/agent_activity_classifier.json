@@ -110,11 +110,11 @@
           "description": "Fires when the agent has made at least one tool call and errors stay below the midpoint.",
           "output": "[1,0,0,0] — productive"
         },
-        "vectors": [
+        "events": [
           {
             "id": "agact-productive-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 1.0,
@@ -135,7 +135,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "agact-productive-out",
                 "vector": [
@@ -164,11 +164,11 @@
           "description": "Fires when the agent hits repeated tool errors. The reasoning-depth leg is covered by a second initial vector in this sequence so either signal triggers it (OR semantics within sequence via two initial vectors).",
           "output": "[0,0,1,0] — struggling"
         },
-        "vectors": [
+        "events": [
           {
             "id": "agact-struggling-errors",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.5,
@@ -190,7 +190,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "agact-struggling-errors-out",
                 "vector": [
@@ -214,7 +214,7 @@
           {
             "id": "agact-struggling-depth",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.5,
@@ -236,7 +236,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "agact-struggling-depth-out",
                 "vector": [
@@ -266,11 +266,11 @@
           "description": "Fires when tool_calls_norm is LOW — default state when the agent is either idle or just emitting reasoning without tool invocation. Mutually exclusive with productive via the tool_calls_norm split.",
           "output": "[0,1,0,0] — normal"
         },
-        "vectors": [
+        "events": [
           {
             "id": "agact-normal-check",
             "isInitial": true,
-            "nextVectorIds": [],
+            "nextEventIds": [],
             "elements": [
               {
                 "value": 0.0,
@@ -290,7 +290,7 @@
                 "comparatorType": "threshold"
               }
             ],
-            "outputVectors": [
+            "outputEvents": [
               {
                 "id": "agact-normal-out",
                 "vector": [
@@ -318,7 +318,7 @@
         "name": "Productive turn — 2 tool calls, no errors",
         "pattern": "tool_calls=0.4, tool_errors=0.0, reasoning_depth=0.3 → productive",
         "description": "Agent invoked 2 tools (norm=0.4) with no errors and moderate reasoning (3 steps). Should assert productive [1,0,0,0].",
-        "vectors": [
+        "events": [
           [
             0.4,
             0.0,
@@ -336,7 +336,7 @@
         "name": "Struggling turn — repeated tool errors",
         "pattern": "tool_calls=0.6, tool_errors=0.67, reasoning_depth=0.2 → struggling",
         "description": "Agent tried 3 tools but 2 errored (norm=0.67). Should assert struggling [0,0,1,0] via the errors leg.",
-        "vectors": [
+        "events": [
           [
             0.6,
             0.67,
@@ -354,7 +354,7 @@
         "name": "Struggling turn — deep reasoning without tools",
         "pattern": "tool_calls=0.0, tool_errors=0.0, reasoning_depth=0.9 → struggling",
         "description": "Agent has looped through 9 reasoning steps without tool calls — likely stuck. Should assert struggling [0,0,1,0] via the depth leg.",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.0,
@@ -372,7 +372,7 @@
         "name": "Normal turn — no tool calls, shallow reasoning",
         "pattern": "tool_calls=0.0, tool_errors=0.0, reasoning_depth=0.2 → normal",
         "description": "Agent emitted a quick reasoning-only response. Should assert normal [0,1,0,0].",
-        "vectors": [
+        "events": [
           [
             0.0,
             0.0,

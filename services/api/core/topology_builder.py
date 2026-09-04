@@ -27,6 +27,8 @@ session_agent_context can read its 16-byte input contiguously from [7492:7508].
 
 from __future__ import annotations
 
+from core.event_keys import output_events, sequence_events
+
 # Per-graph base offsets.  rag stays at 7464 (no conflicts), agent starts at 7492
 # where DC alert FF outputs used to live (now relocated to [7532:7538]).
 GRAPH_BASE_OFFSETS: dict[str, int] = {
@@ -120,11 +122,11 @@ def _bits_per_element(sequences: list) -> int:
     """
     values: set[float] = set()
     for sequence in sequences:
-        for vector in sequence.get("vectors") or []:
+        for vector in sequence_events(sequence):
             for element in vector.get("elements") or []:
                 if isinstance(element.get("value"), (int, float)):
                     values.add(float(element["value"]))
-            for ov in vector.get("outputVectors") or []:
+            for ov in output_events(vector):
                 for value in ov.get("vector") or []:
                     if isinstance(value, (int, float)):
                         values.add(float(value))
@@ -184,13 +186,13 @@ def build_machine_json(graph_name: str, binding: dict) -> dict:
                     "signal_element": i * BYTES_PER_NODE,
                     "output_bit": i,
                 },
-                "vectors": [
+                "events": [
                     {
                         "id": f"vec-topo-{graph_name}-{node}",
                         "isInitial": True,
                         "elements": elements,
-                        "nextVectorIds": [],
-                        "outputVectors": [
+                        "nextEventIds": [],
+                        "outputEvents": [
                             {
                                 "id": f"out-topo-{graph_name}-{node}",
                                 "vector": output_vector,
@@ -262,7 +264,7 @@ def build_machine_json(graph_name: str, binding: dict) -> dict:
                     "rules": [
                         {
                             "sequenceId": sequence["id"],
-                            "outputMatches": (sequence["vectors"][0].get("outputVectors") or [{}])[
+                            "outputMatches": (output_events(sequence_events(sequence)[0]) or [{}])[
                                 0
                             ].get("vector", []),
                             "ragStatusCode": "GREEN",
@@ -270,8 +272,7 @@ def build_machine_json(graph_name: str, binding: dict) -> dict:
                             "description": sequence.get("name") or sequence["id"],
                         }
                         for sequence in sequences
-                        if sequence.get("vectors")
-                        and (sequence["vectors"][0].get("outputVectors") or [])
+                        if sequence_events(sequence) and output_events(sequence_events(sequence)[0])
                     ],
                 },
             },
