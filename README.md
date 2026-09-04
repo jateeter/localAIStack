@@ -172,7 +172,7 @@ tail -f /tmp/ollama.log
 ## Architecture notes
 
 - **Qdrant is unified** with the Reality Engine stack: both `localai_docs`
-  (document embeddings) and `reality-vectors` (perceptual vectors) live in this
+  (document embeddings) and `reality-events` (perceptual vectors) live in this
   instance.  Any active runtime (CPP, Scala, LSP) connects from its Docker
   network via `host.docker.internal:4333`.
 - **Model metadata** lives in `config/models.registry.json`, mounted into the
