@@ -86,7 +86,8 @@ services:
   # the RealityEngine engines.  Exposed on host ports 4333 (REST) / 4334 (gRPC).
   # Collections:
   #   localai_docs     — document embeddings (dim = ${EMBED_DIM}, ternary-bonsai:4 by default)
-  #   reality-events  — RE perceptual vectors, same dim (auto-created by RE on startup)
+  #   reality-events  — legacy RE perceptual vectors, same dim. The engines no longer
+  #                     read or write Qdrant; nothing creates this collection now.
   # Engines connect via host.docker.internal:4333 from their Docker network.
   qdrant:
     image: qdrant/qdrant:v1.14.1
