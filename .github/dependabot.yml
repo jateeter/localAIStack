@@ -36,6 +36,42 @@ updates:
       timezone: America/Chicago
     open-pull-requests-limit: 5
 
+  # Compose service images (docker-compose.yml at the repo root)
+  #
+  # This entry is why loki drifted unnoticed. The `docker` ecosystem below
+  # covers /services/api — the API image's own Dockerfile base — and nothing
+  # watched the root compose file, so `grafana/loki` moved 2.x -> 3.4.2 by hand
+  # in one commit while `config/loki-config.yml` kept the 2.x `shared_store`
+  # spelling. Loki then rejected its config on every boot and crash-looped
+  # silently for weeks, until `api`'s depends_on turned it into a failed stack
+  # start (#77).
+  #
+  # Pins are kept deliberately. Dependabot needs a resolvable version to
+  # propose a bump against; `:latest` would remove the pin *and* the ability to
+  # track it, which is the opposite of currency — the drift would simply stop
+  # being visible in git.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Chicago
+    groups:
+      observability:
+        patterns:
+          - "grafana/*"
+          - "prom/*"
+    ignore:
+      # Majors reviewed by hand, matching the pip policy above. A major bump of
+      # an image with a mounted config file is a config migration wearing a
+      # version number: loki 2 -> 3 removed `compactor.shared_store`, and no
+      # amount of image currency would have carried config/loki-config.yml
+      # across with it. These land as manual work, not as an automerged PR.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    open-pull-requests-limit: 5
+
   # Docker base images
   - package-ecosystem: docker
     directory: /services/api
