@@ -40,7 +40,16 @@ limits_config:
 
 compactor:
   working_directory: /loki/compactor
-  shared_store: filesystem
+  # `shared_store` was a Loki 2.x compactor field and was removed in 3.x, where
+  # the compactor takes its object store from the schema config and names the
+  # delete store separately. This file kept the 2.x spelling while
+  # docker-compose.yml pins grafana/loki:3.4.2, so Loki refused the config on
+  # every boot — "field shared_store not found in type compactor.Config" — and
+  # crash-looped. Nothing surfaced it because Loki is a logging sidecar, until
+  # `api` (which depends_on it) started failing with "dependency failed to
+  # start: container localai_loki is unhealthy" and took localAIStack's whole
+  # start.sh down with it.
+  delete_request_store: filesystem
   compaction_interval: 10m
   retention_enabled: true
   retention_delete_delay: 2h
