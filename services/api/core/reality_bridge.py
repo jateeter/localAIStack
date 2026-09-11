@@ -156,12 +156,32 @@ _CAREKIT_SENSORS = [
     },
 ]
 
-# MACHINES_DIR is set explicitly in docker-compose.yml to avoid relying on
-# __file__ path arithmetic that breaks when the service/ subtree is mounted
-# at /app (4 parents from /app/core/ overshoots to filesystem root).
+# LOCALAI_MACHINES_DIR, not MACHINES_DIR.
+#
+# This points at *this stack's own* data/machines — rag_corrective_cycle,
+# personal_health_baseline, medication_adherence, the session carries. It is not
+# the RealityEngine_Machines corpus and never was.
+#
+# `MACHINES_DIR` means the corpus repository everywhere else in the workspace,
+# and RealityEngine_CI's deploy-validate-agent exports it as such to every child
+# process. Under it, every CareKit test here looked for medication_adherence.json
+# inside RealityEngine_Machines and failed — twelve red tests that pass
+# standalone — until run-all-tests.sh added an `env -u MACHINES_DIR` to paper
+# over it. One name, two meanings, in two repos
+# (RealityEngine_CI/docs/MACHINES_DIR_SWEEP.md).
+#
+# The explicit env var also avoids __file__ path arithmetic, which breaks when
+# the service/ subtree is mounted at /app: four parents from /app/core/
+# overshoots to the filesystem root.
+#
+# MACHINES_DIR is deliberately NOT honoured as a fallback. Keeping it would keep
+# the defect: the only value the surrounding workspace ever injects is the
+# corpus repository, which is the wrong directory, and the built-in default
+# below is already correct for a bare local run. A fallback here would mean the
+# rename changed the name and not the behaviour.
 _MACHINES_DIR = pathlib.Path(
     os.getenv(
-        "MACHINES_DIR",
+        "LOCALAI_MACHINES_DIR",
         str(pathlib.Path(__file__).parent.parent.parent.parent / "data" / "machines"),
     )
 )
