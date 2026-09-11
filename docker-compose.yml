@@ -172,7 +172,10 @@ services:
       # registry instead of silently degrading (RealityEngine_CI#44).
       RE_REGISTRY_URL: "${RE_REGISTRY_URL:-http://host.docker.internal:5999/re-registry.json}"
       RE_SSL_VERIFY: "false"
-      MACHINES_DIR: "/app/data/machines"
+      # This stack's own machines, not the RealityEngine_Machines corpus.
+      # MACHINES_DIR is deliberately not set here: it means the corpus repo
+      # everywhere else in the workspace, and reality_bridge no longer reads it.
+      LOCALAI_MACHINES_DIR: "/app/data/machines"
       # Model registry — config/ is mounted below; without this the loader's
       # repo-root walk overshoots to / because services/api mounts at /app.
       MODELS_REGISTRY_PATH: "/app/config/models.registry.json"
