@@ -1101,9 +1101,7 @@ def push_node_signal(
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 
-def _get_existing_machine_names(
-    client: httpx.Client, re_url: str | None = None
-) -> set | None:
+def _get_existing_machine_names(client: httpx.Client, re_url: str | None = None) -> set | None:
     """Names the engine already holds, or **None** when that could not be read.
 
     `None` and `set()` are different answers and must not be conflated. An
@@ -1128,9 +1126,7 @@ def _get_existing_machine_names(
     recorded as an error, never as an empty set.
     """
     try:
-        resp = client.get(
-            f"{re_url or _re_url()}/api/machines", timeout=_INVENTORY_TIMEOUT
-        )
+        resp = client.get(f"{re_url or _re_url()}/api/machines", timeout=_INVENTORY_TIMEOUT)
         resp.raise_for_status()
         machines = resp.json().get("machines", [])
     except Exception as exc:  # noqa: BLE001 - the caller decides what to do

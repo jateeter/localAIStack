@@ -62,10 +62,15 @@ class _Client:
 
 # ── the read ────────────────────────────────────────────────────────────────
 
+
 def test_unreadable_inventory_is_none_not_empty():
     """`None` and `set()` are different answers and must stay different."""
-    assert rb._get_existing_machine_names(
-        _Client(get_raises=httpx.ReadTimeout("timed out")), "http://re") is None
+    assert (
+        rb._get_existing_machine_names(
+            _Client(get_raises=httpx.ReadTimeout("timed out")), "http://re"
+        )
+        is None
+    )
 
 
 def test_genuinely_empty_inventory_is_an_empty_set():
@@ -75,15 +80,16 @@ def test_genuinely_empty_inventory_is_an_empty_set():
 
 def test_readable_inventory_returns_the_names():
     assert rb._get_existing_machine_names(
-        _Client(names=["localai/a", "localai/b"]), "http://re") == {"localai/a", "localai/b"}
+        _Client(names=["localai/a", "localai/b"]), "http://re"
+    ) == {"localai/a", "localai/b"}
 
 
 # ── the caller ──────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def one_target(monkeypatch):
-    monkeypatch.setattr(rb, "_re_targets",
-                        lambda: [{"re_url": "http://re", "instance": "scala-1"}])
+    monkeypatch.setattr(rb, "_re_targets", lambda: [{"re_url": "http://re", "instance": "scala-1"}])
 
 
 def _run(monkeypatch, client, machines):
@@ -91,8 +97,10 @@ def _run(monkeypatch, client, machines):
     return rb.import_machines_everywhere(machines, "test")
 
 
-MACHINES = [("localai/a", {"machine": {"name": "localai/a"}}),
-            ("localai/b", {"machine": {"name": "localai/b"}})]
+MACHINES = [
+    ("localai/a", {"machine": {"name": "localai/a"}}),
+    ("localai/b", {"machine": {"name": "localai/b"}}),
+]
 
 
 def test_unreadable_inventory_imports_nothing(monkeypatch, one_target):
