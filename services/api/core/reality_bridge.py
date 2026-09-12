@@ -255,6 +255,11 @@ _SESSION_AGENT_OFFSET = 7504  # [agent_ever_engaged, tools_ever_used, _, _]
 
 _SENSOR_TIMEOUT = httpx.Timeout(1.0)
 _PUSH_TIMEOUT = httpx.Timeout(2.0)
+# The machine inventory is ~16.4 MB and is read once per import to decide what
+# is already there. A push deadline is the wrong budget for it: cpp answers in
+# ~1.0s idle, so 2.0s leaves no margin, and the cost of losing that race used to
+# be a full re-import.
+_INVENTORY_TIMEOUT = httpx.Timeout(30.0)
 
 # ── Offset-drift guard ────────────────────────────────────────────────────────
 # Expected perceptualMapping offsets for every machine JSON this bridge owns.
@@ -1096,13 +1101,42 @@ def push_node_signal(
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 
-def _get_existing_machine_names(client: httpx.Client, re_url: str | None = None) -> set:
+def _get_existing_machine_names(client: httpx.Client, re_url: str | None = None) -> set | None:
+    """Names the engine already holds, or **None** when that could not be read.
+
+    `None` and `set()` are different answers and must not be conflated. An
+    empty set means "this engine holds nothing", which makes every machine new
+    and triggers a full import. A failed read means "I do not know", and
+    importing on that basis is the most destructive available interpretation of
+    not knowing.
+
+    This returned `set()` on any exception, so a read that timed out re-imported
+    the entire localai set. On 2026-09-11 that produced six machines resident
+    twice on one engine of three — 1344 against 1338 — and every fold they
+    produced was emitted twice (RealityEngine_Scala#114, which this explains and
+    which is *not* an engine defect).
+
+    The read is not comfortable: `GET /api/machines` is ~16.4 MB and cpp answers
+    in ~1.0s against a 2.0s client timeout, so losing the race is ordinary
+    rather than exotic. `_INVENTORY_TIMEOUT` gives it its own budget, because a
+    corpus listing is not a push and should not inherit a push's deadline.
+
+    Same rule the parity harness already applies to source sets
+    (`RealityEngine_CI/scripts/CLAUDE.md`): a set that could not be read is
+    recorded as an error, never as an empty set.
+    """
     try:
-        resp = client.get(f"{re_url or _re_url()}/api/machines")
+        resp = client.get(f"{re_url or _re_url()}/api/machines", timeout=_INVENTORY_TIMEOUT)
         resp.raise_for_status()
-        return {m.get("name") for m in resp.json().get("machines", [])}
-    except Exception:
-        return set()
+        machines = resp.json().get("machines", [])
+    except Exception as exc:  # noqa: BLE001 - the caller decides what to do
+        log.warning(
+            "reality_bridge.machine_inventory_unreadable",
+            re_url=re_url or _re_url(),
+            error=str(exc),
+        )
+        return None
+    return {m.get("name") for m in machines}
 
 
 def _re_targets() -> list[dict]:
@@ -1135,6 +1169,20 @@ def import_machines_everywhere(machines: list[tuple[str, dict]], label: str) -> 
         try:
             with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
                 existing = _get_existing_machine_names(client, re_url)
+                if existing is None:
+                    # Not knowing what is registered is a reason to do nothing,
+                    # not a reason to import everything. Logged per instance and
+                    # counted against `overall`, so a blind skip cannot pass for
+                    # a successful fan-out — the same reporting discipline the
+                    # docstring above describes for a partial fan-out.
+                    log.warning(
+                        "reality_bridge.import_skipped_unreadable_inventory",
+                        label=label,
+                        instance=instance,
+                        re_url=re_url,
+                    )
+                    overall = False
+                    continue
                 for name, machine_json in machines:
                     if name in existing:
                         skipped += 1
