@@ -1,5 +1,39 @@
 # localAIStack — PE/RE Health Integration Audit & Roadmap
 
+Last reviewed: 2026-09-16
+
+## Status of this document
+
+**This document was substantially wrong until 2026-09-16 and is corrected here
+rather than quietly rewritten.** It declared Phase 4 unstarted while 4a and 4b
+were fully implemented and carried 70 passing tests, and every perceptual-space
+offset it printed was from a layout the code had already migrated off.
+
+A reader who trusted it would have rebuilt work that exists, at offsets that do
+not. The specific corrections are recorded below because a stale roadmap is how
+a reader concludes the opposite of the truth — the same reason
+`localHealthkitBridge/ROADMAP.md` corrects its own status line in place.
+
+| What the document claimed | What the code does |
+|---|---|
+| Phase 4a CareKit "not yet done" | Shipped: machine, sensors, `push_carekit_signal()`, startup wiring, drift guard, tests |
+| Phase 4b session carry "not yet done" | Shipped: `session_health_context.json`, `_HEALTH_CARRY_OFFSET`, carry decode, `get_session_context()` key |
+| Phase 4c PE ingest endpoint is work to do | Already shipped in **all four** PE runtimes, under a **different, canonical** contract |
+| CareKit sensors at 194/195/196, output 198, carry 202 | **7582 / 7583 / 7584**, output **7586**, carry **7590** |
+| Health sensors at `[186:190]` | `[7574:7577]` |
+| `[7594:256] free (50 bytes)` | Arithmetic is impossible; the free tail is `[7594:7952]` = 358 bytes |
+| "85 tests, no services needed" | 211 unit tests collected — 210 pass, 1 skips on a missing optional import |
+| "7 documents in `data/documents/health/`" then lists 9 | 9 files present |
+| `config/integrations.healthkit-localai.json` is the HealthKit config | No runtime loads it, and its schema **cannot be resolved** by any PE ingest handler |
+
+The offsets in the third and fourth rows are not a typo. localAIStack's machines
+moved into the reserved `localaistack-integration` band at `[7440:7952]`
+(declared in `RealityEngine_Machines/domains/domain-registry.json`,
+`rangePolicy.reservedRanges`, 512 bytes, exclusive). This document was never
+updated to follow them.
+
+---
+
 ## Audit: current integration state
 
 ### What is complete
@@ -7,58 +41,94 @@
 | Layer | Component | Status |
 |---|---|---|
 | PE/RE bridge | `core/reality_bridge.py` — sensors, drift guard, push paths | ✅ |
-| RAG pipeline | `rag_graph.py` — retrieve → grade → generate → rewrite | ✅ |
-| Agent pipeline | `agent_graph.py` — agent/tools loop + activity metrics | ✅ |
-| Session carries | 5 machines: rag, agent, ai_load_bridge, classifiers | ✅ |
-| Graph topology | `topology_builder.py` — binds LangGraph nodes to perceptual space | ✅ |
+| RAG pipeline | `graphs/rag_graph.py` — retrieve → grade → generate → rewrite | ✅ |
+| Agent pipeline | `graphs/agent_graph.py` — agent/tools loop + activity metrics | ✅ |
+| Session carries | 5 machines: rag, agent, ai_load_bridge, activity classifier, health carry | ✅ |
+| Graph topology | `core/topology_builder.py` — binds LangGraph nodes to perceptual space | ✅ |
 | GraphQL receiver | `routers/graphql_endpoint.py` — machine → localAI upstream trigger | ✅ |
-| Bridge unit tests | `tests/test_reality_bridge.py` — 20 tests, all passing | ✅ |
-| Perceptual space | [0:186] fully allocated, [7574:256] free (health + future) | ✅ |
-| **Health machine** | `data/machines/personal_health_baseline.json` — [7574:7578]→[7578:7582] | ✅ Phase 1 |
-| **Health bridge** | `push_health_signal()`, `get_health_state()`, `get_current_health_state()`, startup | ✅ Phase 1+2 |
-| **Health sim** | `scripts/simulate_health_push.py` — Yuma/MQTT analog | ✅ Phase 1 |
-| **Health tests** | 58 tests across `test_health_integration.py` + `test_phase2.py` | ✅ Phase 1+2 |
+| Perceptual space | localAI band `[7440:7952]`; allocated through `[7594]`; 358 bytes free | ✅ |
+| **Health machine** | `data/machines/personal_health_baseline.json` — `[7574:7578]`→`[7578:7582]` | ✅ Phase 1 |
+| **Health bridge** | `push_health_signal()`, `get_health_state()`, `get_current_health_state()` | ✅ Phase 1+2 |
+| **Health sim** | `scripts/simulate_health_push.py` — Yuma/MQTT analog, 4 scenarios + cycle | ✅ Phase 1 |
 | **Health-aware chat** | `routers/chat.py` — health context injection, 3-level opt-in | ✅ Phase 2 |
-| **HealthKit config** | `config/integrations.healthkit-localai.json` — HK type → PE sensor mapping | ✅ Phase 2 |
 | **Health RAG** | `health_docs` collection, 9 knowledge docs, `health_search` agent tool | ✅ Phase 2+3 |
 | **Health doc ingest** | `scripts/ingest_health_docs.py` — loads health docs into Qdrant | ✅ Phase 2 |
 | **`/health` bridge status** | `pe` + `re` fields; `bridge` rollup; async parallel checks | ✅ Phase 3 |
-| **Compose integration tests** | `tests/e2e/test_api_integration.py` — 15 tests, `--integration` flag | ✅ Phase 3 |
-| **Live stack tests** | `tests/e2e/test_health_pipeline.py` — 13 tests, `--live` flag | ✅ Phase 3 |
+| **Compose integration tests** | `tests/e2e/test_api_integration.py` — 15 tests, `--integration` | ✅ Phase 3 |
+| **Live stack tests** | `tests/e2e/test_health_pipeline.py` — 21 tests, `--live` | ✅ Phase 3+4 |
 | **CI e2e workflow** | `.github/workflows/e2e.yml` + `docker-compose.ci.yml` override | ✅ Phase 3 |
+| **CareKit machine** | `data/machines/medication_adherence.json` — `[7582:7586]`→`[7586:7590]` | ✅ **Phase 4a** |
+| **CareKit bridge** | `_CAREKIT_SENSORS`, `push_carekit_signal()`, `get_carekit_state()`, `import_carekit_machine()` | ✅ **Phase 4a** |
+| **Health session carry** | `data/machines/session_health_context.json` — `[7578:7582]`→`[7590:7594]` | ✅ **Phase 4b** |
+| **Carry decode** | `get_health_state_from_carry()`, `get_session_context()["health_state"]` | ✅ **Phase 4b** |
+| **Phase 4 tests** | `tests/test_phase4.py` — 70 tests | ✅ **Phase 4a+4b** |
+| **PE ingest endpoints** | HealthKit **and** CareKit ingest + status, shipped in TS / C++ / LSP / Scala PE | ✅ **Phase 4c** (upstream) |
+| **iOS bridge** | `localHealthkitBridge` — 7 modules, 5 test suites, host app, device e2e green | ✅ **Phase 4c** (upstream, M0–M5) |
 
 ### What is not yet done
 
-| Gap | Scope | Phase |
-|---|---|---|
-| CareKit bridge | `localHealthkitBridge` README describes CareKit alongside HealthKit; no machine yet | 4 |
-| Personalisation feedback loop | Health state → RAG re-rank → session carry (health context persists across sessions) | 4 |
+| Gap | Task |
+|---|---|
+| Three competing PE integration registries in `config/` | T2 |
+| Chat still makes a synchronous RE round-trip per request | T4 |
+| `push_carekit_signal()` has no non-test caller | T5 |
+| `/health` does not report CareKit state | T6 |
+| No Swift ↔ Python band-threshold parity check | T7 |
+| iOS bridge and localAI health machine read **different regions** — no end-to-end path | T8 |
+| CareKit sync absent from the Swift bridge (upstream, deferred to its v0.2) | T9 |
+| Personalisation feedback loop — health state → RAG re-rank | T10 |
+| All three health machine JSONs carry stale offsets in their prose metadata | T11 |
 
 ---
 
-## Perceptual space layout (post-Phase 1)
+## Perceptual space layout (verified 2026-09-16)
+
+Authority for every offset below is `services/api/core/reality_bridge.py`
+(`_EXPECTED_MACHINE_OFFSETS`, `_RAG_SENSORS`, `_HEALTH_SENSORS`,
+`_CAREKIT_SENSORS`). The drift guard `verify_machine_offsets()` asserts the
+machine JSON files agree with that table, so the table is the single place an
+offset change must be made.
+
+localAIStack owns the reserved band `[7440:7952]` — `localaistack-integration`,
+exclusive, 512 bytes, declared in
+`RealityEngine_Machines/domains/domain-registry.json`. Machines in this band are
+registered into the RE at runtime by the reality bridge, not loaded from the
+corpus.
 
 ```
-[0:12]    Legacy machines (MultiStep, RSFlipFlop, KleeneStar …)
-[12:60]   DC sensor inputs
-[7448:7468]   DC control signals / rag topology
-[7464:7472]   RAG topology nodes  (4 nodes × 2 bytes)
-[7472:7476]   RAG topology output
-[7476:7492]  DC machines
-[7492:7496] Agent topology nodes (2 × 2 bytes)
-[7496:7500] Agent topology output
-[7500:7504] session_rag_context output  [last_generate, last_rewrite, last_abort, _]
-[7504:7508] session_agent_context output [agent_ever_engaged, tools_ever_used, _, _]
-[7508:7532] ai_load_bridge output (6 × 4D nominal/elevated/critical patterns)
-[7532:7538] DC terminal FF outputs (relocated)
-[7538:7574] AI DC machine outputs (6 machines × 6D)
-[7574:7578] Personal health sensors (hr.ok, hrv.ok, sleep.ok, reserved)   Phase 1
-[7578:7582] personal_health_baseline output (thriving, balanced, watch, attention)   Phase 1
-[7582:7586] CareKit sensors (med_adherence, task_completion, symptom_ok, reserved)   Phase 4a
-[7586:7590] medication_adherence output (adherent, partial, lapsed, concern)   Phase 4a
-[7590:7594] session_health_context carry (thriving, balanced, watch, attention)   Phase 4b
-[7594:256] Free (50 bytes) — stress index, activity level, medication side-effects …
+── localAI reserved band [7440:7952] ────────────────────────────────────────
+[7440:7448]  rag_corrective_cycle input   (rag_retrieval [7440:7444],
+                                           rag_grading   [7444:7448])
+[7448:7452]  rag_corrective_cycle output  → session_rag_context input
+[7452:7456]  agent_activity sensor        → agent_activity_classifier input
+[7456:7460]  agent_activity_classifier output
+[7492:7508]  session_agent_context input
+[7500:7504]  session_rag_context output   [last_generate, last_rewrite, last_abort, _]
+[7504:7508]  session_agent_context output [agent_ever_engaged, tools_ever_used, _, _]
+[7500:7508]  ai_load_bridge input
+[7574:7577]  personal health sensors      hr.ok, hrv.ok, sleep.ok          Phase 1
+[7574:7578]  personal_health_baseline input window
+[7578:7582]  personal_health_baseline output  [thriving, balanced, watch, attention]
+[7582:7585]  CareKit sensors              med_adherence, task_completion, symptom_ok
+[7582:7586]  medication_adherence input window                             Phase 4a
+[7586:7590]  medication_adherence output  [adherent, partial, lapsed, concern]
+[7590:7594]  session_health_context carry [thriving, balanced, watch, attention]
+[7594:7952]  free — 358 bytes                                              Phase 4b
+─────────────────────────────────────────────────────────────────────────────
+
+Outside the band (written by localAI, read elsewhere):
+[272:280]    ai_load_bridge output — narrowed to the two inputs no corpus
+             machine feeds (see jateeter/localAIStack#48)
+[4210:4214]  ACP/OpenClaw completion sensor region
 ```
+
+Two regions belong to other owners and are named here only because they are
+routinely confused with localAI's:
+
+- `[4320:4344]` — the **corpus** HealthKit regions that `localHealthkitBridge`
+  posts into, consumed by `RealityEngine_Machines/machines/domains/health-personal/`.
+  This is **not** localAI's `[7574:7578]`. See T8.
+- `[0:186]` — the pre-migration layout this document used to print. Historical.
 
 ---
 
@@ -78,323 +148,106 @@ yuma.lateraledge.cloud:1883 (MQTT broker)
 ### Health pipeline (personal domain)
 
 ```
-Apple Watch / iPhone (HealthKit)  OR  scripts/simulate_health_push.py
-  → band normalization (HR [60,100], HRV ≥30ms, Sleep ≥6.5h → 0.0/1.0)
+scripts/simulate_health_push.py   (see T8 for the iOS path, which is not yet wired)
+  → band normalization (HR [60,100], HRV ≥30 ms, Sleep ≥6.5 h → 0.0/1.0)
   → PE sensor sources: localai_health_{hr,hrv,sleep}_ok  [7574:7577]
   → PE /api/push → RE /api/perceive
-  → personal_health_baseline machine fires (thriving/balanced/watch/attention)
+  → personal_health_baseline fires (thriving/balanced/watch/attention)
   → perceptualSpace[7578:7582] decoded by get_health_state()
+  → session_health_context latches the state into [7590:7594]
   → POST /graphql  updateProcessState  (GREEN/AMBER/RED)
   → localAI ring buffer, Grafana logs
 ```
 
-Key structural parallels:
-
-| Yuma/MQTT | Health/HealthKit |
+| Yuma/MQTT | Health |
 |---|---|
-| MQTT broker | iOS HealthKit / simulate_health_push.py |
-| Band normalization rules (JSON) | Band thresholds in reality_bridge.py |
-| 16 sensor regions | 3 sensor regions [7574:7577] |
-| AGX001 … AGX032 machines | personal_health_baseline machine |
+| MQTT broker | `simulate_health_push.py` (iOS HealthKit path open — T8) |
+| Band normalization rules (JSON) | Band thresholds in `reality_bridge.py` |
+| 16 sensor regions | 3 sensor regions `[7574:7577]` |
+| AGX001 … AGX032 machines | `personal_health_baseline` + `medication_adherence` |
 | GREEN/AMBER/RED governance | thriving→GREEN, watch→AMBER, attention→RED |
 | Prometheus paging decisions | GraphQL events ring buffer → Loki/Grafana |
 
 ---
 
-## Roadmap
+## Completed phases
 
 ### Phase 1 — Health machine + simulation (DONE, 2026-06-18)
 
-- [x] `data/machines/personal_health_baseline.json` — 4-state CES classifier
-- [x] `_HEALTH_SENSORS` + `push_health_signal()` + `get_health_state()` in `reality_bridge.py`
-- [x] `import_health_machines()` wired into `main.py` startup
-- [x] Health sensors added to `register_sensors()` and `_SENSOR_TO_MACHINE`
-- [x] Health machine added to `_EXPECTED_MACHINE_OFFSETS` drift guard
-- [x] `scripts/simulate_health_push.py` — cycles all four health scenarios
-- [x] `tests/test_health_integration.py` — 20 unit + e2e tests (network-free)
-
-**To verify Phase 1 (PE+RE running):**
-```bash
-python scripts/simulate_health_push.py --scenario cycle
-curl http://localhost:4000/graphql/events
-```
-
-**To run new tests:**
-```bash
-cd services/api && python -m pytest tests/test_health_integration.py -v
-```
-
----
+- `data/machines/personal_health_baseline.json` — 4-state classifier,
+  `PASSTHROUGH` arbiter, `gte` match, input `[7574:7578]`, output `[7578:7582]`
+- `_HEALTH_SENSORS` + `push_health_signal()` + `get_health_state()`
+- `import_health_machines()` wired into `main.py` startup
+- Health machine in the `_EXPECTED_MACHINE_OFFSETS` drift guard
+- `scripts/simulate_health_push.py` — `--scenario thriving|balanced|watch|attention|cycle`
+- `tests/test_health_integration.py` — 22 tests, network-free
 
 ### Phase 2 — Health-aware chat context (DONE, 2026-06-18)
 
-**Goal:** the localAI chat responses are informed by the current health state without the user having to explicitly state their health status.
+- `_inject_health_context()` + `_HEALTH_HINTS` in `routers/chat.py`; three-level
+  opt-in: `ChatRequest.health_context` → `X-Health-Context: enabled` header →
+  `Settings.health_context_enabled`
+- `get_current_health_state()` — reads the RE state; prefers the live classifier
+  output and falls back to the carry
+- `core/vector_store.py` → `get_health_vector_store()` (`health_docs` collection);
+  `health_search` tool in `graphs/agent_graph.py`
+- `scripts/ingest_health_docs.py`
+- `tests/test_phase2.py` — 36 tests
 
-**Tasks:**
+**Correction:** this phase recorded `config/integrations.healthkit-localai.json`
+as its HealthKit config. That file is not loadable by any PE — see T2.
 
-1. **`routers/chat.py` health context injection** ✅
-   - `get_current_health_state()` added to `reality_bridge.py` — reads
-     `GET /api/perceptual-simulation/state` on the RE (no PE push, no side effects).
-   - `_inject_health_context()` + `_HEALTH_HINTS` dict added to `chat.py`.
-   - Three-level opt-in: `ChatRequest.health_context` body field (highest priority) →
-     `X-Health-Context: enabled` header → `Settings.health_context_enabled` global flag.
-   - `config.py` extended with `health_collection_name: str = "health_docs"` and
-     `health_context_enabled: bool = False` (opt-in, override via env var).
+### Phase 3 — Full stack e2e (DONE, 2026-06-18)
 
-2. **HealthKit ingest registration** ✅
-   - `config/integrations.healthkit-localai.json` created — maps 3 HK type identifiers
-     (HeartRate, HRV SDNN, SleepAnalysis) to PE sensors at [7574:7576].
-   - Primary sourceMappings use `normalize.mode = "passthrough"` for TS PE compatibility.
-   - `cppLspRuntimeConfig` block documents native `band` mode for CPP/LSP runtimes.
-   - All `bandThresholds` are locked to the Python constants in `reality_bridge.py`
-     and verified by `test_healthkit_config_band_thresholds_match_python_constants`.
+- `/health` gained `pe` and `re` sub-objects and a top-level `bridge` rollup;
+  PE and RE checks run in parallel via `asyncio.gather`
+- `tests/e2e/conftest.py` — `--integration` / `--live` flags, `live_api`,
+  `live_pe`, `live_re` fixtures, `poll_until()`
+- `tests/e2e/test_api_integration.py` (15) and `tests/e2e/test_health_pipeline.py` (21)
+- `.github/workflows/e2e.yml` + `docker-compose.ci.yml`
+- 9 health knowledge documents in `data/documents/health/`
 
-3. **Health docs RAG collection** ✅
-   - `core/vector_store.py` extended with `get_health_vector_store()` —
-     separate `_health_store` global pointing to `health_docs` collection.
-   - `graphs/agent_graph.py` gains `health_search` tool added to `TOOLS`.
-   - Four health knowledge documents created in `data/documents/health/`:
-     - `hrv_interpretation.md` — SDNN ranges, recovery factors, cognitive impact
-     - `heart_rate_guide.md` — RHR bands, nominal range, causes of HR anomalies
-     - `sleep_quality.md` — duration thresholds, sleep stages, hygiene practices
-     - `wellness_baselines.md` — the four health states and localAI behavior per state
-   - `scripts/ingest_health_docs.py` — loads health docs into `health_docs` collection
-     (run once after standing up Qdrant; `--clear` flag for clean rebuild).
+**Correction:** e2e tests are *collected* in a default run and skip on the
+missing flag; they are not excluded from collection as this document claimed.
 
-**Tests added:** `tests/test_phase2.py` — 36 tests, all passing.
-**Total Phase 1+2 health tests:** 94 passed (36 Phase 2 + 22 Phase 1 health + 36 Phase 1 bridge).
+### Phase 4a — CareKit machine (DONE)
 
-**To verify Phase 2 (services running):**
-```bash
-# Run tests (network-free)
-cd services/api && python -m pytest tests/test_phase2.py tests/test_health_integration.py -v
+`data/machines/medication_adherence.json` — input `[7582:7586]`, output
+`[7586:7590]`, `PASSTHROUGH` arbiter, `gte` match.
 
-# Ingest health docs into Qdrant
-python scripts/ingest_health_docs.py
+**Five sequences, four states.** `partial` is reached by two disjoint guards, so
+the sequence count is 5 while the output alphabet is 4:
 
-# Chat with health context via header
-curl -s http://localhost:4000/chat \
-  -H "Content-Type: application/json" \
-  -H "X-Health-Context: enabled" \
-  -d '{"messages": [{"role": "user", "content": "How should I plan my day?"}]}'
-
-# Or per-request body field
-curl -s http://localhost:4000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "I feel off today"}], "health_context": true}'
-
-# Agent health_search tool
-curl -s http://localhost:4000/graph/agent \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "What does low HRV mean for my recovery?"}]}'
-```
-
----
-
-### Phase 3 — Full stack e2e test (DONE, 2026-06-18)
-
-**Goal:** a single `pytest` run against a live Docker compose stack that validates the entire pipeline end-to-end.
-
-**Deliverables:**
-
-1. **`/health` endpoint — PE/RE bridge status** ✅
-   - New `pe` and `re` sub-objects in `services` response
-   - `pe`: `status`, `sensor_count`, `health_sensors` count
-   - `re`: `status`, `health_state` (live decode from perceptualSpace[7578:7582]), `machine_count`, `ps_length`
-   - New top-level `bridge` field: `"ok"` | `"degraded"` (PE/RE optional — their status doesn't affect `status`)
-   - PE and RE checks run in parallel via `asyncio.gather`
-
-2. **E2E test structure** ✅
-   - `tests/e2e/conftest.py` — `--integration` and `--live` CLI flags; `live_api`, `live_pe`, `live_re` session fixtures; `poll_until()` helper
-   - `tests/e2e/test_api_integration.py` — 15 `@integration` tests, CI-friendly (no PE/RE): `/health` structure, bridge-degraded behaviour, Qdrant/Redis ok, root, docs, graphql/events
-   - `tests/e2e/test_health_pipeline.py` — 13 `@live` tests: sensor registration, machine import, PE→RE push→state for all 4 scenarios, `/health` reports correct state, chat injection, agent health_search, GraphQL trigger, full cycle
-   - All 28 e2e tests collect cleanly; all skip without `--integration`/`--live` flags
-   - E2E excluded from default `pytest` run via `pyproject.toml addopts`
-
-3. **CI workflow** ✅
-   - `.github/workflows/e2e.yml` — two jobs: `api-integration` (compose stack) + `unit` (sanity check)
-   - `docker-compose.ci.yml` — override strips loki logging driver, removes loki from `depends_on`, sets PE/RE to unreachable addresses
-   - Compose stack start: `docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d qdrant redis api`
-   - 90-second readiness poll on the API Docker healthcheck
-   - Runs `pytest tests/e2e/test_api_integration.py --integration -v`
-
-4. **Health docs compendium** ✅ — 7 documents in `data/documents/health/`:
-   - `hrv_interpretation.md` — SDNN ranges, recovery factors, cognitive impact
-   - `heart_rate_guide.md` — RHR bands, nominal range, medical thresholds
-   - `sleep_quality.md` — duration, stages, hygiene practices
-   - `wellness_baselines.md` — the four states and localAI behaviour
-   - `recovery_protocols.md` — training load, periodisation, evidence-based recovery interventions
-   - `stress_and_hrv.md` — ANS anatomy, breathing protocols, HRV biofeedback
-   - `wearable_metrics.md` — Apple Watch measurement methods, accuracy, HK delivery cadence
-   - `nutrition_and_recovery.md` — protein timing, hydration, caffeine, alcohol effects on HRV
-   - `health_state_interventions.md` — specific actionable steps per state (thriving/balanced/watch/attention)
-
-**To run locally:**
-```bash
-# Unit tests (default, no services needed)
-pytest                # → 85 tests
-
-# Compose integration tests (starts qdrant+redis+api)
-docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d qdrant redis api
-pytest services/api/tests/e2e/test_api_integration.py --integration -v
-
-# Live stack tests (PE + RE + localAI all running)
-pytest services/api/tests/e2e/test_health_pipeline.py --live -v
-
-# Ingest health docs into running Qdrant
-python scripts/ingest_health_docs.py
-```
-
----
-
-### Phase 4 — CareKit machine · health session carry · iOS bridge
-
-**Goal:** extend the health domain to CareKit medication adherence, latch the health state as a durable session carry so downstream machines can consume it without waiting for a fresh push, and close the physical data loop with a real iOS HealthKit + CareKit bridge module.
-
-**Perceptual space allocation (post-Phase 4):**
-
-```
-[7574:7578]  personal health sensors — hr.ok, hrv.ok, sleep.ok, reserved   (Phase 1)
-[7578:7582]  personal_health_baseline output — thriving, balanced, watch, attention   (Phase 1)
-[7582:7586]  CareKit sensors — med_adherence, task_completion, symptom_ok, reserved  (4a NEW)
-[7586:7590]  medication_adherence output — adherent, partial, lapsed, concern        (4a NEW)
-[7590:7594]  session_health_context carry — thriving, balanced, watch, attention      (4b NEW)
-[7594:256]  free — 50 bytes for stress index, activity classification, future        
-```
-
----
-
-#### 4a — CareKit machine at [7582:7590]
-
-**What CareKit tracks:** Apple CareKit manages structured care plans — scheduled medication doses, daily activity tasks, and symptom check-ins. Each scheduled event produces an `OCKOutcome` when completed. The bridge aggregates these into three normalised scalars before sending to the PE.
-
-**Sensor layout [7582:7586]:**
-
-| Offset | Sensor | Range | Source |
-|---|---|---|---|
-| 194 | `localai_carekit_med_adherence` | 0.0–1.0 | doses taken / doses scheduled (rolling 24 h) |
-| 195 | `localai_carekit_task_completion` | 0.0–1.0 | CareKit activity tasks completed / scheduled today |
-| 196 | `localai_carekit_symptom_ok` | 0.0–1.0 | 1.0 = no symptoms reported or severity low; 0.0 = moderate+ |
-| 197 | reserved | — | future (side-effect flag, pain scale) |
-
-Sensor TTLs: med_adherence 3 600 000 ms (1 h, dose window), task_completion 86 400 000 ms (24 h), symptom_ok 86 400 000 ms.
-
-**Machine: `data/machines/medication_adherence.json`**
-
-```
-perceptualMapping.input:  { offset: 194, length: 4 }
-perceptualMapping.output: { offset: 198, length: 4 }
-arbiterRule: OR   matchAlgorithm: gte   (same as personal_health_baseline)
-```
-
-Four mutually exclusive sequences (OR-arbiter, all isInitial), partition the `[med × task × symptom]` space:
-
-| State | Output | Guard logic |
+| Sequence | Output | Guard |
 |---|---|---|
-| `adherent` | `[1,0,0,0]` | med HIGH AND task HIGH AND symptom HIGH — full compliance, no symptoms |
-| `partial` | `[0,1,0,0]` | med HIGH AND (task LOW OR symptom LOW) — medication taken but incomplete follow-through |
-| `lapsed` | `[0,0,1,0]` | med LOW AND symptom HIGH — missed doses but no symptom escalation |
-| `concern` | `[0,0,0,1]` | med LOW AND symptom LOW — missed doses with symptom flag (wildcard on task) |
+| `carekit-adherent` | `[1,0,0,0]` | med HIGH ∧ task HIGH ∧ symptom HIGH |
+| `carekit-partial-task` | `[0,1,0,0]` | med HIGH ∧ task LOW |
+| `carekit-partial-symptom` | `[0,1,0,0]` | med HIGH ∧ task HIGH ∧ symptom LOW |
+| `carekit-lapsed` | `[0,0,1,0]` | med LOW ∧ symptom HIGH |
+| `carekit-concern` | `[0,0,0,1]` | med LOW ∧ symptom LOW |
 
-`adherent` requires all three HIGH; `partial` requires med HIGH but at least one of task/symptom LOW; `lapsed` requires med LOW and symptom HIGH; `concern` requires med LOW and symptom LOW — the same disjoint partitioning used by `personal_health_baseline`.
+Sensors (`_CAREKIT_SENSORS`), pre-normalised ratios, no band step:
 
-**Python additions (`core/reality_bridge.py`):**
-
-```python
-# Sensors — add to register_sensors() via _CAREKIT_SENSORS list
-_CAREKIT_SENSORS = [
-    {"sensorId": "localai_carekit_med_adherence",   "region": {"offset": 194, "length": 1}, "ttlMs": 3_600_000},
-    {"sensorId": "localai_carekit_task_completion", "region": {"offset": 195, "length": 1}, "ttlMs": 86_400_000},
-    {"sensorId": "localai_carekit_symptom_ok",      "region": {"offset": 196, "length": 1}, "ttlMs": 86_400_000},
-]
-
-# Offset constants
-_CAREKIT_OUTPUT_OFFSET = 198   # one-hot: [adherent, partial, lapsed, concern]
-_CAREKIT_MACHINE_PATH  = _MACHINES_DIR / "medication_adherence.json"
-_CAREKIT_MACHINE_NAME  = "localai/medication_adherence"
-
-def push_carekit_signal(
-    med_adherence_ratio:    float,   # 0.0–1.0
-    task_completion_ratio:  float,   # 0.0–1.0
-    symptom_ok:             float,   # 1.0 = no significant symptoms
-) -> str:
-    """
-    Write CareKit compliance scalars to PE, trigger push, return decoded
-    adherence state: "adherent" | "partial" | "lapsed" | "concern".
-    Falls back to "partial" when PE/RE is unreachable.
-    """
-
-def get_carekit_state(ps: list) -> str | None:
-    """One-hot decode of medication_adherence output at [7586:7590]."""
-```
-
-**Drift guard additions** (`_EXPECTED_MACHINE_OFFSETS`):
-
-```python
-{"path": _CAREKIT_MACHINE_PATH, "input": {"offset": 194, "length": 4}, "output": {"offset": 198, "length": 4}},
-```
-
-**Startup wiring (`main.py`):** add `import_carekit_machine()` to the lifespan startup sequence (after `import_health_machines()`).
-
-**HealthKit config extension (`config/integrations.healthkit-localai.json`):** add CareKit source mappings under a new `"carekitSourceMappings"` key mirroring the HealthKit section — HK types map to `localai_carekit_*` sensor IDs with `normalize.mode = "passthrough"`.
-
-**Tests (`tests/test_phase4.py`):**
-- `test_carekit_sensor_layout_matches_machine_input_window` — verifies [7582:7586] ⊂ machine input
-- `test_carekit_machine_json_four_sequences_mutually_exclusive`
-- `test_push_carekit_signal_returns_correct_state[adherent/partial/lapsed/concern]`
-- `test_get_carekit_state_decodes_onehot_correctly`
-- `test_carekit_drift_guard_in_expected_offsets`
-- `test_carekit_config_extension_present_in_integrations_json`
-
----
-
-#### 4b — Health session carry
-
-**The problem:** `personal_health_baseline` writes [7578:7582] when a HealthKit push arrives. Between pushes — during a conversation that may span minutes — the RE perceptual space holds those values via PE carry-forward semantics. However, downstream machines (e.g., a future RAG re-rank machine) need to consume a stable health-state signal as part of their *input* window, not read it out-of-band via `get_current_health_state()`. A bistable carry machine provides that.
-
-**Machine: `data/machines/session_health_context.json`**
-
-```
-perceptualMapping.input:  { offset: 190, length: 4 }   ← reads health classifier output directly
-perceptualMapping.output: { offset: 202, length: 4 }   ← writes to carry region
-arbiterRule: OR   matchAlgorithm: gte
-```
-
-Four sequences (one per health state), all isInitial, same OR-arbiter bistable pattern as `session_rag_context.json`:
-
-| Sequence | Trigger | Carry output |
+| Offset | Sensor | TTL |
 |---|---|---|
-| `sess-health-thriving` | ps[190] ≥ 0.5 | `[1,0,0,0]` |
-| `sess-health-balanced` | ps[191] ≥ 0.5 | `[0,1,0,0]` |
-| `sess-health-watch`    | ps[192] ≥ 0.5 | `[0,0,1,0]` |
-| `sess-health-attention`| ps[193] ≥ 0.5 | `[0,0,0,1]` |
+| 7582 | `localai_carekit_med_adherence` | 3 600 000 ms (1 h dose window) |
+| 7583 | `localai_carekit_task_completion` | 86 400 000 ms (24 h) |
+| 7584 | `localai_carekit_symptom_ok` | 86 400 000 ms (24 h) |
 
-When no health push occurs in a cycle (agent tool call, RAG step) none of the four sequences fire and PE carry-forward holds [7590:7594] unchanged — the health state persists across the entire conversation without re-querying the RE.
+Python: `push_carekit_signal()` (clamps to `[0,1]`, falls back to `"partial"`
+when the PE is unreachable), `get_carekit_state()`, `import_carekit_machine()`
+wired at `main.py:54`, drift-guard entry, `_SENSOR_TO_MACHINE` entries.
 
-**Why this is necessary vs. just reading [7578:7582] directly:** `get_current_health_state()` makes an HTTP call to the RE on every chat request. The carry machine removes that synchronous call from the request path entirely — the health state is available as part of the assembled perceptual space on every push and can be read from the push response body.
+### Phase 4b — Health session carry (DONE, except the chat warm path)
 
-**Python additions (`core/reality_bridge.py`):**
+`data/machines/session_health_context.json` — input `[7578:7582]` (reads the
+classifier output directly), output `[7590:7594]`, four isInitial sequences, one
+per state. When no health push occurs in a cycle none fire and PE carry-forward
+holds the region, so the state persists across a conversation.
 
-```python
-_HEALTH_CARRY_OFFSET = 202   # [thriving, balanced, watch, attention] carry
-
-# Add to _SESSION_MACHINE_DEFS
-{"path": _MACHINES_DIR / "session_health_context.json", "name": "localai/session_health_context"},
-
-# Add to _EXPECTED_MACHINE_OFFSETS
-{"path": _MACHINES_DIR / "session_health_context.json",
- "input": {"offset": 190, "length": 4}, "output": {"offset": 202, "length": 4}},
-
-# Extend get_session_context() return dict:
-"health_state": get_health_state_from_carry(ps),   # reads [7590:7594]
-
-def get_health_state_from_carry(ps: list) -> str | None:
-    """Decode health state from the session carry at [7590:7594].
-    Differs from get_health_state() which reads the live classifier output [7578:7582].
-    Returns None until the first health push this RE session."""
-```
-
-**`get_session_context()` return shape (after 4b):**
+Python: `_HEALTH_CARRY_OFFSET = 7590`, `get_health_state_from_carry()`,
+`session_health_context` in `_SESSION_MACHINE_DEFS`, drift-guard entry, and
+`get_session_context()` now returns:
 
 ```python
 {
@@ -402,279 +255,228 @@ def get_health_state_from_carry(ps: list) -> str | None:
     "agent":          {"ever_engaged": bool, "tools_ever_used": bool},
     "agent_activity": "productive" | "normal" | "struggling" | None,
     "ai_load_tier":   "nominal" | "elevated" | "critical" | None,
-    "health_state":   "thriving" | "balanced" | "watch" | "attention" | None,  # NEW
+    "health_state":   "thriving" | "balanced" | "watch" | "attention" | None,
 }
 ```
 
-**Chat integration impact:** `chat.py` currently calls `get_current_health_state()` synchronously on every request. After 4b, update `_inject_health_context()` to prefer the carry from `get_session_context()` (available from the most recent push response) and fall back to the HTTP poll only when the carry is None. This eliminates the extra HTTP round-trip on warm paths.
+**Open:** the chat integration this phase specified — prefer the carry, drop the
+synchronous poll — was never done. See T4.
 
-**Tests (extend `tests/test_phase4.py`):**
-- `test_session_health_context_machine_reads_health_output_window`
-- `test_session_health_context_carry_correct_per_state[thriving/balanced/watch/attention]`
-- `test_get_session_context_includes_health_state_key`
-- `test_health_state_from_carry_decodes_onehot`
-- `test_bistable_hold_when_no_health_push` — assert None when carry region is all-zero
+### Phase 4c — PE ingest and the iOS bridge (DONE upstream, under a different contract)
+
+The schema this document specified for Phase 4c — `hkTypeIdentifier`, a raw
+`value`, server-side band normalization, no auth, port 3004 — **was never
+built, and should not be.** It is one of three mutually incompatible
+descriptions of the ingest contract that existed in the workspace; the conflict
+was resolved against it.
+
+**`localHealthkitBridge/docs/INGEST_CONTRACT.md` is canonical.** Batch body is
+`bridgeId`, `bridgeToken`, `samples[{type, sourceName?, unit, values[4], metadata}]`,
+optional `anchorToken`; mapping resolution is `healthkit:<type>:<sourceName>`
+then `healthkit:<type>`; values are pre-normalized by the device.
+
+Shipped against it, none of it localAIStack work:
+
+| Surface | Where |
+|---|---|
+| TS PE ingest + status | `RealityEngine_Manager/perception-engine/backend/src/server.ts` + `integrations/adapters/HealthKitBridge.ts` |
+| TS PE CareKit ingest + status | same, + `integrations/adapters/CareKitBridge.ts` |
+| C++ PE | `RealityEngine_CPP/src/perception_engine_server.cpp` |
+| Lisp PE | `RealityEngine_LSP/src/perception-service.lisp` |
+| Scala PE | `perception-engine/.../api/PerceptionRoutes.scala` |
+| Per-engine parity | `RealityEngine_Machines/tests/integration/healthkit-ingest-contract.spec.ts` |
+| iOS bridge | `localHealthkitBridge` — M0–M5, device e2e green 2026-07-24 |
+
+What remains for localAIStack is wiring, not building: T7 and T8.
 
 ---
 
-#### 4c — iOS localHealthkitBridge Swift module
+## Remaining work
 
-**Architecture overview:**
+### T1 — Roadmap truth pass ✅ 2026-09-16
 
-```
-Apple Watch / iPhone
-  ↓  HK anchored observers (background delivery)
-localHealthkitBridge (Swift Package)
-  ↓  BandNormalizer — applies thresholds → 0.0/1.0
-  ↓  LocalAIBridge — HTTP POST /api/integrations/healthkit/ingest
-PE (perception-engine, port 3004)
-  ↓  /api/integrations/healthkit/ingest handler
-  ↓  loads config/integrations.healthkit-localai.json
-  ↓  writes to sensor regions via existing _write_sensor() path
-  ↓  calls /api/push → RE evaluates machines
-RE (reality-engine, port 3000)
-  ↓  personal_health_baseline + medication_adherence fire
-  ↓  perceptualSpace[7578:7590] updated
-localAI API (port 4000)
-  ↓  chat.py reads health_state via get_current_health_state() or carry
-```
+This document. Status tables, offsets, test counts and the Phase 4c contract
+now match the code, and the corrections are recorded rather than silently applied.
 
-**Step 1 — PE ingest endpoint (TypeScript, `perception-engine/backend/src/server.ts`)**
+### T2 — Collapse three PE integration registries into one
 
-Add `POST /api/integrations/healthkit/ingest` before the existing `/api/push` route:
+`config/` holds three PE integration registries with no declared authority:
 
-```typescript
-// Body schema
-interface HKIngestPayload {
-  samples: Array<{
-    hkTypeIdentifier: string;
-    value: number;           // raw HK value (bpm, ms, hours — pre-aggregated)
-    unit: string;            // "bpm" | "ms" | "h" (informational)
-    startDate: string;       // ISO 8601
-    endDate: string;
-  }>;
-}
-```
+| File | Shape | Loaded by | Tested by |
+|---|---|---|---|
+| `integrations.json` | canonical `healthkit:<type>` ids; health + CareKit + `openclaw-xacp` | the `INTEGRATIONS_CONFIG` target | — |
+| `pe-integrations.json` | canonical, but a strict **subset** — health only, no ACP | nothing | `test_phase4.py:822-917`, 7 tests |
+| `integrations.healthkit-localai.json` | `sourceMappings[].hkTypeIdentifier` — **unresolvable** by any PE | nothing | `test_phase2.py:66` |
 
-Handler logic:
-1. Load `integrations.healthkit-localai.json` (cached at startup, `INTEGRATIONS_CONFIG` env var)
-2. For each sample, look up `hkTypeIdentifier` in `sourceMappings`
-3. Apply normalization:
-   - `passthrough` → write `sample.value` directly (iOS bridge pre-computes 0.0/1.0)
-   - `minmax` → `(value - min) / (max - min)` clamped [0, 1]
-4. Call existing `writeSensor(sensorId, [normalizedValue])` — same path as `/api/sensors/:id`
-5. After all samples processed, call `/api/push` to trigger RE evaluation
-6. Return `{ accepted: N, rejected: 0, state: <decoded health state from push response> }`
+Three failures compound here. The stale file's keys cannot be matched by the
+canonical lookup, so it would silently resolve nothing if it were ever loaded.
+`pe-integrations.json` duplicates the six health mappings verbatim and drops
+ACP — and it is the file the CareKit region-parity tests assert against, so the
+offsets guarding those sensors are checked against a PE integration registry no
+runtime reads. `pe-integrations.json:99` then cites the stale file as the
+authority for band thresholds, a third copy pointing at the one that cannot be
+loaded.
 
-Also add `GET /api/integrations/healthkit/status` — returns sensor TTL status for the three health sensors (used by the iOS bridge to display last-sync time).
+This is the duplication failure the engineering contract's qualifier rule warns
+about, in `config/`: copies drift, and with no authority a reader cannot tell
+which is current.
 
-**Step 2 — Swift Package structure (`localHealthkitBridge/`)**
+- Keep `config/integrations.json` as the sole PE integration registry.
+- Delete `config/pe-integrations.json` and `config/integrations.healthkit-localai.json`.
+- Repoint `test_phase2.py:66` and the seven `test_phase4.py` PE-integration-registry tests at the survivor.
+- Preserve the band-threshold assertions — they are the only check locking the
+  JSON to the Python constants — against `integrations.json`.
 
-```
-localHealthkitBridge/
-  Package.swift
-  Sources/HealthKitBridge/
-    BridgeConfiguration.swift    — PE base URL, retry policy, auth token (if any)
-    HealthKitManager.swift       — HK store access, permission request, sample queries
-    BandNormalizer.swift         — threshold logic mirroring integrations JSON bandThresholds
-    LocalAIBridge.swift          — HTTP client; POST /api/integrations/healthkit/ingest
-    BackgroundDelivery.swift     — HK background delivery observer registration
-    CareKitSync.swift            — aggregates OCKOutcome → adherence ratio, writes carekit sensors
-  Tests/HealthKitBridgeTests/
-    BandNormalizerTests.swift
-    LocalAIBridgeTests.swift     — URLProtocol mock
-```
+Phase 4a's instruction to add a `carekitSourceMappings` key to the stale file is
+withdrawn: the CareKit mappings already exist correctly in `integrations.json`.
 
-**Package.swift dependencies:**
+### T3 — (withdrawn, folded into T2)
 
-```swift
-dependencies: [
-    .package(url: "https://github.com/StanfordSpezi/SpeziHealthKit.git", from: "0.5.0"),
-    .package(url: "https://github.com/StanfordSpezi/SpeziCareKit.git",   from: "0.5.0"),
-]
-```
+### T4 — Chat warm path: read the carry, not the network
 
-**`BandNormalizer.swift` — mirrors `reality_bridge.py` constants:**
+`routers/chat.py:86-90` calls `get_current_health_state()` on every request with
+health context enabled — an HTTP round-trip to the RE per chat turn. Phase 4b
+built the carry precisely to remove it.
 
-```swift
-struct BandNormalizer {
-    static let hrLow:   Double = 60.0
-    static let hrHigh:  Double = 100.0
-    static let hrvOk:   Double = 30.0   // SDNN ms
-    static let sleepOk: Double = 6.5    // hours
+Prefer the `health_state` already present in the most recent push response via
+`get_session_context()`, and fall back to the poll only when the carry is cold.
 
-    static func normalizeHR(_ bpm: Double)       -> Double { (bpm >= hrLow && bpm <= hrHigh) ? 1.0 : 0.0 }
-    static func normalizeHRV(_ sdnnMs: Double)   -> Double { sdnnMs >= hrvOk  ? 1.0 : 0.0 }
-    static func normalizeSleep(_ hours: Double)  -> Double { hours  >= sleepOk ? 1.0 : 0.0 }
-}
-```
+### T5 — Operator-facing CareKit driver
 
-These thresholds must stay locked to `bandThresholds` in `config/integrations.healthkit-localai.json`. Add a CI step that parses the JSON and asserts matching constants (Swift test or bash comparison).
+`push_carekit_signal()` has no non-test caller. `scripts/simulate_health_push.py`
+exposes only the health scenarios. Add `--carekit adherent|partial|lapsed|concern`
+so the CareKit leg is exercisable the way the health leg is.
 
-**`HealthKitManager.swift` — data types and query strategy:**
+### T6 — `/health` reports CareKit
 
-| HK type | Query method | Aggregation |
+`routers/health.py:48-55` decodes `health_state` only. Add `carekit_state` and
+the CareKit sensor count to the `re` / `pe` sub-objects, mirroring Phase 3.
+
+### T7 — Swift ↔ Python band-threshold parity check
+
+`_HR_LOW_BPM` / `_HR_HIGH_BPM` / `_HRV_OK_MS` / `_SLEEP_OK_HOURS` in
+`reality_bridge.py` have no counterpart assertion in `localHealthkitBridge` —
+no `bandThresholds` reference exists anywhere in that repo. Note this is a
+cross-repo gap and not merely a missing assert: the Swift normalizer targets the
+corpus families at `[4320:4344]`, so a parity check must first decide *which*
+thresholds it is locking together. Sequence it after T8.
+
+### T8 — End-to-end iOS → localAI health machine
+
+**No path connects the shipped iOS bridge to `personal_health_baseline` today.**
+The bridge posts family vectors into the corpus regions `[4320:4344]`;
+localAI's machine reads `[7574:7578]`. Both halves work; they are not joined.
+
+Two routes, and the choice is the real decision in this task:
+
+1. Run a PE with `INTEGRATIONS_CONFIG=localAIStack/config/integrations.json` and
+   have the bridge post `bridgeId: healthkit-localai`. The mappings already
+   resolve to the localAI sensors. Costs a dedicated PE or a merged PE integration registry.
+2. Add localAI band-mode mappings to the shared PE integration registry so one PE feeds both
+   region sets. Tracked upstream as `localHealthkitBridge` post-MVP
+   ("localAI band-mode target").
+
+This is the roadmap's one genuine remaining integration item. Everything else
+under Phase 4c is upstream and green.
+
+### T9 — CareKit sync in the Swift bridge (blocked upstream)
+
+`CareKitSync.swift` does not exist. `localHealthkitBridge/ROADMAP.md` puts
+CareKit sync explicitly out of scope for v0.1.0 and into v0.2+, naming this
+stack's Phase 4a machine as its prerequisite — which is now done. Recorded here
+as a dependency, not as ready work. The PE-side CareKit ingest it will target is
+already shipped in all four runtimes.
+
+### T10 — Personalisation feedback loop
+
+The one unbuilt feature. No `rerank` / `re_rank` code exists anywhere in
+`services/api/`. Health state should re-rank RAG retrieval — a user in
+`attention` or `watch` should surface recovery and intervention documents ahead
+of general ones.
+
+- Consume `get_session_context()["health_state"]` in `graphs/rag_graph.py`
+  (free to read once T4 lands).
+- Re-rank retrieved documents by health relevance before the grade step.
+- Tests: per-state ordering, and no-op when the carry is cold.
+
+### T11 — Stale offsets inside the machine JSON metadata
+
+All three health machine JSONs carry the pre-migration layout in their prose —
+`metadata.eventSpace`, `metadata.outputSpace`, and every
+`metadata.sensorSources[].region` — five stale strings per file, fifteen total:
+
+| File | Says | Actual `perceptualMapping` |
 |---|---|---|
-| `HKQuantityTypeIdentifierHeartRate` | `HKStatisticsQuery` (discreteAverage) | Average over last 10 min at rest |
-| `HKQuantityTypeIdentifierHeartRateVariabilitySDNN` | `HKSampleQuery` | Most recent SDNN sample |
-| `HKCategoryTypeIdentifierSleepAnalysis` | `HKSampleQuery` | Sum of `.asleepCore + .asleepDeep + .asleepREM` in last 24 h |
+| `medication_adherence.json` | `[194:198]` → `[198:202]` | `[7582:7586]` → `[7586:7590]` |
+| `session_health_context.json` | pre-migration | `[7578:7582]` → `[7590:7594]` |
+| `personal_health_baseline.json` | pre-migration | `[7574:7578]` → `[7578:7582]` |
 
-Background delivery: use `HKObserverQuery` + `enableBackgroundDelivery(for:frequency:)` with `.immediate` for HR and HRV, `.daily` for sleep. SpeziHealthKit wraps this in `HealthKit.requestAuthorization` + `@HealthKitQuery` property wrapper.
+The drift guard checks `perceptualMapping`, which is correct in all three — it
+does not read prose, so nothing catches this. The risk is a reader trusting the
+description over the mapping. Consider extending `verify_machine_offsets()` to
+assert the `sensorSources` region strings parse to the mapped window, which
+would make this class of drift impossible to reintroduce.
 
-**`CareKitSync.swift` — CareKit → carekit sensor scalars:**
+### Sequencing
 
-```swift
-// Queries OCKStore for the rolling 24-h window
-func computeAdherenceRatio() async -> Double   // doses taken / scheduled
-func computeTaskCompletion() async -> Double   // tasks completed / scheduled
-func computeSymptomOk() async -> Double        // 1.0 if no symptom entry or severity < moderate
-```
-
-Called by `BackgroundDelivery` on CareKit store change notifications.
-
-**`LocalAIBridge.swift` — HTTP client:**
-
-```swift
-struct HKSample: Codable { let hkTypeIdentifier: String; let value: Double; let unit: String;
-                            let startDate: String; let endDate: String }
-struct IngestPayload: Codable { let samples: [HKSample] }
-
-func ingest(samples: [HKSample]) async throws -> IngestResponse
-```
-
-Retry policy: 3 attempts with exponential backoff (2 s, 4 s, 8 s). On permanent failure, log locally; do not surface an alert to the user unless the bridge has been silent for > 30 min.
-
-**`BridgeConfiguration.swift` — runtime configuration:**
-
-```swift
-struct BridgeConfiguration {
-    var peBaseURL: URL       // default: http://localhost:3004 (dev) / http://host.docker.internal:3004 (device)
-    var integrationId: String = "healthkit-localai-v1"
-    var retryCount: Int = 3
-    var pushAfterIngest: Bool = true   // trigger RE evaluation on every batch
-}
-```
-
-Load from app `Info.plist` key `LocalAIPEBaseURL` or `LOCALAI_PE_URL` env (useful for Xcode scheme environment variables during development).
-
-**Step 3 — Connecting localAI chat:**
-
-The iOS app does not need to call the localAI chat API directly from the bridge — the bridge only pushes sensor data. The chat connection is a separate app-level concern (WebView, native URLSession, or open-webui). What the bridge enables:
-
-- The PE/RE health state is updated in the background on every HK delivery
-- When the user opens a chat in the iOS app and sends a message:
-  - The app includes `X-Health-Context: enabled` header (or `"health_context": true` body field)
-  - The localAI API reads the current health state from the RE carry and injects it into the system prompt
-  - No additional round-trip is needed from the iOS side
-
-For apps using open-webui, add `HEALTH_CONTEXT_ENABLED=true` to the API environment — this enables injection globally without requiring the iOS app to set the header per-request.
-
-**Step 4 — Developer testing guide**
-
-```bash
-# 1. Unit tests — Swift Package
-cd localHealthkitBridge
-swift test
-
-# 2. Simulator testing (no real Apple Watch needed)
-#    Use the simulate script to push band values directly:
-python scripts/simulate_health_push.py --scenario thriving
-#    Then verify the PE received the push:
-curl http://localhost:3004/api/integrations/healthkit/status
-
-# 3. Device testing checklist
-#    a. Build bridge in Xcode, add to target app
-#    b. Grant HealthKit permissions (HR, HRV, Sleep)
-#    c. Wear Apple Watch for 10 min (HK delivers HR in background)
-#    d. Check PE sources: curl http://localhost:3004/api/sources
-#    e. Check RE state: curl http://localhost:3000/api/perceptual-simulation/state
-#    f. Verify chat injection: curl -H "X-Health-Context: enabled" http://localhost:4000/chat ...
-
-# 4. CareKit testing
-#    a. Create a test care plan in your app with OCKStore
-#    b. Mark a task as completed → verify localai_carekit_task_completion sensor updates
-#    c. Log a medication dose → verify localai_carekit_med_adherence sensor updates
-```
-
-**Tests (`tests/test_phase4.py`, extended):**
-- `test_pe_healthkit_ingest_endpoint_registered` — verifies `/api/integrations/healthkit/ingest` is in the PE server routes
-- `test_pe_ingest_maps_hk_types_to_sensors` — POST sample payload, assert sensors written
-- `test_pe_ingest_triggers_push` — confirm `/api/push` called after sensor writes
-- `test_pe_integration_config_loaded_from_env` — `INTEGRATIONS_CONFIG` env var path
-- `test_carekit_adherence_ratio_boundary_values` — 0 doses taken, partial, full
-- `test_band_normalizer_thresholds_match_python_constants` — parity check against `integrations.healthkit-localai.json`
-
-Live stack (`tests/e2e/test_health_pipeline.py`, new `@live` tests):
-- `test_pe_healthkit_ingest_endpoint_accepts_hr_sample`
-- `test_pe_ingest_full_payload_fires_correct_re_state`
-- `test_carekit_push_updates_carekit_sensor_region`
+T2 and T11 are config and data hygiene — one sitting, no dependencies.
+T4, T5, T6 are small, self-contained code changes. T8 is the decision that
+unblocks T7, and both need a live universe to verify. T10 is the only
+multi-day feature and reads best after T4. T9 is a note, not work.
 
 ---
 
-**Phase 4 effort breakdown:**
-
-| Task | Subtask | Estimated days |
-|---|---|---|
-| 4a CareKit machine | JSON + Python sensors + drift guard + tests | 1.5 |
-| 4b Session carry | Machine JSON + bridge extension + carry read + tests | 1.0 |
-| 4c PE ingest endpoint | TypeScript server.ts addition + config loading + tests | 1.5 |
-| 4c Swift module | Package scaffold + HealthKitManager + BandNormalizer + bridge | 3.0 |
-| 4c CareKit sync | CareKitSync.swift + OCKStore queries + device testing | 2.5 |
-| 4c CI parity check | JSON threshold vs Swift constant check | 0.5 |
-| **Total** | | **~10 days** |
-
-**Sequencing:** 4a and 4b can be done in parallel (no dependencies between them). The PE ingest endpoint (4c step 1) should follow 4a and 4b since it needs the full sensor registry. The Swift module (4c steps 2–4) can start in parallel with 4a/4b but depends on the PE endpoint being reachable for device testing.
-
----
-
-## Test coverage matrix
+## Test coverage matrix (verified 2026-09-16)
 
 | Test file | Type | Count | Flag | Network |
 |---|---|---|---|---|
-| `tests/test_reality_bridge.py` | unit (fake client) | 36 | (default) | no |
-| `tests/test_health_integration.py` | health unit (fake client) | 22 | (default) | no |
+| `tests/test_reality_bridge.py` | unit (fake client) | 28 | (default) | no |
+| `tests/test_health_integration.py` | health unit | 22 | (default) | no |
 | `tests/test_phase2.py` | Phase 2 unit | 36 | (default) | no |
-| `tests/test_phase4.py` | Phase 4 unit — CareKit + carry | ~20 | (default) | no |
+| `tests/test_phase4.py` | Phase 4a+4b unit | 70 | (default) | no |
+| `tests/test_bridge_binding.py` | binding unit | 15 | (default) | no |
+| `tests/test_model_registry.py` | model registry unit | 18 | (default) | no |
+| `tests/test_machine_schema.py` | schema unit | 9 | (default) | no |
+| `tests/test_import_guard.py` | import guard unit | 7 | (default) | no |
+| `tests/test_registry_resolver.py` | resolver unit | 6 | (default) | no |
 | `tests/e2e/test_api_integration.py` | compose integration | 15 | `--integration` | API only |
-| `tests/e2e/test_health_pipeline.py` | full live stack | 13+3 | `--live` | PE+RE+API |
-| `localHealthkitBridge/Tests/` | Swift unit — normalizer + HTTP mock | ~12 | `swift test` | no |
+| `tests/e2e/test_health_pipeline.py` | full live stack | 21 | `--live` | PE+RE+API |
+| `tests/e2e/test_patient_wellness_workflow.py` | live workflow | 1 | `--live` | PE+RE+API |
 
-**Total tests (after Phase 4):** ~157 (114 Python unit + 18 Python e2e + 12 Swift unit + 13 Python live)
+**Default run:** 211 collected, 210 pass, 1 skip
+(`test_machine_schema.py:102`, topology builder needs `langchain_core`).
+**Full collection:** 248 — the 37 e2e tests are collected and skip without their flag.
 
-**Run unit tests (default):**
 ```bash
-cd services/api
-python -m pytest -v                    # 85 tests, no services needed
-```
+# Unit tests
+cd services/api && python -m pytest -v
 
-**Run compose integration tests:**
-```bash
+# Compose integration tests
 docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d qdrant redis api
 python -m pytest services/api/tests/e2e/test_api_integration.py --integration -v
-```
 
-**Run live stack tests:**
-```bash
-# Ensure PE (port 3004), RE (port 3000), localAI (port 4000) are running
-python -m pytest services/api/tests/e2e/test_health_pipeline.py --live -v
-```
+# Live stack tests — PE (3004), RE (3000), localAI (4000) running
+python -m pytest services/api/tests/e2e/ --live -v
 
-**Run the simulate script (PE+RE required):**
-```bash
+# Ingest health docs into a running Qdrant
+python scripts/ingest_health_docs.py
+
+# Drive the health pipeline
 python scripts/simulate_health_push.py --scenario cycle
+curl http://localhost:4000/graphql/events
 ```
 
 ---
 
-## Grafana / Loki queries for health domain
+## Grafana / Loki queries for the health domain
 
 ```logql
 # All health bridge events
 {app="localaistack", service="api"} |~ "health_state_read|health_machine|health_sensor"
 
-# GraphQL triggers from health machine
+# GraphQL triggers from the health machine
 {app="localaistack", service="api"} |~ "personal_health_baseline"
 
-# Health state distribution over last hour
+# Health state distribution over the last hour
 {app="localaistack", service="api"} | json | state =~ "thriving|balanced|watch|attention"
 ```
