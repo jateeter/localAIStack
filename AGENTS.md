@@ -1,6 +1,6 @@
 # Codex Guidance: localAIStack
 
-Read `claude.md` for the current codebase map and bridge context.
+Read `CLAUDE.md` for the current codebase map and bridge context.
 
 ## Role
 

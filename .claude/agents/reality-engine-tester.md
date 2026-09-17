@@ -10,23 +10,23 @@ You are an elite system integration testing engineer specializing in the integra
 
 ## Per-Repo Guidance Files
 
-Each sibling repository contains a `claude.md` at its root with repo-specific testing commands, integration guidance, editing rules, and gotchas. **Read the relevant `claude.md` before running tests in or against a repo.** All files are under `/Users/johnt/workspace/GitHub/`:
+Each sibling repository contains a `CLAUDE.md` at its root with repo-specific testing commands, integration guidance, editing rules, and gotchas. **Read the relevant `CLAUDE.md` before running tests in or against a repo.** All files are under `/Users/johnt/workspace/GitHub/`:
 
-| Repo | claude.md path | Primary focus |
+| Repo | CLAUDE.md path | Primary focus |
 |------|---------------|---------------|
-| RealityEngine_CI | `RealityEngine_CI/claude.md` | Orchestration, startUniverse, e2e entry points |
-| RealityEngine_Machines | `RealityEngine_Machines/claude.md` | Corpus validation, contracts, seeding |
-| RealityEngine_Manager | `RealityEngine_Manager/claude.md` | Visualizer, PE proxy, MQTT, OpenClaw |
-| RealityEngine_Scala | `RealityEngine_Scala/claude.md` | JVM reference runtime, parity baseline |
-| RealityEngine_CPP | `RealityEngine_CPP/claude.md` | C++20 runtime, startup/corpus root causes |
-| RealityEngine_LSP | `RealityEngine_LSP/claude.md` | Common Lisp runtime, JSON serialization parity |
-| localAIStack | `localAIStack/claude.md` | RAG/FastAPI/Qdrant, endpoint alignment |
-| localOpenClawStack | `localOpenClawStack/claude.md` | OpenClaw gateway, dispatch ledger, source activation |
-| localHealthkitBridge | `localHealthkitBridge/claude.md` | HealthKit Swift bridge, canonical PE ingest contract |
+| RealityEngine_CI | `RealityEngine_CI/CLAUDE.md` | Orchestration, startUniverse, e2e entry points |
+| RealityEngine_Machines | `RealityEngine_Machines/CLAUDE.md` | Corpus validation, contracts, seeding |
+| RealityEngine_Manager | `RealityEngine_Manager/CLAUDE.md` | Visualizer, PE proxy, MQTT, OpenClaw |
+| RealityEngine_Scala | `RealityEngine_Scala/CLAUDE.md` | JVM reference runtime, parity baseline |
+| RealityEngine_CPP | `RealityEngine_CPP/CLAUDE.md` | C++20 runtime, startup/corpus root causes |
+| RealityEngine_LSP | `RealityEngine_LSP/CLAUDE.md` | Common Lisp runtime, JSON serialization parity |
+| localAIStack | `localAIStack/CLAUDE.md` | RAG/FastAPI/Qdrant, endpoint alignment |
+| localOpenClawStack | `localOpenClawStack/CLAUDE.md` | OpenClaw gateway, dispatch ledger, source activation |
+| localHealthkitBridge | `localHealthkitBridge/CLAUDE.md` | HealthKit Swift bridge, canonical PE ingest contract |
 
-The workspace-level `claude.md` at `/Users/johnt/workspace/GitHub/claude.md` describes how all repos compose into the integrated RealityEngine system. Read it first if the task spans multiple repos, and update it when the project map changes.
+The workspace-level `CLAUDE.md` at `/Users/johnt/workspace/GitHub/CLAUDE.md` describes how all repos compose into the integrated RealityEngine system. Read it first if the task spans multiple repos, and update it when the project map changes.
 
-### Key test commands from each claude.md
+### Key test commands from each CLAUDE.md
 
 **RealityEngine_CI** (`/Users/johnt/workspace/GitHub/RealityEngine_CI/`)
 ```bash
@@ -115,8 +115,8 @@ docker compose ps
 
 ### Map maintenance rules
 
-- When a mapped repo, directory, command, environment default, or integration responsibility changes, update the nearest `claude.md`.
-- When a cross-repo role, startup path, or runtime contract changes, update `/Users/johnt/workspace/GitHub/claude.md`.
+- When a mapped repo, directory, command, environment default, or integration responsibility changes, update the nearest `CLAUDE.md`.
+- When a cross-repo role, startup path, or runtime contract changes, update `/Users/johnt/workspace/GitHub/CLAUDE.md`.
 - Keep this agent file aligned with the root map when test orchestration guidance changes.
 
 ### Artifact rules (apply across all repos)
