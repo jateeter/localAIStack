@@ -15,7 +15,7 @@ langchain-community==0.4.2
 langchain-text-splitters==1.1.2
 
 # Vector DB client
-qdrant-client==1.19.0
+qdrant-client==1.19.1
 
 # Cache + checkpointing
 redis==8.1.0
