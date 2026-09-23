@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 import structlog
@@ -70,8 +71,30 @@ async def lifespan(app: FastAPI):
             )
     except Exception as e:
         log.warning("Reality Engine bridge not available", error=str(e))
+    follower = None
+    if s.health_scope_interval_s > 0:
+        follower = asyncio.create_task(_follow_health_scope(s.health_scope_interval_s))
     yield
+    if follower:
+        follower.cancel()
     log.info("localAIStack API shutting down")
+
+
+async def _follow_health_scope(interval_s: float) -> None:
+    """Keep localAI's health slots in step with HealthKit scope on every PE.
+
+    Scope changes (add / lock / remove) arrive at the PE from the owner's
+    authorization workflow at any time, so this polls rather than reacting to
+    startup alone. Never raises: a PE that is down is retried next interval.
+    """
+    from core.reality_bridge import follow_health_scope
+
+    while True:
+        try:
+            await asyncio.to_thread(follow_health_scope)
+        except Exception as e:
+            log.warning("health scope follower failed", error=str(e))
+        await asyncio.sleep(interval_s)
 
 
 app = FastAPI(

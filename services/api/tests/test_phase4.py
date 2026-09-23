@@ -4,7 +4,7 @@ Phase 4 tests — CareKit machine, health session carry, PE integrations registr
 Covers the three Phase 4 PE implementations:
   (a) medication_adherence CES machine at [7582:7586]→[7586:7590]
   (b) session_health_context bistable carry at [7578:7582]→[7590:7594]
-  (c) config/pe-integrations.json structure (PE registry for HealthKit + CareKit)
+  (c) config/integrations.json structure (PE integration config for CareKit)
 
 Sections:
   (1)  Offset-drift guard — new machines in _EXPECTED_MACHINE_OFFSETS; JSON agrees
@@ -18,7 +18,7 @@ Sections:
   (9)  get_session_context() — health_state key present and uses carry
   (10) get_current_health_state() — carry fallback when live output is silent
   (11) verify_machine_offsets() — covers all three sensor lists (bug-fix validation)
-  (12) pe-integrations.json — version, integrations, sourceMappings structure
+  (12) integrations.json — version, integrations, sourceMappings structure
 
 All tests are network-free; httpx.Client is monkeypatched with a fake.
 """
@@ -819,10 +819,10 @@ def test_drift_guard_all_sensor_lists_pass_clean():
     )
 
 
-# ── (12) pe-integrations.json ─────────────────────────────────────────────────
+# ── (12) integrations.json ────────────────────────────────────────────────────
 
 _PE_INTEGRATIONS_PATH = (
-    pathlib.Path(__file__).parent.parent.parent.parent / "config" / "pe-integrations.json"
+    pathlib.Path(__file__).parent.parent.parent.parent / "config" / "integrations.json"
 )
 
 
@@ -832,7 +832,7 @@ def _load_pe_integrations() -> dict:
 
 def test_pe_integrations_file_exists():
     assert _PE_INTEGRATIONS_PATH.exists(), (
-        f"config/pe-integrations.json not found at {_PE_INTEGRATIONS_PATH}"
+        f"config/integrations.json not found at {_PE_INTEGRATIONS_PATH}"
     )
 
 
@@ -845,7 +845,7 @@ def test_pe_integrations_has_healthkit_integration():
     data = _load_pe_integrations()
     integrations = {i["id"]: i for i in data.get("integrations", [])}
     assert "healthkit-localai" in integrations, (
-        "healthkit-localai integration missing from pe-integrations.json"
+        "healthkit-localai integration missing from integrations.json"
     )
     assert integrations["healthkit-localai"]["kind"] == "healthkit"
     assert integrations["healthkit-localai"]["enabled"] is True
@@ -855,27 +855,17 @@ def test_pe_integrations_has_carekit_integration():
     data = _load_pe_integrations()
     integrations = {i["id"]: i for i in data.get("integrations", [])}
     assert "carekit-localai" in integrations, (
-        "carekit-localai integration missing from pe-integrations.json"
+        "carekit-localai integration missing from integrations.json"
     )
     assert integrations["carekit-localai"]["kind"] == "carekit"
     assert integrations["carekit-localai"]["enabled"] is True
 
 
-def test_pe_integrations_healthkit_source_mappings():
-    """HealthKit source mappings must cover HR, HRV, and Sleep at offsets 186–188."""
+def test_pe_integrations_maps_no_healthkit_sensor():
+    """HealthKit families land in the corpus lanes via RealityEngine_CI's config (T2/T8)."""
     data = _load_pe_integrations()
-    by_id = {m["id"]: m for m in data.get("sourceMappings", [])}
-    hk_hr = by_id.get("healthkit:HKQuantityTypeIdentifierHeartRate")
-    hk_hrv = by_id.get("healthkit:HKQuantityTypeIdentifierHeartRateVariabilitySDNN")
-    hk_sl = by_id.get("healthkit:HKCategoryTypeIdentifierSleepAnalysis")
-
-    assert hk_hr is not None, "HK HR source mapping missing"
-    assert hk_hrv is not None, "HK HRV source mapping missing"
-    assert hk_sl is not None, "HK Sleep source mapping missing"
-
-    assert hk_hr["region"]["offset"] == 7574
-    assert hk_hrv["region"]["offset"] == 7575
-    assert hk_sl["region"]["offset"] == 7576
+    hk = [m["id"] for m in data.get("sourceMappings", []) if m["id"].startswith("healthkit")]
+    assert hk == []
 
 
 def test_pe_integrations_carekit_source_mappings():
@@ -914,6 +904,6 @@ def test_pe_integrations_source_mapping_regions_match_sensor_constants():
         py_offset = sensor["region"]["offset"]
         assert json_offset == py_offset, (
             f"Offset mismatch for {sid}: "
-            f"pe-integrations.json says {json_offset}, "
+            f"integrations.json says {json_offset}, "
             f"reality_bridge says {py_offset}"
         )

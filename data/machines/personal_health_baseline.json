@@ -2,14 +2,14 @@
   "version": "1.0.0",
   "machine": {
     "name": "localai/personal_health_baseline",
-    "description": "Personal health state classifier. Reads three band sensors — heart rate ok, HRV ok, sleep ok — from the Perception Engine and asserts one of four mutually exclusive health states: thriving, balanced, watch, or attention. Structurally parallel to rag_corrective_cycle: all sequences are isInitial and fire in OR arbitration; exactly one state fires per step because the four guards partition the [hr.ok × hrv.ok × sleep.ok] space.",
+    "description": "Personal health state classifier. Reads the worst-band-wins roll-up that localAIStack writes at [7574:7578] as a one-hot [thriving, balanced, watch, attention] and asserts the matching state at [7578:7582]. The roll-up is computed over whichever HealthKit families are in scope (data/health/health_bands.json, graded from the bridge's lanes at [4320:4344]); that set changes with the owner's authorization workflow, so the machine reads one fixed-width summary rather than one element per measure. All sequences are isInitial under PASSTHROUGH; the input is one-hot, so at most one fires per step, and an all-zero input (no graded band) fires none.",
     "metadata": {
       "category": "personal-health",
       "author": "localAIStack health bridge",
       "created": "2026-06-18T00:00:00Z",
       "pattern": "health-state-classifier",
-      "eventSpace": "4D band vector at [186:190]: [hr_ok, hrv_ok, sleep_ok, _]",
-      "outputSpace": "4D classification at [190:194]: [thriving, balanced, watch, attention]",
+      "eventSpace": "4D roll-up one-hot at [7574:7578]: [thriving, balanced, watch, attention], written by localAIStack (sensor localai_health_rollup)",
+      "outputSpace": "4D classification at [7578:7582]: [thriving, balanced, watch, attention]",
       "tags": [
         "health",
         "healthkit",
@@ -18,34 +18,31 @@
         "personal-health"
       ],
       "sensorSources": {
-        "localai_health_hr_ok": {
-          "region": "[186:187]",
-          "description": "Heart rate in nominal band [60, 100] bpm → 1.0; outside → 0.0",
-          "ttlMs": 300000
+        "localai_health_rollup": {
+          "region": "[7574:7578]",
+          "description": "Worst-band-wins roll-up over the live band slots, one-hot; all zero when no band is graded",
+          "ttlMs": 86400000
         },
-        "localai_health_hrv_ok": {
-          "region": "[187:188]",
-          "description": "HRV SDNN ≥ 30 ms (healthy recovery) → 1.0; below → 0.0",
-          "ttlMs": 900000
-        },
-        "localai_health_sleep_ok": {
-          "region": "[188:189]",
-          "description": "Sleep duration ≥ 6.5 h → 1.0; insufficient → 0.0",
+        "localai_health_slot_<band>": {
+          "region": "[7600:7632]",
+          "description": "One element per band in scope (ok 1.0, watch 0.5, concern 0.0), allocated dynamically; a band out of scope has no slot and no source",
           "ttlMs": 86400000
         }
       },
       "stateLogic": {
-        "thriving": "hr=OK AND hrv=OK AND sleep=OK — all three baseline pillars healthy",
-        "balanced": "hr=OK AND hrv=OK AND sleep=LOW — vitals good but insufficient sleep",
-        "watch": "hr=OK AND hrv=LOW — cardiovascular nominal but recovery is poor; sleep may be anything",
-        "attention": "hr=LOW/HIGH — heart rate outside nominal range; flag for health check-in",
-        "mutualExclusivity": "thriving ⊃ balanced ⊃ watch ⊃ attention via the hr/hrv/sleep split; no two fire in the same step"
+        "grading": "Each band in data/health/health_bands.json grades its HealthKit family ok / watch / concern (worst axis wins); without current data or below minConfidence it is not graded",
+        "thriving": "Every live band graded ok.",
+        "balanced": "Exactly one live band graded watch, none concern.",
+        "watch": "Two or more live bands graded watch, none concern.",
+        "attention": "At least one live band graded concern.",
+        "none": "No band graded — the roll-up is all zero and no state is asserted",
+        "mutualExclusivity": "The roll-up is one-hot, so no two sequences fire in the same step"
       },
       "localAIPromptHints": {
-        "thriving": "All baseline health metrics are in nominal range. The user is thriving physically.",
-        "balanced": "Cardiovascular metrics are healthy but sleep is below target. Gently prompt rest.",
-        "watch": "Heart rate is nominal but HRV indicates low recovery. Suggest lighter activity today.",
-        "attention": "Heart rate is outside the nominal range. Recommend a health check-in."
+        "thriving": "Every health measure in scope is in its nominal range.",
+        "balanced": "One health measure in scope is slightly outside its nominal range. A gentle nudge is enough.",
+        "watch": "Several health measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to rest.",
+        "attention": "At least one health measure in scope is well outside its nominal range. Recommend a health check-in."
       },
       "sequenceCount": 4,
       "machineClass": "signal-monitor",
@@ -80,7 +77,7 @@
             ],
             "ragStatusCode": "GREEN",
             "processStatus": "info",
-            "description": "Fires when all three health band sensors are in their nominal range. The most positive state — no action warranted."
+            "description": "Every live band graded ok."
           },
           {
             "sequenceId": "health-balanced",
@@ -92,7 +89,7 @@
             ],
             "ragStatusCode": "GREEN",
             "processStatus": "info",
-            "description": "Fires when heart rate and HRV are both nominal but sleep duration is below target. Vitals are healthy but rest is lacking — a gentle nudge toward better sleep hygiene."
+            "description": "Exactly one live band graded watch, none concern."
           },
           {
             "sequenceId": "health-watch",
@@ -104,7 +101,7 @@
             ],
             "ragStatusCode": "GREEN",
             "processStatus": "info",
-            "description": "Fires when heart rate is nominal but HRV indicates poor recovery. Sleep may be anything. Suggests lighter activity and recovery focus today."
+            "description": "Two or more live bands graded watch, none concern."
           },
           {
             "sequenceId": "health-attention",
@@ -116,7 +113,7 @@
             ],
             "ragStatusCode": "GREEN",
             "processStatus": "info",
-            "description": "Fires when heart rate is outside the nominal [60, 100] bpm band. This is the highest-priority state — cardiovascular signal warrants a health check-in regardless of HRV or sleep."
+            "description": "At least one live band graded concern."
           }
         ]
       }
@@ -137,9 +134,9 @@
     "sequences": [
       {
         "id": "health-thriving",
-        "name": "Thriving: hr=OK AND hrv=OK AND sleep=OK",
+        "name": "Thriving: roll-up[0] HIGH",
         "metadata": {
-          "description": "Fires when all three health band sensors are in their nominal range. The most positive state — no action warranted.",
+          "description": "Every live band graded ok.",
           "output": "[1,0,0,0] — thriving"
         },
         "events": [
@@ -153,12 +150,14 @@
                 "threshold": 0.5
               },
               {
-                "value": 1.0,
-                "threshold": 0.5
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
               },
               {
-                "value": 1.0,
-                "threshold": 0.5
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
               },
               {
                 "value": 0.5,
@@ -176,25 +175,25 @@
                   0.0
                 ],
                 "metadata": {
-                  "description": "All health baseline pillars nominal — thriving",
+                  "description": "Every live band graded ok. — thriving",
                   "state": "thriving",
                   "ragStatusCode": "GREEN",
-                  "promptHint": "All baseline health metrics are in nominal range."
+                  "promptHint": "Every health measure in scope is in its nominal range."
                 }
               }
             ],
             "metadata": {
               "name": "THRIVING_CHECK",
-              "description": "element[0]: hr_ok HIGH (>=0.5); element[1]: hrv_ok HIGH (>=0.5); element[2]: sleep_ok HIGH (>=0.5); element[3]: wildcard"
+              "description": "element[0]: roll-up thriving HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
             }
           }
         ]
       },
       {
         "id": "health-balanced",
-        "name": "Balanced: hr=OK AND hrv=OK AND sleep=LOW",
+        "name": "Balanced: roll-up[1] HIGH",
         "metadata": {
-          "description": "Fires when heart rate and HRV are both nominal but sleep duration is below target. Vitals are healthy but rest is lacking — a gentle nudge toward better sleep hygiene.",
+          "description": "Exactly one live band graded watch, none concern.",
           "output": "[0,1,0,0] — balanced"
         },
         "events": [
@@ -204,16 +203,18 @@
             "nextEventIds": [],
             "elements": [
               {
-                "value": 1.0,
-                "threshold": 0.5
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
               },
               {
                 "value": 1.0,
                 "threshold": 0.5
               },
               {
-                "value": 0.0,
-                "threshold": 0.5
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
               },
               {
                 "value": 0.5,
@@ -231,25 +232,25 @@
                   0.0
                 ],
                 "metadata": {
-                  "description": "Cardiovascular metrics nominal; sleep below target — balanced",
+                  "description": "Exactly one live band graded watch, none concern. — balanced",
                   "state": "balanced",
                   "ragStatusCode": "GREEN",
-                  "promptHint": "Cardiovascular metrics are healthy but sleep is below target. Gently prompt rest."
+                  "promptHint": "One health measure in scope is slightly outside its nominal range. A gentle nudge is enough."
                 }
               }
             ],
             "metadata": {
               "name": "BALANCED_CHECK",
-              "description": "element[0]: hr_ok HIGH; element[1]: hrv_ok HIGH; element[2]: sleep_ok LOW (<0.5, GTE split at 0.5 with value=0); element[3]: wildcard. Mutually exclusive with thriving because sleep_ok is LOW here."
+              "description": "element[1]: roll-up balanced HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
             }
           }
         ]
       },
       {
         "id": "health-watch",
-        "name": "Watch: hr=OK AND hrv=LOW",
+        "name": "Watch: roll-up[2] HIGH",
         "metadata": {
-          "description": "Fires when heart rate is nominal but HRV indicates poor recovery. Sleep may be anything. Suggests lighter activity and recovery focus today.",
+          "description": "Two or more live bands graded watch, none concern.",
           "output": "[0,0,1,0] — watch"
         },
         "events": [
@@ -259,17 +260,18 @@
             "nextEventIds": [],
             "elements": [
               {
-                "value": 1.0,
-                "threshold": 0.5
-              },
-              {
-                "value": 0.0,
-                "threshold": 0.5
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
               },
               {
                 "value": 0.5,
                 "threshold": 0.5,
                 "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
               },
               {
                 "value": 0.5,
@@ -287,25 +289,25 @@
                   0.0
                 ],
                 "metadata": {
-                  "description": "Heart rate nominal but HRV indicates low recovery — watch",
+                  "description": "Two or more live bands graded watch, none concern. — watch",
                   "state": "watch",
                   "ragStatusCode": "AMBER",
-                  "promptHint": "Heart rate is nominal but HRV indicates low recovery. Suggest lighter activity today."
+                  "promptHint": "Several health measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to rest."
                 }
               }
             ],
             "metadata": {
               "name": "WATCH_CHECK",
-              "description": "element[0]: hr_ok HIGH; element[1]: hrv_ok LOW; elements[2-3]: wildcard. Mutually exclusive with thriving/balanced because hrv_ok is LOW."
+              "description": "element[2]: roll-up watch HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
             }
           }
         ]
       },
       {
         "id": "health-attention",
-        "name": "Attention: hr=LOW/HIGH (out of nominal band)",
+        "name": "Attention: roll-up[3] HIGH",
         "metadata": {
-          "description": "Fires when heart rate is outside the nominal [60, 100] bpm band. This is the highest-priority state — cardiovascular signal warrants a health check-in regardless of HRV or sleep.",
+          "description": "At least one live band graded concern.",
           "output": "[0,0,0,1] — attention"
         },
         "events": [
@@ -315,23 +317,23 @@
             "nextEventIds": [],
             "elements": [
               {
-                "value": 0.0,
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
                 "threshold": 0.5
-              },
-              {
-                "value": 0.5,
-                "threshold": 0.5,
-                "comparatorType": "threshold"
-              },
-              {
-                "value": 0.5,
-                "threshold": 0.5,
-                "comparatorType": "threshold"
-              },
-              {
-                "value": 0.5,
-                "threshold": 0.5,
-                "comparatorType": "threshold"
               }
             ],
             "outputEvents": [
@@ -344,16 +346,16 @@
                   1.0
                 ],
                 "metadata": {
-                  "description": "Heart rate outside nominal band — attention required",
+                  "description": "At least one live band graded concern. — attention",
                   "state": "attention",
                   "ragStatusCode": "RED",
-                  "promptHint": "Heart rate is outside the nominal range. Recommend a health check-in."
+                  "promptHint": "At least one health measure in scope is well outside its nominal range. Recommend a health check-in."
                 }
               }
             ],
             "metadata": {
               "name": "ATTENTION_CHECK",
-              "description": "element[0]: hr_ok LOW (<0.5, GTE split at 0.5 with value=0); elements[1-3]: wildcard. Mutually exclusive with thriving/balanced/watch because they all require hr_ok HIGH."
+              "description": "element[3]: roll-up attention HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
             }
           }
         ]
@@ -361,30 +363,29 @@
     ],
     "inputSequences": [
       {
-        "name": "All nominal — thriving",
-        "pattern": "hr=in-range, hrv=good, sleep=sufficient → thriving",
-        "description": "80 bpm (hr.ok=1.0), HRV=45ms (hrv.ok=1.0), sleep=7.5h (sleep.ok=1.0). All three sensors HIGH. Should assert thriving [1,0,0,0].",
+        "name": "Roll-up thriving",
+        "pattern": "roll-up one-hot [0] → thriving",
+        "description": "localAIStack wrote roll-up state thriving. Should assert thriving [1,0,0,0].",
         "events": [
           [
             1.0,
-            1.0,
-            1.0,
+            0.0,
+            0.0,
             0.0
           ]
         ],
         "metadata": {
           "expectedOutput": "[1,0,0,0]",
-          "activeSequence": "health-thriving",
-          "notes": "hr.ok=1.0 (≥0.5 HIGH), hrv.ok=1.0 (≥0.5 HIGH), sleep.ok=1.0 (≥0.5 HIGH) → thriving fires"
+          "activeSequence": "health-thriving"
         }
       },
       {
-        "name": "Good vitals, poor sleep — balanced",
-        "pattern": "hr=in-range, hrv=good, sleep=insufficient → balanced",
-        "description": "75 bpm (hr.ok=1.0), HRV=38ms (hrv.ok=1.0), sleep=5.5h (sleep.ok=0.0). HR and HRV nominal but sleep below 6.5h target. Should assert balanced [0,1,0,0].",
+        "name": "Roll-up balanced",
+        "pattern": "roll-up one-hot [1] → balanced",
+        "description": "localAIStack wrote roll-up state balanced. Should assert balanced [0,1,0,0].",
         "events": [
           [
-            1.0,
+            0.0,
             1.0,
             0.0,
             0.0
@@ -392,44 +393,58 @@
         ],
         "metadata": {
           "expectedOutput": "[0,1,0,0]",
-          "activeSequence": "health-balanced",
-          "notes": "hr.ok HIGH, hrv.ok HIGH, sleep.ok=0.0 (<0.5 LOW) → balanced fires"
+          "activeSequence": "health-balanced"
         }
       },
       {
-        "name": "HR nominal but poor recovery — watch",
-        "pattern": "hr=in-range, hrv=low, sleep=any → watch",
-        "description": "70 bpm (hr.ok=1.0), HRV=18ms (hrv.ok=0.0), sleep=6.0h (sleep.ok=0.0). HR fine but HRV signals poor recovery. Should assert watch [0,0,1,0].",
+        "name": "Roll-up watch",
+        "pattern": "roll-up one-hot [2] → watch",
+        "description": "localAIStack wrote roll-up state watch. Should assert watch [0,0,1,0].",
         "events": [
           [
+            0.0,
+            0.0,
             1.0,
-            0.0,
-            0.0,
             0.0
           ]
         ],
         "metadata": {
           "expectedOutput": "[0,0,1,0]",
-          "activeSequence": "health-watch",
-          "notes": "hr.ok HIGH, hrv.ok=0.0 (<0.5 LOW) → watch fires; sleep is also low but watch fires first in state space"
+          "activeSequence": "health-watch"
         }
       },
       {
-        "name": "HR out of range — attention",
-        "pattern": "hr=out-of-band, hrv=any, sleep=any → attention",
-        "description": "105 bpm (hr.ok=0.0 — above 100bpm ceiling), HRV and sleep irrelevant. Heart rate flag is highest priority. Should assert attention [0,0,0,1].",
+        "name": "Roll-up attention",
+        "pattern": "roll-up one-hot [3] → attention",
+        "description": "localAIStack wrote roll-up state attention. Should assert attention [0,0,0,1].",
         "events": [
           [
             0.0,
-            1.0,
-            1.0,
-            0.0
+            0.0,
+            0.0,
+            1.0
           ]
         ],
         "metadata": {
           "expectedOutput": "[0,0,0,1]",
-          "activeSequence": "health-attention",
-          "notes": "hr.ok=0.0 (<0.5 LOW) → attention fires regardless of other sensors"
+          "activeSequence": "health-attention"
+        }
+      },
+      {
+        "name": "No graded band — no state",
+        "pattern": "roll-up all zero → nothing fires",
+        "description": "No band in scope has current, confident data. The roll-up is all zero and no sequence fires: no state rather than a guessed one.",
+        "events": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "none",
+          "activeSequence": "none"
         }
       }
     ]

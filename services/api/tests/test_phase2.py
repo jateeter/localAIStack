@@ -61,9 +61,7 @@ class _FakeREClient:
 
 
 _HEALTHKIT_CONFIG_PATH = (
-    pathlib.Path(__file__).parent.parent.parent.parent
-    / "config"
-    / "integrations.healthkit-localai.json"
+    pathlib.Path(__file__).parent.parent.parent.parent / "config" / "integrations.json"
 )
 
 
@@ -187,9 +185,9 @@ def test_get_current_health_state_calls_re_not_pe(monkeypatch):
 
 _EXPECTED_HINTS = {
     "thriving": "nominal range",  # substring expected in hint
-    "balanced": "sleep",
-    "watch": "HRV",
-    "attention": "heart rate",
+    "balanced": "slightly outside",
+    "watch": "several",
+    "attention": "well outside",
 }
 
 
@@ -387,7 +385,11 @@ def test_health_search_has_health_focused_description():
     )
 
 
-# ── (6) HealthKit integration config structure ────────────────────────────────
+# ── (6) HealthKit in the integration config ───────────────────────────────────
+# HEALTH_INTEGRATION_ROADMAP T2/T8. HealthKit families land in the corpus lanes
+# through RealityEngine_CI's config; localAIStack's config maps no HealthKit
+# sensor, because anything it mapped into [7574:7578] or [7600:7632] would be a
+# second writer on windows core/health_scope.py owns.
 
 
 @pytest.fixture
@@ -396,76 +398,29 @@ def healthkit_config() -> dict:
     return json.loads(_HEALTHKIT_CONFIG_PATH.read_text())
 
 
-def test_healthkit_config_exists():
-    assert _HEALTHKIT_CONFIG_PATH.exists(), (
-        f"HealthKit integration config not found at {_HEALTHKIT_CONFIG_PATH}"
-    )
+def test_healthkit_config_declares_healthkit_integration(healthkit_config):
+    kinds = {i["id"]: i["kind"] for i in healthkit_config["integrations"]}
+    assert kinds.get("healthkit-localai") == "healthkit"
 
 
-def test_healthkit_config_has_required_top_level_keys(healthkit_config):
-    for key in ("integrationId", "sourceMappings", "bandThresholds", "targetPerceptualRegion"):
-        assert key in healthkit_config, f"Missing key: {key}"
+def test_healthkit_config_maps_no_healthkit_sensor(healthkit_config):
+    hk = [m["id"] for m in healthkit_config["sourceMappings"] if m["id"].startswith("healthkit")]
+    assert hk == [], f"localAIStack config must not map HealthKit sensors: {hk}"
 
 
-def test_healthkit_config_maps_three_hk_types(healthkit_config):
-    expected = {
-        "HKQuantityTypeIdentifierHeartRate",
-        "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
-        "HKCategoryTypeIdentifierSleepAnalysis",
-    }
-    actual = {m["hkTypeIdentifier"] for m in healthkit_config["sourceMappings"]}
-    assert actual == expected
+def test_healthkit_config_writes_nothing_into_localai_health_windows(healthkit_config):
+    owned = [(7574, 7578), (7600, 7632)]
+    for m in healthkit_config["sourceMappings"]:
+        r = m.get("region")
+        if not r:
+            continue
+        lo, hi = r["offset"], r["offset"] + r["length"]
+        for a, b in owned:
+            assert hi <= a or lo >= b, f"{m['id']} writes [{lo}:{hi}], inside [{a}:{b}]"
 
 
-def test_healthkit_config_sensor_ids_match_python_constants(healthkit_config):
-    expected_ids = {s["sensorId"] for s in reality_bridge._HEALTH_SENSORS}
-    config_ids = {m["sensorId"] for m in healthkit_config["sourceMappings"]}
-    assert config_ids == expected_ids, (
-        f"Config sensorIds {config_ids} do not match bridge constants {expected_ids}"
-    )
-
-
-def test_healthkit_config_regions_match_health_sensors(healthkit_config):
-    sensor_regions = {s["sensorId"]: s["region"] for s in reality_bridge._HEALTH_SENSORS}
-    for mapping in healthkit_config["sourceMappings"]:
-        sid = mapping["sensorId"]
-        assert sid in sensor_regions, f"{sid} not in _HEALTH_SENSORS"
-        assert mapping["region"] == sensor_regions[sid], (
-            f"{sid} region mismatch: config={mapping['region']} bridge={sensor_regions[sid]}"
-        )
-
-
-def test_healthkit_config_target_region_is_health_input_window(healthkit_config):
-    target = healthkit_config["targetPerceptualRegion"]
-    assert target["offset"] == 7574
-    assert target["length"] == 4
-
-
-def test_healthkit_config_band_thresholds_match_python_constants(healthkit_config):
-    bt = healthkit_config["bandThresholds"]
-    assert bt["hr_low_bpm"] == reality_bridge._HR_LOW_BPM
-    assert bt["hr_high_bpm"] == reality_bridge._HR_HIGH_BPM
-    assert bt["hrv_ok_sdnn_ms"] == reality_bridge._HRV_OK_MS
-    assert bt["sleep_ok_hours"] == reality_bridge._SLEEP_OK_HOURS
-
-
-def test_healthkit_config_passthrough_normalize_for_ts_pe(healthkit_config):
-    """Primary sourceMappings must use passthrough normalize mode (TS PE compat)."""
-    for mapping in healthkit_config["sourceMappings"]:
-        mode = mapping.get("normalize", {}).get("mode")
-        assert mode == "passthrough", (
-            f"{mapping['hkTypeIdentifier']} uses normalize.mode={mode!r}; "
-            f"TS PE requires 'passthrough'"
-        )
-
-
-def test_healthkit_config_cpp_lsp_block_uses_band_mode(healthkit_config):
-    """The cppLspRuntimeConfig block must document 'band' normalize for native runtimes."""
-    cpp_block = healthkit_config.get("cppLspRuntimeConfig", {})
-    assert cpp_block, "cppLspRuntimeConfig block is missing"
-    for mapping in cpp_block.get("sourceMappings", []):
-        mode = mapping.get("normalize", {}).get("mode")
-        assert mode == "band", (
-            f"{mapping.get('hkTypeIdentifier')} in cppLspRuntimeConfig "
-            f"should use mode='band', got {mode!r}"
-        )
+def test_redundant_healthkit_configs_are_gone():
+    """T2: one config, not three that had already drifted apart."""
+    cfg = _HEALTHKIT_CONFIG_PATH.parent
+    assert not (cfg / "pe-integrations.json").exists()
+    assert not (cfg / "integrations.healthkit-localai.json").exists()

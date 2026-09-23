@@ -185,6 +185,8 @@ services:
     volumes:
       - ./data/documents:/app/data/documents
       - ./data/machines:/app/data/machines:ro
+      # health_bands.json, resolved beside LOCALAI_MACHINES_DIR (core/health_bands.py)
+      - ./data/health:/app/data/health:ro
       - ./config:/app/config:ro
       - ./services/api:/app  # live-reload in dev
     depends_on:

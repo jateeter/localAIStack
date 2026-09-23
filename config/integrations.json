@@ -1,8 +1,6 @@
 {
   "_comment": [
-    "Unified PE integration registry for localAIStack.",
-    "Covers the personal health domain (HealthKit + CareKit) and the",
-    "OpenClaw xACP agent dispatch contract.",
+    "PE integration config for localAIStack: CareKit and the OpenClaw xACP agent dispatch contract.",
     "",
     "Load via: INTEGRATIONS_CONFIG=../localAIStack/config/integrations.json",
     "",
@@ -10,7 +8,12 @@
     "and machine input windows in data/machines/. Update all three together.",
     "",
     "ACP completion lands at perceptual space [4210:4214] (4-element region).",
-    "Health sensors land at [7574:7585] (1-element each)."
+    "CareKit sensors land at [7582:7585] (1-element each).",
+    "",
+    "HealthKit maps no sensors here. The bridge's families land in the corpus lanes",
+    "[4320:4344] through the lane mappings in RealityEngine_CI config/integrations.json",
+    "(localHealthkitBridge docs/lane-semantics.json). localAIStack grades them and owns",
+    "[7574:7578] (roll-up) and [7600:7632] (band slots): core/health_scope.py."
   ],
   "version": "1.0",
   "integrations": [
@@ -18,7 +21,7 @@
       "id": "healthkit-localai",
       "kind": "healthkit",
       "enabled": true,
-      "_comment": "Receives POST /api/integrations/healthkit/ingest from localHealthkitBridge iOS module. Pre-normalised 0.0/1.0 band values."
+      "_comment": "Receives POST /api/integrations/healthkit/ingest from localHealthkitBridge. Families are pre-normalised lane values; see the header comment for where they land."
     },
     {
       "id": "carekit-localai",
@@ -45,33 +48,6 @@
     }
   ],
   "sourceMappings": [
-    {
-      "id": "healthkit:HKQuantityTypeIdentifierHeartRate",
-      "sensorId": "localai_health_hr_ok",
-      "name": "localai/health/hr_ok",
-      "region": { "offset": 7574, "length": 1 },
-      "ttlMs": 300000,
-      "normalize": { "mode": "passthrough", "clamp": true },
-      "_comment": "HR in [60,100] bpm → 1.0, else 0.0 (iOS bridge pre-computes band)"
-    },
-    {
-      "id": "healthkit:HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
-      "sensorId": "localai_health_hrv_ok",
-      "name": "localai/health/hrv_ok",
-      "region": { "offset": 7575, "length": 1 },
-      "ttlMs": 900000,
-      "normalize": { "mode": "passthrough", "clamp": true },
-      "_comment": "SDNN >= 30 ms → 1.0, else 0.0 (iOS bridge pre-computes band)"
-    },
-    {
-      "id": "healthkit:HKCategoryTypeIdentifierSleepAnalysis",
-      "sensorId": "localai_health_sleep_ok",
-      "name": "localai/health/sleep_ok",
-      "region": { "offset": 7576, "length": 1 },
-      "ttlMs": 86400000,
-      "normalize": { "mode": "passthrough", "clamp": true },
-      "_comment": "Total sleep >= 6.5 h → 1.0, else 0.0 (iOS bridge aggregates stages)"
-    },
     {
       "id": "carekit-localai-med",
       "sensorId": "localai_carekit_med_adherence",

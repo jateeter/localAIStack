@@ -7,8 +7,8 @@
       "category": "ai-pipeline",
       "author": "localAIStack bridge",
       "created": "2026-04-16T00:00:00Z",
-      "eventSpace": "8D vector at [52:60]: [doc_count_norm, avg_score, _, _, kept_ratio, rewrite_count_norm, _, _]",
-      "outputSpace": "4D binary at [60:64]: [generate, rewrite, abort, _]",
+      "eventSpace": "8D vector at [7440:7448]: [doc_count_norm, avg_score, _, _, kept_ratio, rewrite_count_norm, _, _]",
+      "outputSpace": "4D binary at [7448:7452]: [generate, rewrite, abort, _]",
       "tags": [
         "rag",
         "routing",

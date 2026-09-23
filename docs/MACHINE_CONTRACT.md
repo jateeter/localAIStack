@@ -67,9 +67,17 @@ write any cell a corpus machine also writes?*
 
 | | cells |
 |---|---|
-| localAI occupies | `[7440:7594]` |
+| localAI machines occupy | `[7440:7594]` |
+| health band slots (PE sensors, no machine) | `[7600:7632]` |
 | reserved band (`LOCALAI_BAND`) | `[7440:7952]` |
 | bridge lane, outside the band | `ai_load_bridge` output `[272:280]` |
+
+The health band slots are written by PE sensor sources that `services/api/core/health_scope.py`
+declares and removes as HealthKit scope changes: one cell per band in scope, allocated dynamically,
+capacity 32. No machine maps them, so this gate does not see them. They lie inside the band and
+overlap no localAI machine window; `tests/test_health_bands.py` asserts the slot table stays inside
+the band. The roll-up that feeds `personal_health_baseline` is a single sensor at `[7574:7578]`, the
+machine's own input window.
 
 The band is a real reservation now: `localaistack-integration` in
 `RealityEngine_Machines domains/domain-registry.json` `rangePolicy.reservedRanges`, mirrored into
