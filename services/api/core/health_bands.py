@@ -50,6 +50,9 @@ class Axis:
     source_range: tuple[float, float] | None
     ok: dict
     watch: dict
+    # The normalised value meaning "not measured" (lane-semantics.json
+    # `absentValue`). An axis at it is skipped, not graded.
+    absent_value: float | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +102,7 @@ def load_bands(path: Path = _BANDS_PATH) -> BandTable:
                         source_range=tuple(a["sourceRange"]) if a.get("sourceRange") else None,
                         ok=a["ok"],
                         watch=a["watch"],
+                        absent_value=a.get("absentValue"),
                     )
                     for a in b["axes"]
                 ),
@@ -150,13 +154,21 @@ def grade_band(band: Band, family: list[float] | None, min_confidence: float) ->
     if ci is not None and (len(family) <= ci or family[ci] < min_confidence):
         return None
     worst = "ok"
+    graded = 0
     for axis in band.axes:
         if len(family) <= axis.index or axis.source_range is None:
             return None
-        g = grade_axis_raw(axis, denormalize(axis, float(family[axis.index])))
+        value = float(family[axis.index])
+        if axis.absent_value is not None and value == float(axis.absent_value):
+            # Not measured (e.g. a Health blood-pressure entry carries no heart
+            # rate): skip the axis rather than grade 0 bpm as a concern.
+            continue
+        g = grade_axis_raw(axis, denormalize(axis, value))
+        graded += 1
         if GRADES.index(g) > GRADES.index(worst):
             worst = g
-    return worst
+    # Every axis not measured: nothing to say, so no grade.
+    return worst if graded else None
 
 
 def grade_raw(band: Band, raw: float) -> str:
