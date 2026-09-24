@@ -140,8 +140,11 @@ from **11 to 2**, and the two that remain are the intended ones.
    ```
 3. Running engines pick up the change the next time localAIStack starts, with no universe restart.
    The importer stamps each machine's metadata with `localaiContentHash`, a hash of its definition.
-   A held machine whose hash differs, is missing, or is held twice is deleted and re-imported. An
-   unchanged one is skipped. A delete that fails is never followed by a post, so a name can't end up
-   held twice. Replacing a machine resets its runtime state (active events) on that engine.
+   A held machine that localAIStack stamped is deleted and re-imported when its hash differs or it is
+   held twice; an unchanged one is skipped. **An unstamped copy is left alone:** someone else loaded it,
+   typically the engine's own corpus (the regression corpus ships `rag_corrective_cycle`,
+   `session_agent_context` and `session_rag_context`), and replacing it re-interns its test sources on
+   every PE as duplicates. A delete that fails is never followed by a post. Replacing a machine resets
+   its runtime state (active events) on that engine.
 4. Moving a machine's region is a contract change: update the table above, and widen `LOCALAI_BAND`
    deliberately rather than to make a failure go away.

@@ -152,12 +152,16 @@ def test_changed_machine_is_replaced(monkeypatch, one_target):
     assert [j["machine"]["name"] for _, j in c.posts] == ["localai/a"]
 
 
-def test_unstamped_machine_is_replaced_once(monkeypatch, one_target):
-    """A machine imported before stamping carries no hash, so it is replaced."""
+def test_unstamped_machine_is_not_localais_to_replace(monkeypatch, one_target):
+    """No stamp: loaded by someone else (the engine's corpus). Left alone.
+
+    Replacing it duplicated its test sources on every PE (regression run
+    20260924T165353Z, reset-contract: rag_corrective_cycle, session_agent_context,
+    session_rag_context, the three the regression corpus ships).
+    """
     c = _Client(names=["localai/a", ("localai/b", _h("localai/b"))])
     assert _run(monkeypatch, c, MACHINES) is True
-    assert c.deletes == ["http://re/api/machines/id-0"]
-    assert len(c.posts) == 1
+    assert c.deletes == [] and c.posts == []
 
 
 def test_name_held_twice_is_collapsed_to_one(monkeypatch, one_target):
