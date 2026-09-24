@@ -53,6 +53,8 @@ Perceptual space layout (256-element vector):
   docstring and the DC machine JSONs for details.
 """
 
+import copy
+import hashlib
 import json
 import os
 import pathlib
@@ -1145,6 +1147,44 @@ def _get_existing_machine_names(client: httpx.Client, re_url: str | None = None)
     (`RealityEngine_CI/scripts/CLAUDE.md`): a set that could not be read is
     recorded as an error, never as an empty set.
     """
+    inventory = _get_existing_machines(client, re_url)
+    return None if inventory is None else set(inventory)
+
+
+# Metadata key carrying the hash of the definition a machine was imported from.
+# Engines return machine metadata verbatim, so this round-trips.
+_CONTENT_HASH_KEY = "localaiContentHash"
+
+
+def _machine_body(machine_json: dict) -> dict:
+    return machine_json.get("machine", machine_json)
+
+
+def machine_content_hash(machine_json: dict) -> str:
+    """Hash of a machine definition, ignoring the hash stamp itself."""
+    doc = copy.deepcopy(machine_json)
+    body = _machine_body(doc)
+    (body.get("metadata") or {}).pop(_CONTENT_HASH_KEY, None)
+    if body.get("metadata") == {}:
+        body.pop("metadata")  # stamping created it; it carries nothing
+    canon = json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canon.encode()).hexdigest()[:16]
+
+
+def _stamped(machine_json: dict, content_hash: str) -> dict:
+    doc = copy.deepcopy(machine_json)
+    _machine_body(doc).setdefault("metadata", {})[_CONTENT_HASH_KEY] = content_hash
+    return doc
+
+
+def _get_existing_machines(
+    client: httpx.Client, re_url: str | None = None
+) -> dict[str, list[dict]] | None:
+    """``{name: [{"id", "hash"}, ...]}`` for what the engine holds, or None if unreadable.
+
+    A list per name, because a name held twice is a state worth seeing (see
+    `_get_existing_machine_names`), not one to collapse.
+    """
     try:
         resp = client.get(f"{re_url or _re_url()}/api/machines", timeout=_INVENTORY_TIMEOUT)
         resp.raise_for_status()
@@ -1156,7 +1196,12 @@ def _get_existing_machine_names(client: httpx.Client, re_url: str | None = None)
             error=str(exc),
         )
         return None
-    return {m.get("name") for m in machines}
+    inventory: dict[str, list[dict]] = {}
+    for m in machines:
+        inventory.setdefault(m.get("name"), []).append(
+            {"id": m.get("id"), "hash": (m.get("metadata") or {}).get(_CONTENT_HASH_KEY)}
+        )
+    return inventory
 
 
 def _re_targets() -> list[dict]:
@@ -1185,10 +1230,10 @@ def import_machines_everywhere(machines: list[tuple[str, dict]], label: str) -> 
     for target in targets:
         re_url = target["re_url"]
         instance = target.get("instance") or "env"
-        imported = skipped = failed = 0
+        imported = skipped = replaced = failed = 0
         try:
             with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
-                existing = _get_existing_machine_names(client, re_url)
+                existing = _get_existing_machines(client, re_url)
                 if existing is None:
                     # Not knowing what is registered is a reason to do nothing,
                     # not a reason to import everything. Logged per instance and
@@ -1204,13 +1249,28 @@ def import_machines_everywhere(machines: list[tuple[str, dict]], label: str) -> 
                     overall = False
                     continue
                 for name, machine_json in machines:
-                    if name in existing:
+                    content_hash = machine_content_hash(machine_json)
+                    held = existing.get(name, [])
+                    if len(held) == 1 and held[0]["hash"] == content_hash:
                         skipped += 1
                         continue
                     try:
-                        r = client.post(f"{re_url}/api/machines", json=machine_json)
+                        # Held but different (or unstamped, or held twice): the
+                        # engine is running a definition this file no longer
+                        # says. Replace it; a name-only check kept an old
+                        # definition live until the universe restarted.
+                        # Delete first, and never post over a failed delete,
+                        # or the name ends up held twice.
+                        for entry in held:
+                            client.delete(f"{re_url}/api/machines/{entry['id']}").raise_for_status()
+                        r = client.post(
+                            f"{re_url}/api/machines", json=_stamped(machine_json, content_hash)
+                        )
                         r.raise_for_status()
-                        imported += 1
+                        if held:
+                            replaced += 1
+                        else:
+                            imported += 1
                     except Exception as exc:
                         failed += 1
                         log.warning(
@@ -1236,6 +1296,7 @@ def import_machines_everywhere(machines: list[tuple[str, dict]], label: str) -> 
             label=label,
             instance=instance,
             imported=imported,
+            replaced=replaced,
             skipped=skipped,
             failed=failed,
         )

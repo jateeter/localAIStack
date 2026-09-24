@@ -38,20 +38,35 @@ class _Resp:
 
 
 class _Client:
-    """Records POSTs; `get_raises` makes the inventory read fail."""
+    """Records POSTs and DELETEs; `get_raises` makes the inventory read fail.
 
-    def __init__(self, names=(), get_raises=None):
-        self._names, self._get_raises = list(names), get_raises
-        self.posts = []
+    `names` entries are a name, or (name, content_hash) for a stamped machine.
+    """
+
+    def __init__(self, names=(), get_raises=None, delete_status=200):
+        self._held = [n if isinstance(n, tuple) else (n, None) for n in names]
+        self._get_raises, self._delete_status = get_raises, delete_status
+        self.posts, self.deletes = [], []
 
     def get(self, url, **kw):
         if self._get_raises is not None:
             raise self._get_raises
-        return _Resp({"machines": [{"name": n} for n in self._names]})
+        return _Resp(
+            {
+                "machines": [
+                    {"name": n, "id": f"id-{i}", "metadata": {rb._CONTENT_HASH_KEY: h} if h else {}}
+                    for i, (n, h) in enumerate(self._held)
+                ]
+            }
+        )
 
     def post(self, url, json=None, **kw):
         self.posts.append((url, json))
         return _Resp({"success": True})
+
+    def delete(self, url, **kw):
+        self.deletes.append(url)
+        return _Resp({}, self._delete_status)
 
     def __enter__(self):
         return self
@@ -111,16 +126,57 @@ def test_unreadable_inventory_imports_nothing(monkeypatch, one_target):
     assert ok is False, "a blind skip must not report success"
 
 
-def test_already_present_machines_are_skipped(monkeypatch, one_target):
-    c = _Client(names=["localai/a", "localai/b"])
+def _h(name):
+    return rb.machine_content_hash(dict(MACHINES)[name])
+
+
+def test_unchanged_machines_are_skipped(monkeypatch, one_target):
+    c = _Client(names=[("localai/a", _h("localai/a")), ("localai/b", _h("localai/b"))])
     assert _run(monkeypatch, c, MACHINES) is True
+    assert c.posts == [] and c.deletes == []
+
+
+def test_absent_machines_are_imported_stamped(monkeypatch, one_target):
+    c = _Client(names=[("localai/a", _h("localai/a"))])
+    assert _run(monkeypatch, c, MACHINES) is True
+    assert [j["machine"]["name"] for _, j in c.posts] == ["localai/b"]
+    assert c.posts[0][1]["machine"]["metadata"][rb._CONTENT_HASH_KEY] == _h("localai/b")
+    assert c.deletes == []
+
+
+def test_changed_machine_is_replaced(monkeypatch, one_target):
+    """The fix: a held definition that differs from the file is replaced, not kept."""
+    c = _Client(names=[("localai/a", "stale-hash"), ("localai/b", _h("localai/b"))])
+    assert _run(monkeypatch, c, MACHINES) is True
+    assert c.deletes == ["http://re/api/machines/id-0"]
+    assert [j["machine"]["name"] for _, j in c.posts] == ["localai/a"]
+
+
+def test_unstamped_machine_is_replaced_once(monkeypatch, one_target):
+    """A machine imported before stamping carries no hash, so it is replaced."""
+    c = _Client(names=["localai/a", ("localai/b", _h("localai/b"))])
+    assert _run(monkeypatch, c, MACHINES) is True
+    assert c.deletes == ["http://re/api/machines/id-0"]
+    assert len(c.posts) == 1
+
+
+def test_name_held_twice_is_collapsed_to_one(monkeypatch, one_target):
+    h = _h("localai/a")
+    c = _Client(names=[("localai/a", h), ("localai/a", h), ("localai/b", _h("localai/b"))])
+    assert _run(monkeypatch, c, MACHINES) is True
+    assert c.deletes == ["http://re/api/machines/id-0", "http://re/api/machines/id-1"]
+    assert len(c.posts) == 1
+
+
+def test_failed_delete_never_posts_a_second_copy(monkeypatch, one_target):
+    c = _Client(names=[("localai/a", "stale-hash")], delete_status=500)
+    assert _run(monkeypatch, c, MACHINES[:1]) is False
     assert c.posts == []
 
 
-def test_absent_machines_are_imported(monkeypatch, one_target):
-    c = _Client(names=["localai/a"])
-    assert _run(monkeypatch, c, MACHINES) is True
-    assert [j["machine"]["name"] for _, j in c.posts] == ["localai/b"]
+def test_content_hash_ignores_its_own_stamp():
+    doc = dict(MACHINES)["localai/a"]
+    assert rb.machine_content_hash(rb._stamped(doc, "x")) == rb.machine_content_hash(doc)
 
 
 def test_inventory_read_has_its_own_timeout():
