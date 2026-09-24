@@ -57,3 +57,21 @@ def test_machine_prose_names_regions_inside_the_localai_band():
                     continue  # [3] and the like: element indices, not regions
                 stale.append(f"{path.name}: {m.group(0)}")
     assert stale == [], "stale region references in machine prose: " + ", ".join(stale)
+
+
+def test_every_localai_sequence_has_a_trigger_rule():
+    """Every sequence carries a triggerConfig rule (scripts/conform_machines.py).
+
+    Governance is attached to a merge entry only when a rule matches the fired
+    sequence, so a sequence without one emits a merge entry without
+    `governance` beside entries that carry it, and RealityEngine_CI's
+    pe-step-contract reports the step's elements as disagreeing with each other
+    on every engine (regression runs 20260924T165353Z, 20260924T172724Z:
+    personal_health_baseline's health-none).
+    """
+    missing = []
+    for path in sorted(reality_bridge._MACHINES_DIR.glob("*.json")):
+        m = json.loads(path.read_text())["machine"]
+        rules = {r["sequenceId"] for r in m["metadata"].get("triggerConfig", {}).get("rules", [])}
+        missing += [f"{path.name}:{s['id']}" for s in m["sequences"] if s["id"] not in rules]
+    assert missing == [], f"sequences without a trigger rule: {missing}"

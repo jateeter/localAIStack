@@ -114,6 +114,18 @@
             "ragStatusCode": "GREEN",
             "processStatus": "info",
             "description": "At least one live band graded concern."
+          },
+          {
+            "sequenceId": "health-none",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "No live band is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites."
           }
         ]
       }
