@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "machine": {
     "name": "localai/personal_health_baseline",
-    "description": "Personal health state classifier. Reads the worst-band-wins roll-up that localAIStack writes at [7574:7578] as a one-hot [thriving, balanced, watch, attention] and asserts the matching state at [7578:7582]. The roll-up is computed over whichever HealthKit families are in scope (data/health/health_bands.json, graded from the bridge's lanes at [4320:4344]); that set changes with the owner's authorization workflow, so the machine reads one fixed-width summary rather than one element per measure. All sequences are isInitial under PASSTHROUGH; the input is one-hot, so at most one fires per step, and an all-zero input (no graded band) fires none.",
+    "description": "Personal health state classifier. Reads the worst-band-wins roll-up that localAIStack writes at [7574:7578] as a one-hot [thriving, balanced, watch, attention] and asserts the matching state at [7578:7582]. The roll-up is computed over whichever HealthKit families are in scope (data/health/health_bands.json, graded from the bridge's lanes at [4320:4344]); that set changes with the owner's authorization workflow, so the machine reads one fixed-width summary rather than one element per measure. All sequences are isInitial under PASSTHROUGH; the input is one-hot, so at most one fires per step, and an all-zero input (no graded band) fires health-none, which retracts the output to all zero.",
     "metadata": {
       "category": "personal-health",
       "author": "localAIStack health bridge",
@@ -35,7 +35,7 @@
         "balanced": "Exactly one live band graded watch, none concern.",
         "watch": "Two or more live bands graded watch, none concern.",
         "attention": "At least one live band graded concern.",
-        "none": "No band graded — the roll-up is all zero and no state is asserted",
+        "none": "No band graded — the roll-up is all zero; health-none retracts the output to all zero",
         "mutualExclusivity": "The roll-up is one-hot, so no two sequences fire in the same step"
       },
       "localAIPromptHints": {
@@ -44,7 +44,7 @@
         "watch": "Several health measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to rest.",
         "attention": "At least one health measure in scope is well outside its nominal range. Recommend a health check-in."
       },
-      "sequenceCount": 4,
+      "sequenceCount": 5,
       "machineClass": "signal-monitor",
       "governance": {
         "schemaVersion": "1.0.0",
@@ -359,6 +359,60 @@
             }
           }
         ]
+      },
+      {
+        "id": "health-none",
+        "name": "None: roll-up all LOW",
+        "metadata": {
+          "description": "No live band is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites.",
+          "output": "[0,0,0,0] — none"
+        },
+        "events": [
+          {
+            "id": "health-none-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "health-none-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "No live band graded — no state",
+                  "state": "none",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "No current health data is in scope."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "NONE_CHECK",
+              "description": "every element LOW (<0.5, gte with value 0): the all-zero roll-up"
+            }
+          }
+        ]
       }
     ],
     "inputSequences": [
@@ -432,8 +486,8 @@
       },
       {
         "name": "No graded band — no state",
-        "pattern": "roll-up all zero → nothing fires",
-        "description": "No band in scope has current, confident data. The roll-up is all zero and no sequence fires: no state rather than a guessed one.",
+        "pattern": "roll-up all zero → health-none retracts the output",
+        "description": "No band in scope has current, confident data. The roll-up is all zero; health-none fires and writes [0,0,0,0], so no state is asserted rather than the last one held.",
         "events": [
           [
             0.0,
@@ -443,8 +497,8 @@
           ]
         ],
         "metadata": {
-          "expectedOutput": "none",
-          "activeSequence": "none"
+          "expectedOutput": "[0,0,0,0]",
+          "activeSequence": "health-none"
         }
       }
     ]

@@ -399,8 +399,10 @@ What was built:
    family below the confidence floor, or with no current reading, is not graded
    at all rather than graded as a failure. The watch zones are provisional.
 3. **Worst band wins.** Any concern → attention; otherwise one watch → balanced,
-   two or more → watch; all ok → thriving; nothing graded → no state (an
-   all-zero roll-up, which fires nothing). `personal_health_baseline` now reads
+   two or more → watch; all ok → thriving; nothing graded → no state. An
+   all-zero roll-up fires a fifth sequence, `health-none`, which writes
+   `[0,0,0,0]`. Without it, the output region would keep showing the last state
+   after every measure had left scope (seen live, then fixed). `personal_health_baseline` now reads
    that one-hot roll-up rather than one element per measure, so the machine's
    shape does not change as scope does.
 4. **Dynamic slots.** `core/health_scope.py` runs from the API lifespan every
