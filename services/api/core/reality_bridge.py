@@ -738,6 +738,38 @@ def get_health_state_from_carry(ps: list) -> str | None:
     return None
 
 
+# T4: the RE read chat falls back to is cached this long per engine.
+_HEALTH_STATE_CACHE_S = 30.0
+_health_state_cache: dict[str, tuple[float, str | None]] = {}
+
+
+def current_health_state() -> str | None:
+    """Health state for chat, without a network round trip when localAI knows it.
+
+    First the scope follower's last state for the bound engine. The follower
+    computes the roll-up itself every HEALTH_SCOPE_INTERVAL_S, so this is as
+    fresh as the RE's own output and costs nothing to read. When the follower
+    has no state (no HealthKit data, the simulator path, or the follower is
+    off), fall back to reading the RE, cached for _HEALTH_STATE_CACHE_S so a
+    conversation does not pay a round trip on every turn.
+    """
+    import time
+
+    target = bind()
+    if target is not None:
+        summary = health_scope.last_summary(target["pe_url"])
+        if summary and summary.get("state"):
+            return summary["state"]
+    key = (target or {}).get("re_url") or _re_url()
+    now = time.monotonic()
+    hit = _health_state_cache.get(key)
+    if hit and now - hit[0] < _HEALTH_STATE_CACHE_S:
+        return hit[1]
+    state = get_current_health_state()
+    _health_state_cache[key] = (now, state)
+    return state
+
+
 def get_current_health_state() -> str | None:
     """
     Read the current health state from the RE perceptual space without

@@ -250,7 +250,7 @@ def test_chat_endpoint_checks_header_and_body_and_settings():
     content = chat_path.read_text()
     assert "health_context_enabled" in content
     assert "x_health_context" in content or "X-Health-Context" in content or "Header" in content
-    assert "get_current_health_state" in content
+    assert "current_health_state" in content
 
 
 def test_inject_logic_body_false_overrides_global_true():
