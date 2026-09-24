@@ -138,5 +138,10 @@ from **11 to 2**, and the two that remain are the intended ones.
    # or, from elsewhere:
    MACHINES_DIR=/path/to/RealityEngine_Machines ./scripts/check_machine_regions.py
    ```
-3. Moving a machine's region is a contract change: update the table above, and widen `LOCALAI_BAND`
+3. Running engines pick up the change the next time localAIStack starts, with no universe restart.
+   The importer stamps each machine's metadata with `localaiContentHash`, a hash of its definition.
+   A held machine whose hash differs, is missing, or is held twice is deleted and re-imported. An
+   unchanged one is skipped. A delete that fails is never followed by a post, so a name can't end up
+   held twice. Replacing a machine resets its runtime state (active events) on that engine.
+4. Moving a machine's region is a contract change: update the table above, and widen `LOCALAI_BAND`
    deliberately rather than to make a failure go away.
