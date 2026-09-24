@@ -163,7 +163,7 @@ def grade_raw(band: Band, raw: float) -> str:
     """Grade a single-axis band from a raw reading in its own unit.
 
     For callers holding a measurement rather than a lane family — the
-    simulator and ``push_health_signal``. Dormant bands grade too: dormancy
+    health push script and ``push_health_signal``. Dormant bands grade too: dormancy
     means no lane feeds them, not that their thresholds are unknown.
     """
     if len(band.axes) != 1:

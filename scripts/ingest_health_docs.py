@@ -2,7 +2,7 @@
 """
 Ingest personal health knowledge documents into the health_docs Qdrant collection.
 
-This script loads the Markdown files from data/documents/health/ and adds them
+This script loads the Markdown files from documents/health/ and adds them
 to the 'health_docs' vector store, enabling the health_search tool in the agent
 graph to answer health-related questions with grounded context.
 
@@ -12,11 +12,11 @@ Usage
   cd services/api && python ../../scripts/ingest_health_docs.py
 
   # With explicit paths:
-  python scripts/ingest_health_docs.py --docs-dir data/documents/health \
+  python scripts/ingest_health_docs.py --docs-dir documents/health \
       --qdrant-host localhost --qdrant-port 4333
 
 Options
-  --docs-dir PATH     Directory containing .md health documents  [default: data/documents/health]
+  --docs-dir PATH     Directory containing .md health documents  [default: documents/health]
   --qdrant-host HOST  Qdrant host                                [default: localhost]
   --qdrant-port PORT  Qdrant port                                [default: 4333]
   --collection NAME   Target collection name                     [default: health_docs]

@@ -63,7 +63,7 @@ _held: dict[str, dict[str, str]] = {}
 _resync_asked: dict[str, set[tuple[int, str]]] = {}
 _last: dict[str, dict] = {}
 # Engines on which the follower itself has asserted a state. It retracts only
-# those: a roll-up written by push_health_signal (the simulator) is not the
+# those: a roll-up written by the health push script or push_health_signal() is not the
 # follower's to clear just because no HealthKit family is present.
 _asserted: dict[str, bool] = {}
 

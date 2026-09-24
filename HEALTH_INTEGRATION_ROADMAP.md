@@ -51,7 +51,7 @@ updated to follow them.
 | **Health bands** | `data/health/health_bands.json` + `core/health_bands.py` — grade the bridge's families, roll up worst-wins | ✅ **T8** |
 | **Scope follower** | `core/health_scope.py` — follows HealthKit scope on every PE: dynamic slots, lock holds, remove frees, resync requests | ✅ **T8** |
 | **Health bridge** | `push_health_signal()`, `get_health_state()`, `get_current_health_state()` | ✅ Phase 1+2 |
-| **Health sim** | `scripts/simulate_health_push.py` — Yuma/MQTT analog, 4 scenarios + cycle, graded by the band table | ✅ Phase 1 |
+| **Health push script** | `scripts/simulate_health_push.py` — Yuma/MQTT analog, 4 scenarios + cycle, graded by the band table | ✅ Phase 1 |
 | **Health-aware chat** | `routers/chat.py` — health context injection, 3-level opt-in | ✅ Phase 2 |
 | **Health RAG** | `health_docs` collection, 9 knowledge docs, `health_search` agent tool | ✅ Phase 2+3 |
 | **Health doc ingest** | `scripts/ingest_health_docs.py` — loads health docs into Qdrant | ✅ Phase 2 |
@@ -216,7 +216,7 @@ as its HealthKit config. That file is not loadable by any PE — see T2.
   `live_pe`, `live_re` fixtures, `poll_until()`
 - `tests/e2e/test_api_integration.py` (15) and `tests/e2e/test_health_pipeline.py` (21)
 - `.github/workflows/e2e.yml` + `docker-compose.ci.yml`
-- 9 health knowledge documents in `data/documents/health/`
+- 9 health knowledge documents, now in `documents/health/` (git tracked since 2026-09-24; they were gitignored under `data/documents/` until then)
 
 **Correction:** e2e tests are *collected* in a default run and skip on the
 missing flag; they are not excluded from collection as this document claimed.
@@ -419,8 +419,9 @@ What was built:
    capacity 32. A locked type holds its last grade. A removed type's slot
    source is deleted. An active type with no current data gets one resync
    request per scope generation (`requestedBy: localAIStack`).
-5. `push_health_signal(hr, hrv, sleep)` remains as the simulator and
-   compatibility path. It grades raw readings against the same table and writes
+5. `push_health_signal(hr, hrv, sleep)` remains as a library entry point with no
+   non-test caller. (The health push script, `scripts/simulate_health_push.py`,
+   does not call it; it writes the roll-up itself.) It grades raw readings against the same table and writes
    the roll-up. The three legacy sensors (`localai_health_{hr,hrv,sleep}_ok`)
    are removed from any PE at registration, because they sit inside the
    roll-up's window.
