@@ -1,10 +1,11 @@
 """
-HEALTH_INTEGRATION_ROADMAP T4 and T6, and the follower/simulator boundary.
+HEALTH_INTEGRATION_ROADMAP T4 and T6, and the boundary between the follower and roll-ups it did not write.
 
   (1) T4: chat's health state comes from the scope follower first (no network),
       then from an RE read cached per engine.
-  (2) The follower retracts only a roll-up it asserted itself, so the
-      simulator's push_health_signal() is not undone 30 s later.
+  (2) The follower retracts only a roll-up it asserted itself, so a roll-up
+      written by the health push script or push_health_signal() is not undone
+      30 s later.
   (3) T6: /health reports CareKit state, the CareKit sensor count, and the
       follower's last reconciliation (needs fastapi; skips without it).
 """
@@ -70,13 +71,13 @@ def test_cache_expires(monkeypatch):
     assert len(calls) == 2
 
 
-# ── (2) follower vs simulator ───────────────────────────────────────────────
+# ── (2) follower vs a roll-up it did not write ──────────────────────────────
 
 
 def test_follower_does_not_retract_a_rollup_it_did_not_assert():
-    """push_health_signal wrote 'watch'; no HealthKit data; the follower leaves it."""
+    """The health push script wrote 'watch'; no HealthKit data; the follower leaves it."""
     pe = FakePE(scope=None)
-    health_scope.write_rollup(pe, PE, "watch")  # what push_health_signal does
+    health_scope.write_rollup(pe, PE, "watch")  # what the health push script does
     assert _rollup(pe) == [0.0, 0.0, 1.0, 0.0]
     s = health_scope.reconcile({"pe_url": PE}, client=pe)
     assert s["state"] is None
@@ -90,7 +91,7 @@ def test_follower_still_retracts_its_own_state():
     pe.family(4340, _sleep(7.5), active=False)
     health_scope.reconcile({"pe_url": PE}, client=pe)
     assert _rollup(pe) == [0.0, 0.0, 0.0, 0.0]
-    # Retracted once; a later simulator write is again not the follower's.
+    # Retracted once; a later health push script write is again not the follower's.
     health_scope.write_rollup(pe, PE, "thriving")
     health_scope.reconcile({"pe_url": PE}, client=pe)
     assert _rollup(pe) == [1.0, 0.0, 0.0, 0.0]

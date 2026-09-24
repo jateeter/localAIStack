@@ -19,8 +19,6 @@ __pycache__/
 
 # Stack volumes and local data
 volumes/
-data/documents/*
-!data/documents/.gitkeep
 /tmp/
 
 # Downloaded GGUF weights — fetched by scripts/setup.sh from HuggingFace

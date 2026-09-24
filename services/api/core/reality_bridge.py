@@ -749,7 +749,8 @@ def current_health_state() -> str | None:
     First the scope follower's last state for the bound engine. The follower
     computes the roll-up itself every HEALTH_SCOPE_INTERVAL_S, so this is as
     fresh as the RE's own output and costs nothing to read. When the follower
-    has no state (no HealthKit data, the simulator path, or the follower is
+    has no state (no HealthKit data, a roll-up written by the health push
+    script or push_health_signal(), or the follower is
     off), fall back to reading the RE, cached for _HEALTH_STATE_CACHE_S so a
     conversation does not pay a round trip on every turn.
     """
@@ -831,7 +832,8 @@ def push_health_signal(
     roll-up to the PE, push so personal_health_baseline evaluates it, and
     return the decoded health state.
 
-    The simulator and compatibility path. On a device, the bridge's families
+    A library entry point with no non-test caller; the health push script
+    (scripts/simulate_health_push.py) writes the roll-up itself. On a device, the bridge's families
     reach the PE directly and ``follow_health_scope`` grades them; this grades
     readings a caller already holds, against the same thresholds
     (data/health/health_bands.json): heart rate on the pulse band, HRV on the
