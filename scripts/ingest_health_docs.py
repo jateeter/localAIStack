@@ -59,14 +59,19 @@ SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
 
 
 def get_embeddings(model_name: str):
+    # OLLAMA_BASE_URL as the service uses it; without it the client dials
+    # localhost, which is wrong everywhere but a bare host run.
+    import os
+
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     try:
         from langchain_ollama import OllamaEmbeddings
 
-        return OllamaEmbeddings(model=model_name)
+        return OllamaEmbeddings(model=model_name, base_url=base_url)
     except ImportError:
         from langchain_community.embeddings import OllamaEmbeddings  # type: ignore
 
-        return OllamaEmbeddings(model=model_name)
+        return OllamaEmbeddings(model=model_name, base_url=base_url)
 
 
 def load_health_documents(docs_dir: pathlib.Path) -> list:
@@ -98,7 +103,7 @@ def main() -> None:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--docs-dir", default=str(_REPO_ROOT / "data" / "documents" / "health"))
+    parser.add_argument("--docs-dir", default=str(_REPO_ROOT / "documents" / "health"))
     parser.add_argument("--qdrant-host", default="localhost")
     parser.add_argument("--qdrant-port", type=int, default=4333)
     parser.add_argument("--collection", default="health_docs")
