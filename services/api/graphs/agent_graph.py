@@ -47,8 +47,12 @@ def health_search(query: str) -> str:
     wellness indicators, sleep quality, HRV interpretation, heart rate, and recovery.
     Use this tool when the user asks health-related questions such as what their HRV
     or sleep metrics mean, how to improve recovery, or what health state changes signify."""
+    from core.health_rerank import health_focus, rerank
+
     store = get_health_vector_store()
-    docs = store.similarity_search(query, k=4)
+    # Fetch wider, then re-rank by health state (T10) and keep four. With no
+    # state to act on, the re-rank is a no-op and this is the plain top four.
+    docs = rerank(store.similarity_search(query, k=8), *health_focus())[:4]
     if not docs:
         return "No relevant health information found in the knowledge base."
     return "\n\n---\n\n".join(
