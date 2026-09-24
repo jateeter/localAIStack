@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pathlib
 from types import SimpleNamespace
 
 from core import health_rerank as hr
@@ -55,8 +54,11 @@ def test_documents_without_source_metadata_are_left_in_place():
 
 
 def test_every_mapped_source_exists_in_the_health_corpus():
-    # documents/ is git tracked beside data/ (2026-09-24), so it is always here.
-    corpus = pathlib.Path(__file__).resolve().parents[3] / "documents" / "health"
+    # data/<domain>/documents/, git tracked; resolved beside health_bands.json
+    # the way the service resolves the domain directory.
+    from core import health_bands
+
+    corpus = health_bands._BANDS_PATH.parent / "documents"
     assert corpus.is_dir(), corpus
     mapped = {f for v in (*hr.STATE_SOURCES.values(), *hr.BAND_SOURCES.values()) for f in v}
     missing = sorted(f for f in mapped if not (corpus / f).exists())

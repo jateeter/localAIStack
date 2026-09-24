@@ -186,7 +186,6 @@ services:
       # GET /models reports fits_host against real host memory.
       HOST_RAM_GB: "${HOST_RAM_GB:-}"
     volumes:
-      - ./documents:/app/documents
       - ./data/machines:/app/data/machines:ro
       # health_bands.json, resolved beside LOCALAI_MACHINES_DIR (core/health_bands.py)
       - ./data/health:/app/data/health:ro

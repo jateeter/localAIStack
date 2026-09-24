@@ -30,8 +30,13 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
 - `config/`: dashboards and runtime config.
 - `config/models.registry.json`: model registry — the available-model source of
   truth, also read by `scripts/lib/models_registry.sh`.
-- `data/`: machine data (`data/machines`) and health band tables (`data/health`).
-- `documents/`: RAG knowledge documents, git tracked (`documents/health` is the curated health corpus loaded by `scripts/ingest_health_docs.py`).
+- `data/<domain>/`: everything domain-specific, one directory per domain.
+  JSON (tables, config) at its top level and RAG knowledge documents in
+  `data/<domain>/documents/`, all git tracked. Today: `data/health/`
+  (`health_bands.json`; `documents/` is the curated health corpus loaded by
+  `scripts/ingest_health_docs.py`). New domains follow the same shape, e.g.
+  `data/communityServices/*.json` and `data/communityServices/documents/*`.
+- `data/machines/`: localAI's machine definitions (contracted here, not in the corpus).
 - `models/`: local model assets.
 - `scripts/`: operational helpers and examples.
 
