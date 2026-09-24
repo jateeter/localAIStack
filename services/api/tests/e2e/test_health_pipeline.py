@@ -3,16 +3,20 @@ Live stack e2e tests — require PE + RE + localAI API all running.
 
 These tests exercise the full personal health pipeline:
 
-  simulate_health_push → PE sensors → PE /api/push → RE /api/perceive
-  → personal_health_baseline machine fires → perceptualSpace[190:194]
+  graded roll-up → PE sensor localai_health_rollup [7574:7578] → PE /api/push
+  → RE /api/perceive → personal_health_baseline fires → perceptualSpace[7578:7582]
   → /health reports re.health_state
   → POST /chat with health_context=true → response contains health hint
   → POST /graphql updateProcessState (from simulate script)
 
 Phase 4 additions (CareKit + health carry):
-  push_carekit_signal → PE sensors [194:197] → PE /api/push → RE
-  → medication_adherence machine fires → perceptualSpace[198:202]
-  → session_health_context carry persists health state at [202:206]
+  push_carekit_signal → PE sensors [7582:7585] → PE /api/push → RE
+  → medication_adherence machine fires → perceptualSpace[7586:7590]
+  → session_health_context carry persists health state at [7590:7594]
+
+Regions, sensor ids and decoders come from core.reality_bridge rather than
+being restated here: this file carried the pre-migration [186:206] offsets
+long after the machines moved.
 
 Run locally (all services must be running):
   # Start PE (port 3004) and RE (port 3000) from RealityEngine_CI/startUniverse.sh
@@ -34,13 +38,8 @@ import time
 import httpx
 import pytest
 
+from core import health_bands, reality_bridge
 from tests.e2e.conftest import poll_until
-
-# Band normalization constants — mirror reality_bridge.py
-_HR_LOW_BPM = 60.0
-_HR_HIGH_BPM = 100.0
-_HRV_OK_MS = 30.0
-_SLEEP_OK_HOURS = 6.5
 
 
 def _ssl_verify(url: str) -> bool:
@@ -52,35 +51,40 @@ def _ssl_verify(url: str) -> bool:
     )
 
 
-_HEALTH_SENSORS = [
-    {"sensorId": "localai_health_hr_ok", "region": {"offset": 186, "length": 1}, "ttlMs": 300_000},
-    {"sensorId": "localai_health_hrv_ok", "region": {"offset": 187, "length": 1}, "ttlMs": 900_000},
-    {
-        "sensorId": "localai_health_sleep_ok",
-        "region": {"offset": 188, "length": 1},
-        "ttlMs": 86_400_000,
-    },
-]
+_HEALTH_SENSORS = reality_bridge._HEALTH_SENSORS
 
 _HEALTH_MACHINE_NAME = "localai/personal_health_baseline"
 
+# (hr_bpm, hrv_sdnn_ms, sleep_hours), graded against data/health/health_bands.json.
+# Worst band wins: one watch → balanced, two → watch, any concern → attention.
 _SCENARIOS = {
     "thriving": (72.0, 45.0, 7.5),
     "balanced": (75.0, 38.0, 5.5),
-    "watch": (70.0, 18.0, 6.0),
-    "attention": (105.0, 25.0, 7.0),
+    "watch": (110.0, 25.0, 7.0),
+    "attention": (70.0, 18.0, 6.0),
 }
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _band(hr: float, hrv: float, sleep: float) -> tuple[float, float, float]:
-    return (
-        1.0 if _HR_LOW_BPM <= hr <= _HR_HIGH_BPM else 0.0,
-        1.0 if hrv >= _HRV_OK_MS else 0.0,
-        1.0 if sleep >= _SLEEP_OK_HOURS else 0.0,
-    )
+def _rollup(hr: float, hrv: float, sleep: float) -> list[float]:
+    grades = reality_bridge.health_grades(hr, hrv, sleep)
+    return health_bands.rollup_vector(health_bands.rollup(list(grades.values())))
+
+
+def _write_and_activate(pe_url: str, sensor_id: str, values: list[float]) -> None:
+    """Write first, then activate: a source is never active while empty."""
+    verify = _ssl_verify(pe_url)
+    httpx.post(
+        f"{pe_url}/api/sensors/{sensor_id}", json={"values": values}, timeout=5, verify=verify
+    ).raise_for_status()
+    r = httpx.get(f"{pe_url}/api/sources", timeout=5, verify=verify)
+    src = next((x for x in r.json().get("sources", []) if x.get("sensorId") == sensor_id), None)
+    if src and not src.get("active"):
+        httpx.patch(
+            f"{pe_url}/api/sources/{src['id']}", json={"active": True}, timeout=5, verify=verify
+        ).raise_for_status()
 
 
 def _ensure_health_sensors(pe_url: str) -> None:
@@ -95,9 +99,9 @@ def _ensure_health_sensors(pe_url: str) -> None:
             f"{pe_url}/api/sources",
             json={
                 "type": "sensor",
-                "name": f"localai/health/{sensor['sensorId'].replace('localai_health_', '')}",
+                "name": sensor["name"],
                 "region": sensor["region"],
-                "active": True,
+                "active": False,
                 "sensorId": sensor["sensorId"],
                 "lastValue": [],
                 "lastUpdated": None,
@@ -109,40 +113,12 @@ def _ensure_health_sensors(pe_url: str) -> None:
 
 
 def _push_health_scenario(pe_url: str, scenario: str) -> str | None:
-    """Write band values to PE and trigger a push. Return decoded health state."""
-    hr, hrv, sleep = _SCENARIOS[scenario]
-    hr_ok, hrv_ok, sleep_ok = _band(hr, hrv, sleep)
-    for sid, val in [
-        ("localai_health_hr_ok", hr_ok),
-        ("localai_health_hrv_ok", hrv_ok),
-        ("localai_health_sleep_ok", sleep_ok),
-    ]:
-        httpx.post(
-            f"{pe_url}/api/sensors/{sid}",
-            json={"values": [val]},
-            timeout=5,
-            verify=_ssl_verify(pe_url),
-        ).raise_for_status()
-
+    """Write the scenario's roll-up to the PE and push. Return the decoded health state."""
+    _write_and_activate(pe_url, "localai_health_rollup", _rollup(*_SCENARIOS[scenario]))
     push_r = httpx.post(f"{pe_url}/api/push", timeout=10, verify=_ssl_verify(pe_url))
     push_r.raise_for_status()
     ps = push_r.json().get("step", {}).get("perceptualSpace", [])
-    return _decode_state(ps)
-
-
-def _decode_state(ps: list) -> str | None:
-    def s(i: int) -> float:
-        return ps[i] if len(ps) > i else 0.0  # noqa: E731
-
-    if s(190) >= 0.5:
-        return "thriving"
-    if s(191) >= 0.5:
-        return "balanced"
-    if s(192) >= 0.5:
-        return "watch"
-    if s(193) >= 0.5:
-        return "attention"
-    return None
+    return reality_bridge.get_health_state(ps)
 
 
 def _health_state_from_api(api_url: str) -> str | None:
@@ -159,7 +135,7 @@ def _health_state_from_api(api_url: str) -> str | None:
 
 @pytest.mark.live
 def test_health_sensors_register_in_pe(live_pe: str) -> None:
-    """All three health sensors must be successfully registered in the PE."""
+    """The health roll-up sensor must be registered in the PE."""
     _ensure_health_sensors(live_pe)
     r = httpx.get(f"{live_pe}/api/sources", timeout=5, verify=_ssl_verify(live_pe))
     r.raise_for_status()
@@ -402,11 +378,7 @@ def test_full_health_pipeline_cycle(live_pe: str, live_api: str, live_re: str) -
 
 # ── Phase 4: CareKit sensors ──────────────────────────────────────────────────
 
-_CAREKIT_SENSORS = [
-    {"sensorId": "localai_carekit_med_adherence", "offset": 194, "ttlMs": 3_600_000},
-    {"sensorId": "localai_carekit_task_completion", "offset": 195, "ttlMs": 86_400_000},
-    {"sensorId": "localai_carekit_symptom_ok", "offset": 196, "ttlMs": 86_400_000},
-]
+_CAREKIT_SENSORS = reality_bridge._CAREKIT_SENSORS
 _CAREKIT_MACHINE_NAME = "localai/medication_adherence"
 _HEALTH_CARRY_MACHINE_NAME = "localai/session_health_context"
 
@@ -429,9 +401,9 @@ def _ensure_carekit_sensors(pe_url: str) -> None:
             f"{pe_url}/api/sources",
             json={
                 "type": "sensor",
-                "name": f"localai/carekit/{sensor['sensorId'].replace('localai_carekit_', '')}",
-                "region": {"offset": sensor["offset"], "length": 1},
-                "active": True,
+                "name": sensor["name"],
+                "region": sensor["region"],
+                "active": False,
                 "sensorId": sensor["sensorId"],
                 "lastValue": [],
                 "lastUpdated": None,
@@ -449,47 +421,19 @@ def _push_carekit_scenario(pe_url: str, scenario: str) -> str | None:
         ("localai_carekit_task_completion", task),
         ("localai_carekit_symptom_ok", symp),
     ]:
-        httpx.post(
-            f"{pe_url}/api/sensors/{sid}",
-            json={"values": [val]},
-            timeout=5,
-            verify=_ssl_verify(pe_url),
-        ).raise_for_status()
+        _write_and_activate(pe_url, sid, [val])
 
     push_r = httpx.post(f"{pe_url}/api/push", timeout=10, verify=_ssl_verify(pe_url))
     push_r.raise_for_status()
     ps = push_r.json().get("step", {}).get("perceptualSpace", [])
-    return _decode_carekit_state(ps)
-
-
-def _decode_carekit_state(ps: list) -> str | None:
-    def s(i: int) -> float:
-        return ps[i] if len(ps) > i else 0.0  # noqa: E731
-
-    if s(198) >= 0.5:
-        return "adherent"
-    if s(199) >= 0.5:
-        return "partial"
-    if s(200) >= 0.5:
-        return "lapsed"
-    if s(201) >= 0.5:
-        return "concern"
-    return None
+    push_r = httpx.post(f"{pe_url}/api/push", timeout=10, verify=_ssl_verify(pe_url))
+    push_r.raise_for_status()
+    ps = push_r.json().get("step", {}).get("perceptualSpace", [])
+    return reality_bridge.get_carekit_state(ps)
 
 
 def _decode_health_carry(ps: list) -> str | None:
-    def s(i: int) -> float:
-        return ps[i] if len(ps) > i else 0.0  # noqa: E731
-
-    if s(202) >= 0.5:
-        return "thriving"
-    if s(203) >= 0.5:
-        return "balanced"
-    if s(204) >= 0.5:
-        return "watch"
-    if s(205) >= 0.5:
-        return "attention"
-    return None
+    return reality_bridge.get_health_state_from_carry(ps)
 
 
 @pytest.mark.live
@@ -547,14 +491,14 @@ def test_health_carry_machine_imported_in_re(live_api: str, live_re: str) -> Non
 @pytest.mark.live
 def test_health_carry_persists_after_push(live_pe: str, live_re: str) -> None:
     """
-    After pushing a health scenario, perceptualSpace[202:206] must be non-zero
+    After pushing a health scenario, perceptualSpace[7590:7594] must be non-zero
     (session_health_context carry latched the state). On a subsequent quiet push
     (no sensor writes), the carry must remain stable — PE carry-forward semantics.
     """
     _ensure_health_sensors(live_pe)
 
-    # Push thriving scenario — this fires personal_health_baseline [190:194]
-    # which then fires session_health_context → writes carry at [202:206]
+    # Push thriving scenario — this fires personal_health_baseline [7578:7582]
+    # which then fires session_health_context → writes carry at [7590:7594]
     _push_health_scenario(live_pe, "thriving")
 
     # Read carry from RE state (bypassing PE push)
@@ -582,5 +526,5 @@ def test_health_carry_persists_after_push(live_pe: str, live_re: str) -> None:
     carry_after_quiet = _decode_health_carry(ps_quiet)
     assert carry_after_quiet == "thriving", (
         f"Carry dropped to {carry_after_quiet!r} after quiet push — "
-        f"PE carry-forward should hold [202:206] unchanged when no new sensor fires."
+        f"PE carry-forward should hold [7590:7594] unchanged when no new sensor fires."
     )

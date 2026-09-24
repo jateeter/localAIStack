@@ -10,13 +10,14 @@ Mirrors the structure of test_reality_bridge.py:
       to the correct string for each of the four health states.
 
   (3) End-to-end push cycle — exercises push_health_signal() with a fake
-      PE/RE; confirms band normalization, sensor writes, and state decoding.
+      PE/RE; confirms band grading, the worst-band-wins roll-up write, and
+      state decoding.
 
   (4) Bridge robustness — PE unreachable falls back to "watch".
 
 All tests are network-free; httpx.Client is monkeypatched with a fake that
-records requests and returns canned responses containing a 256-element
-perceptualSpace vector with the 'thriving' state asserted at [190].
+records requests and returns canned responses containing a 7680-element
+perceptualSpace vector with one state asserted in [7578:7582].
 """
 
 from __future__ import annotations
@@ -69,11 +70,19 @@ def test_drift_guard_catches_health_machine_offset_mutation(tmp_path, monkeypatc
 
 
 def test_health_sensors_are_registered_in_sensor_to_machine():
-    """All three health sensor IDs must map to personal_health_baseline.json."""
-    for sid in ("localai_health_hr_ok", "localai_health_hrv_ok", "localai_health_sleep_ok"):
-        assert reality_bridge._SENSOR_TO_MACHINE.get(sid) == "personal_health_baseline.json", (
-            f"{sid} missing from _SENSOR_TO_MACHINE"
-        )
+    """The roll-up sensor maps to personal_health_baseline.json; the legacy three do not."""
+    assert (
+        reality_bridge._SENSOR_TO_MACHINE.get("localai_health_rollup")
+        == "personal_health_baseline.json"
+    )
+    for sid in reality_bridge._LEGACY_HEALTH_SENSOR_IDS:
+        assert sid not in reality_bridge._SENSOR_TO_MACHINE
+
+
+def test_rollup_sensor_fills_health_machine_input_window():
+    """The roll-up is the whole [7574:7578] window: one writer, not four."""
+    assert [s["sensorId"] for s in reality_bridge._HEALTH_SENSORS] == ["localai_health_rollup"]
+    assert reality_bridge._HEALTH_SENSORS[0]["region"] == {"offset": 7574, "length": 4}
 
 
 def test_health_sensors_are_inside_health_machine_input_window():
@@ -194,93 +203,89 @@ def fake_health_client(monkeypatch):
     return fake
 
 
-def test_push_health_signal_thriving_writes_all_sensors_high(fake_health_client):
-    """
-    Nominal scenario: HR=80, HRV=45ms, Sleep=7.5h → all three bands HIGH.
-    push_health_signal must write 1.0 to each sensor and return 'thriving'.
-    """
-    state = reality_bridge.push_health_signal(
-        hr_bpm=80.0,
-        hrv_sdnn_ms=45.0,
-        sleep_hours=7.5,
-    )
+def _rollup_posts(fake) -> list[list[float]]:
+    return [
+        p["json"]["values"] for p in fake.posts if "/api/sensors/localai_health_rollup" in p["url"]
+    ]
+
+
+def test_push_health_signal_thriving_writes_rollup(fake_health_client):
+    """HR=80, HRV=45ms, sleep=7.5h: every band ok → roll-up thriving [1,0,0,0]."""
+    state = reality_bridge.push_health_signal(hr_bpm=80.0, hrv_sdnn_ms=45.0, sleep_hours=7.5)
     assert state == "thriving"
 
     urls = [p["url"] for p in fake_health_client.posts]
-    assert any("/api/sensors/localai_health_hr_ok" in u for u in urls)
-    assert any("/api/sensors/localai_health_hrv_ok" in u for u in urls)
-    assert any("/api/sensors/localai_health_sleep_ok" in u for u in urls)
+    assert _rollup_posts(fake_health_client) == [[1.0, 0.0, 0.0, 0.0]]
     assert any("/api/push" in u for u in urls)
-
-    hr_post = next(
-        p for p in fake_health_client.posts if "/api/sensors/localai_health_hr_ok" in p["url"]
-    )
-    assert hr_post["json"]["values"] == [1.0]
-
-
-def test_push_health_signal_band_values_hr_in_range():
-    """HR=60 (exactly on lower bound) and HR=100 (upper bound) should both be OK."""
-    for bpm in (60.0, 80.0, 100.0):
-        hr_ok = 1.0 if 60.0 <= bpm <= 100.0 else 0.0
-        assert hr_ok == 1.0, f"HR={bpm} should be in range"
-
-    for bpm in (59.9, 100.1, 120.0, 40.0):
-        hr_ok = 1.0 if 60.0 <= bpm <= 100.0 else 0.0
-        assert hr_ok == 0.0, f"HR={bpm} should be out of range"
+    # Declared before its first write, inactive (core/pe_sources.py).
+    decl = next(p for p in fake_health_client.posts if p["url"].endswith("/api/sources"))
+    assert decl["json"]["sensorId"] == "localai_health_rollup"
+    assert decl["json"]["active"] is False
+    for sid in reality_bridge._LEGACY_HEALTH_SENSOR_IDS:
+        assert not any(sid in u for u in urls), f"legacy sensor {sid} written"
 
 
-def test_push_health_signal_band_values_hrv_threshold():
-    """HRV ≥ 30ms → ok=1.0; below → 0.0."""
-    assert (1.0 if reality_bridge._HRV_OK_MS <= 30.0 else 0.0) == 1.0
-    assert (1.0 if reality_bridge._HRV_OK_MS <= 29.9 else 0.0) == 0.0
-
-
-def test_push_health_signal_attention_writes_hr_low(monkeypatch):
-    """HR=105 (above 100 ceiling) must write hr.ok=0.0, returning 'attention'."""
-    fake = _FakeHealthClient(health_state_offset=7581)  # attention
+@pytest.mark.parametrize(
+    ("hr", "hrv", "sleep", "grades", "rollup"),
+    [
+        # grades: pulse, hrv, sleep — against data/health/health_bands.json
+        (80.0, 45.0, 7.5, ("ok", "ok", "ok"), [1.0, 0.0, 0.0, 0.0]),
+        (60.0, 30.0, 6.5, ("ok", "ok", "ok"), [1.0, 0.0, 0.0, 0.0]),  # lower bounds ok
+        (100.0, 45.0, 7.5, ("ok", "ok", "ok"), [1.0, 0.0, 0.0, 0.0]),  # upper bound ok
+        (75.0, 38.0, 5.5, ("ok", "ok", "watch"), [0.0, 1.0, 0.0, 0.0]),  # one watch
+        (110.0, 25.0, 7.0, ("watch", "watch", "ok"), [0.0, 0.0, 1.0, 0.0]),  # two watch
+        (70.0, 18.0, 6.0, ("ok", "concern", "watch"), [0.0, 0.0, 0.0, 1.0]),  # concern wins
+        (130.0, 45.0, 7.5, ("concern", "ok", "ok"), [0.0, 0.0, 0.0, 1.0]),
+        (45.0, 45.0, 7.5, ("concern", "ok", "ok"), [0.0, 0.0, 0.0, 1.0]),
+        (80.0, 45.0, 4.0, ("ok", "ok", "concern"), [0.0, 0.0, 0.0, 1.0]),
+    ],
+)
+def test_push_health_signal_grades_worst_band_wins(monkeypatch, hr, hrv, sleep, grades, rollup):
+    assert tuple(reality_bridge.health_grades(hr, hrv, sleep).values()) == grades
+    fake = _FakeHealthClient(health_state_offset=7578 + rollup.index(1.0))
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
-
-    state = reality_bridge.push_health_signal(
-        hr_bpm=105.0,
-        hrv_sdnn_ms=25.0,
-        sleep_hours=7.0,
-    )
-    assert state == "attention"
-
-    hr_post = next(p for p in fake.posts if "/api/sensors/localai_health_hr_ok" in p["url"])
-    assert hr_post["json"]["values"] == [0.0]
+    reality_bridge.push_health_signal(hr_bpm=hr, hrv_sdnn_ms=hrv, sleep_hours=sleep)
+    assert _rollup_posts(fake) == [rollup]
 
 
-def test_push_health_signal_watch_writes_hrv_low(monkeypatch):
-    """HR in range but HRV=18ms (<30ms) must write hrv.ok=0.0, returning 'watch'."""
-    fake = _FakeHealthClient(health_state_offset=7580)  # watch
+def test_push_health_signal_returns_state_the_machine_asserted(monkeypatch):
+    """The returned state is the RE's, read back from [7578:7582], not the local roll-up."""
+    fake = _FakeHealthClient(health_state_offset=7580)  # RE says watch
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
-
-    state = reality_bridge.push_health_signal(
-        hr_bpm=70.0,
-        hrv_sdnn_ms=18.0,
-        sleep_hours=6.0,
-    )
-    assert state == "watch"
-
-    hrv_post = next(p for p in fake.posts if "/api/sensors/localai_health_hrv_ok" in p["url"])
-    assert hrv_post["json"]["values"] == [0.0]
+    assert reality_bridge.push_health_signal(80.0, 45.0, 7.5) == "watch"
 
 
-def test_push_health_signal_balanced_sleep_low(monkeypatch):
-    """HR and HRV nominal but sleep=5.5h (<6.5h) → sleep.ok=0.0 → 'balanced'."""
-    fake = _FakeHealthClient(health_state_offset=7579)  # balanced
+def test_register_sensors_removes_legacy_health_sensors(monkeypatch):
+    """A PE still holding hr_ok/hrv_ok/sleep_ok loses them: they overlap the roll-up."""
+    legacy = [
+        {"id": f"src-{i}", "type": "sensor", "sensorId": sid, "active": True, "lastValue": [1.0]}
+        for i, sid in enumerate(reality_bridge._LEGACY_HEALTH_SENSOR_IDS)
+    ]
+
+    class _WithLegacy(_FakeHealthClient):
+        def __init__(self):
+            super().__init__()
+            self.deletes: list[str] = []
+
+        def get(self, url, **_):
+            if url.endswith("/api/sources"):
+                return _FakeResponse(200, {"sources": legacy})
+            return super().get(url)
+
+        def delete(self, url, **_):
+            self.deletes.append(url)
+            return _FakeResponse(200, {})
+
+        def patch(self, url, json=None, **_):
+            return _FakeResponse(200, {})
+
+    fake = _WithLegacy()
     monkeypatch.setattr(reality_bridge.httpx, "Client", lambda *a, **kw: fake)
-
-    state = reality_bridge.push_health_signal(
-        hr_bpm=75.0,
-        hrv_sdnn_ms=38.0,
-        sleep_hours=5.5,
+    monkeypatch.setattr(
+        reality_bridge, "_re_targets", lambda: [{"pe_url": "http://pe", "instance": "t"}]
     )
-    assert state == "balanced"
-
-    sleep_post = next(p for p in fake.posts if "/api/sensors/localai_health_sleep_ok" in p["url"])
-    assert sleep_post["json"]["values"] == [0.0]
+    assert reality_bridge.register_sensors() is True
+    assert sorted(fake.deletes) == [f"http://pe/api/sources/src-{i}" for i in range(3)]
 
 
 # ── (4) Bridge robustness ─────────────────────────────────────────────────────

@@ -8,8 +8,8 @@
       "author": "localAIStack health bridge",
       "created": "2026-06-18T00:00:00Z",
       "pattern": "health-state-classifier",
-      "eventSpace": "4D ratio vector at [194:198]: [med_adherence, task_completion, symptom_ok, _]",
-      "outputSpace": "4D classification at [198:202]: [adherent, partial, lapsed, concern]",
+      "eventSpace": "4D ratio vector at [7582:7586]: [med_adherence, task_completion, symptom_ok, _]",
+      "outputSpace": "4D classification at [7586:7590]: [adherent, partial, lapsed, concern]",
       "tags": [
         "health",
         "carekit",
@@ -20,17 +20,17 @@
       ],
       "sensorSources": {
         "localai_carekit_med_adherence": {
-          "region": "[194:195]",
+          "region": "[7582:7583]",
           "description": "Medication adherence ratio (0.0–1.0): doses taken / doses scheduled in rolling 24 h window",
           "ttlMs": 3600000
         },
         "localai_carekit_task_completion": {
-          "region": "[195:196]",
+          "region": "[7583:7584]",
           "description": "CareKit task completion ratio (0.0–1.0): tasks completed / tasks scheduled today",
           "ttlMs": 86400000
         },
         "localai_carekit_symptom_ok": {
-          "region": "[196:197]",
+          "region": "[7584:7585]",
           "description": "Symptom sentinel: 1.0 = no symptoms or severity < moderate; 0.0 = moderate or worse symptoms reported",
           "ttlMs": 86400000
         }

@@ -60,6 +60,7 @@ import pathlib
 import httpx
 import structlog
 
+from core import health_bands, health_scope
 from core.bridge_binding import bind
 from core.pe_sources import (
     activate_sensor_source,
@@ -81,10 +82,9 @@ _SSL_VERIFY: bool | str = os.getenv("RE_SSL_VERIFY", "true").lower() not in ("fa
 #   - rag retrieval  (doc_count_norm, avg_score)        → [7440:7444]
 #   - rag grading    (kept_ratio,    rewrite_count_norm) → [7444:7448]
 #   - agent activity (tool_calls,    tool_errors,   reasoning_depth) → [7452:7456]
-# Health PE sensors (band values — 1.0 = in nominal range, 0.0 = out):
-#   - health.hr.ok   → [7574:7575]
-#   - health.hrv.ok  → [7575:7576]
-#   - health.sleep.ok → [7576:7577]
+# Health PE sensors (HEALTH_INTEGRATION_ROADMAP T8, core/health_scope.py):
+#   - health roll-up (one-hot thriving/balanced/watch/attention) → [7574:7578]
+#   - one slot per band in HealthKit scope, allocated dynamically → [7600:7632]
 # All sensors bypass auto-assembly and land directly in the named region.
 
 _RAG_SENSORS = [
@@ -108,29 +108,20 @@ _RAG_SENSORS = [
     },
 ]
 
-# Personal health band sensors — [7574:7577].  Each carries a 1-element region
-# (single byte) so the RE can read HR, HRV, and sleep independently.  All use
-# long TTLs matching the HealthKit delivery cadence for each data type.
-_HEALTH_SENSORS = [
-    {
-        "sensorId": "localai_health_hr_ok",
-        "name": "localai/health/hr_ok",
-        "region": {"offset": 7574, "length": 1},
-        "ttlMs": 300_000,  # 5 min — heart rate can change quickly
-    },
-    {
-        "sensorId": "localai_health_hrv_ok",
-        "name": "localai/health/hrv_ok",
-        "region": {"offset": 7575, "length": 1},
-        "ttlMs": 900_000,  # 15 min — HRV is a slower-moving metric
-    },
-    {
-        "sensorId": "localai_health_sleep_ok",
-        "name": "localai/health/sleep_ok",
-        "region": {"offset": 7576, "length": 1},
-        "ttlMs": 86_400_000,  # 24 h — sleep updates once per day
-    },
-]
+# Personal health roll-up sensor — [7574:7578], the personal_health_baseline
+# input window. Worst band wins over whichever bands are in HealthKit scope
+# (core/health_bands.py); the per-band slots are declared by core/health_scope.py
+# as scope changes, not here, because their number is not fixed.
+_HEALTH_SENSORS = [health_scope.ROLLUP_SENSOR]
+
+# The three per-measure sensors the roll-up replaced. They wrote [7574:7577],
+# inside the roll-up's region, so registration removes them from any PE that
+# still holds them rather than leaving two writers on one window.
+_LEGACY_HEALTH_SENSOR_IDS = (
+    "localai_health_hr_ok",
+    "localai_health_hrv_ok",
+    "localai_health_sleep_ok",
+)
 
 # CareKit compliance sensors — [7582:7585].  Pre-normalised ratios [0.0, 1.0].
 # Unlike health sensors (binary band normalization), CareKit scalars carry
@@ -217,13 +208,6 @@ _AI_LOAD_TIER_OFFSET = 272
 _HEALTH_MACHINE_PATH = _MACHINES_DIR / "personal_health_baseline.json"
 _HEALTH_MACHINE_NAME = "localai/personal_health_baseline"
 _HEALTH_OUTPUT_OFFSET = 7578  # one-hot: [thriving, balanced, watch, attention]
-
-# Band thresholds for push_health_signal() normalization — must stay aligned
-# with the sensor region descriptions in personal_health_baseline.json.
-_HR_LOW_BPM = 60.0
-_HR_HIGH_BPM = 100.0
-_HRV_OK_MS = 30.0  # SDNN ≥ 30 ms = healthy recovery
-_SLEEP_OK_HOURS = 6.5
 
 # medication_adherence machine — [7582:7586] input, [7586:7590] output.
 _CAREKIT_MACHINE_PATH = _MACHINES_DIR / "medication_adherence.json"
@@ -317,9 +301,7 @@ _SENSOR_TO_MACHINE = {
     "localai_rag_retrieval": "rag_corrective_cycle.json",
     "localai_rag_grading": "rag_corrective_cycle.json",
     "localai_agent_activity": "agent_activity_classifier.json",
-    "localai_health_hr_ok": "personal_health_baseline.json",
-    "localai_health_hrv_ok": "personal_health_baseline.json",
-    "localai_health_sleep_ok": "personal_health_baseline.json",
+    health_scope.ROLLUP_SENSOR_ID: "personal_health_baseline.json",
     "localai_carekit_med_adherence": "medication_adherence.json",
     "localai_carekit_task_completion": "medication_adherence.json",
     "localai_carekit_symptom_ok": "medication_adherence.json",
@@ -513,6 +495,7 @@ def register_sensors() -> bool:
                 _register_sensor_list(client, _RAG_SENSORS, existing, pe_url)
                 _register_sensor_list(client, _HEALTH_SENSORS, existing, pe_url)
                 _register_sensor_list(client, _CAREKIT_SENSORS, existing, pe_url)
+                _remove_legacy_health_sensors(client, existing, pe_url)
                 quiesced = quiesce_valueless_sensors(client, all_sensor_ids, existing, pe_url)
             log.info(
                 "reality_bridge.sensors_registered",
@@ -530,6 +513,26 @@ def register_sensors() -> bool:
                 note="RAG pipeline runs normally without RE telemetry",
             )
     return overall
+
+
+def _remove_legacy_health_sensors(client: "httpx.Client", existing: dict, pe_url: str) -> None:
+    """Delete the pre-roll-up health sensors from a PE: absent, not zero."""
+    for sid in _LEGACY_HEALTH_SENSOR_IDS:
+        source = existing.get(sid)
+        if not source or not source.get("id"):
+            continue
+        r = client.delete(f"{pe_url}/api/sources/{source['id']}")
+        r.raise_for_status()
+        log.info("reality_bridge.legacy_health_sensor_removed", sensor_id=sid, pe_url=pe_url)
+
+
+def follow_health_scope() -> list[dict]:
+    """Reconcile localAI's health slots against HealthKit scope on every PE.
+
+    Each engine's PE holds its own scope, so each is reconciled on its own;
+    one engine being down does not stop the others. Returns the summaries.
+    """
+    return [health_scope.reconcile(target) for target in _re_targets()]
 
 
 def import_machine_if_missing() -> bool:
@@ -790,29 +793,46 @@ def push_health_signal(
     sleep_hours: float,
 ) -> str:
     """
-    Write personal health band values to the PE, trigger a push so the
-    personal_health_baseline machine evaluates them, and return the
-    decoded health state.
+    Grade raw health readings through the band table, write the worst-band-wins
+    roll-up to the PE, push so personal_health_baseline evaluates it, and
+    return the decoded health state.
 
-    Band normalization (mirrors personal_health_baseline.json sensorSources):
-      hr_bpm in [60, 100]   → hr.ok  = 1.0, else 0.0
-      hrv_sdnn_ms >= 30     → hrv.ok = 1.0, else 0.0
-      sleep_hours >= 6.5    → sleep.ok = 1.0, else 0.0
+    The simulator and compatibility path. On a device, the bridge's families
+    reach the PE directly and ``follow_health_scope`` grades them; this grades
+    readings a caller already holds, against the same thresholds
+    (data/health/health_bands.json): heart rate on the pulse band, HRV on the
+    hrv band, sleep on the sleep band.
 
     Returns: "thriving" | "balanced" | "watch" | "attention"
     Falls back to "watch" when the PE/RE is unreachable (safe default —
     watch prompts the AI to be mindful without assuming a crisis).
     """
-    hr_ok = 1.0 if _HR_LOW_BPM <= hr_bpm <= _HR_HIGH_BPM else 0.0
-    hrv_ok = 1.0 if hrv_sdnn_ms >= _HRV_OK_MS else 0.0
-    sleep_ok = 1.0 if sleep_hours >= _SLEEP_OK_HOURS else 0.0
+    grades = health_grades(hr_bpm, hrv_sdnn_ms, sleep_hours)
+    state = health_bands.rollup(list(grades.values()))
 
     target = bind()
-    _write_sensor("localai_health_hr_ok", [hr_ok], target)
-    _write_sensor("localai_health_hrv_ok", [hrv_ok], target)
-    _write_sensor("localai_health_sleep_ok", [sleep_ok], target)
+    if target is None:
+        log.warning("reality_bridge.write_unbound", sensor_id=health_scope.ROLLUP_SENSOR_ID)
+        return "watch"
+    try:
+        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
+            health_scope.write_rollup(client, target["pe_url"], state)
+    except Exception as exc:
+        log.debug(
+            "reality_bridge.write_skipped", sensor_id=health_scope.ROLLUP_SENSOR_ID, error=str(exc)
+        )
 
     return _trigger_push_and_read_health(target)
+
+
+def health_grades(hr_bpm: float, hrv_sdnn_ms: float, sleep_hours: float) -> dict[str, str]:
+    """Per-band grades for raw readings: {"pulse", "hrv", "sleep"} → ok|watch|concern."""
+    table = health_bands.load_bands()
+    return {
+        "pulse": health_bands.grade_raw(health_bands.band(table, "pulse"), hr_bpm),
+        "hrv": health_bands.grade_raw(health_bands.band(table, "hrv"), hrv_sdnn_ms),
+        "sleep": health_bands.grade_raw(health_bands.band(table, "sleep"), sleep_hours),
+    }
 
 
 def _trigger_push_and_read_health(target: dict | None = None) -> str:

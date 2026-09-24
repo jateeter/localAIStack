@@ -1,0 +1,164 @@
+{
+  "$comment": "Health bands for localAIStack's personal_health_baseline, re-based on the families the HealthKit bridge actually delivers (HEALTH_INTEGRATION_ROADMAP T8). Scope is dynamic: a band has a slot only while its hkType is in scope on the PE (INGEST_CONTRACT.md, Scope and resync). Raw-unit thresholds; values are de-normalized with each axis's sourceRange, which must match localHealthkitBridge docs/lane-semantics.json (checked by test_health_bands.py, T7). Each axis grades ok if its value satisfies `ok`, else watch if it satisfies `watch`, else concern; a condition is any of gte/gt/lte/lt, all of which must hold. So `watch` can be the outer band around `ok`. A band grades as its worst axis. The watch zones are provisional.",
+  "schemaVersion": 1,
+  "minConfidence": 0.5,
+  "slotTable": {
+    "offset": 7600,
+    "capacity": 32
+  },
+  "rollup": {
+    "allOk": "thriving",
+    "oneWatch": "balanced",
+    "multiWatch": "watch",
+    "anyConcern": "attention"
+  },
+  "bands": [
+    {
+      "id": "pulse",
+      "hkType": "HKCorrelationTypeIdentifierBloodPressure",
+      "lane": "healthkit-heart-rate",
+      "laneRegion": {
+        "offset": 4320,
+        "length": 4
+      },
+      "confidenceAxis": 3,
+      "axes": [
+        {
+          "index": 2,
+          "name": "pulse_normalized",
+          "unit": "/min",
+          "sourceRange": [
+            0,
+            200
+          ],
+          "ok": {
+            "gte": 60,
+            "lte": 100
+          },
+          "watch": {
+            "gte": 50,
+            "lte": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "blood_pressure",
+      "hkType": "HKCorrelationTypeIdentifierBloodPressure",
+      "lane": "healthkit-heart-rate",
+      "laneRegion": {
+        "offset": 4320,
+        "length": 4
+      },
+      "confidenceAxis": 3,
+      "axes": [
+        {
+          "index": 0,
+          "name": "systolic_normalized",
+          "unit": "mm[Hg]",
+          "sourceRange": [
+            0,
+            200
+          ],
+          "ok": {
+            "lt": 130
+          },
+          "watch": {
+            "lt": 140
+          }
+        },
+        {
+          "index": 1,
+          "name": "diastolic_normalized",
+          "unit": "mm[Hg]",
+          "sourceRange": [
+            0,
+            120
+          ],
+          "ok": {
+            "lt": 80
+          },
+          "watch": {
+            "lt": 90
+          }
+        }
+      ]
+    },
+    {
+      "id": "sleep",
+      "hkType": "HKCategoryTypeIdentifierSleepAnalysis",
+      "lane": "healthkit-sleep",
+      "laneRegion": {
+        "offset": 4340,
+        "length": 4
+      },
+      "confidenceAxis": 3,
+      "axes": [
+        {
+          "index": 0,
+          "name": "total_sleep_normalized",
+          "unit": "h",
+          "sourceRange": [
+            0,
+            10
+          ],
+          "ok": {
+            "gte": 6.5
+          },
+          "watch": {
+            "gte": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "exercise",
+      "hkType": "HKWorkoutTypeIdentifierWorkout",
+      "lane": "healthkit-steps",
+      "laneRegion": {
+        "offset": 4330,
+        "length": 4
+      },
+      "confidenceAxis": 3,
+      "axes": [
+        {
+          "index": 1,
+          "name": "exercise_minutes_normalized",
+          "unit": "min",
+          "sourceRange": [
+            0,
+            120
+          ],
+          "ok": {
+            "gte": 30
+          },
+          "watch": {
+            "gte": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "hrv",
+      "hkType": "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+      "lane": null,
+      "laneRegion": null,
+      "dormant": "No delivering family: the bridge does not read HRV. Activates when a family carrying SDNN is added to scope and given a lane.",
+      "confidenceAxis": null,
+      "axes": [
+        {
+          "index": 0,
+          "name": "sdnn",
+          "unit": "ms",
+          "sourceRange": null,
+          "ok": {
+            "gte": 30
+          },
+          "watch": {
+            "gte": 20
+          }
+        }
+      ]
+    }
+  ]
+}

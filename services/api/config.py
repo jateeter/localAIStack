@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # state into every chat system prompt. Can also be enabled per-request via
     # ChatRequest.health_context=true or the X-Health-Context: enabled header.
     health_context_enabled: bool = False
+    # Seconds between HealthKit scope reconciliations against each running PE
+    # (core/health_scope.py). 0 disables the follower.
+    health_scope_interval_s: float = 30.0
 
     log_level: str = "info"
 

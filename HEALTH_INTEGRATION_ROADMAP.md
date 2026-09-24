@@ -1,6 +1,6 @@
 # localAIStack — PE/RE Health Integration Audit & Roadmap
 
-Last reviewed: 2026-09-16
+Last reviewed: 2026-09-23
 
 ## Status of this document
 
@@ -46,10 +46,12 @@ updated to follow them.
 | Session carries | 5 machines: rag, agent, ai_load_bridge, activity classifier, health carry | ✅ |
 | Graph topology | `core/topology_builder.py` — binds LangGraph nodes to perceptual space | ✅ |
 | GraphQL receiver | `routers/graphql_endpoint.py` — machine → localAI upstream trigger | ✅ |
-| Perceptual space | localAI band `[7440:7952]`; allocated through `[7594]`; 358 bytes free | ✅ |
-| **Health machine** | `data/machines/personal_health_baseline.json` — `[7574:7578]`→`[7578:7582]` | ✅ Phase 1 |
+| Perceptual space | localAI band `[7440:7952]`; allocated through `[7594]` plus the slot table `[7600:7632]`; 326 bytes free | ✅ |
+| **Health machine** | `data/machines/personal_health_baseline.json` — `[7574:7578]`→`[7578:7582]`, reads the worst-wins roll-up | ✅ Phase 1, re-based T8 |
+| **Health bands** | `data/health/health_bands.json` + `core/health_bands.py` — grade the bridge's families, roll up worst-wins | ✅ **T8** |
+| **Scope follower** | `core/health_scope.py` — follows HealthKit scope on every PE: dynamic slots, lock holds, remove frees, resync requests | ✅ **T8** |
 | **Health bridge** | `push_health_signal()`, `get_health_state()`, `get_current_health_state()` | ✅ Phase 1+2 |
-| **Health sim** | `scripts/simulate_health_push.py` — Yuma/MQTT analog, 4 scenarios + cycle | ✅ Phase 1 |
+| **Health sim** | `scripts/simulate_health_push.py` — Yuma/MQTT analog, 4 scenarios + cycle, graded by the band table | ✅ Phase 1 |
 | **Health-aware chat** | `routers/chat.py` — health context injection, 3-level opt-in | ✅ Phase 2 |
 | **Health RAG** | `health_docs` collection, 9 knowledge docs, `health_search` agent tool | ✅ Phase 2+3 |
 | **Health doc ingest** | `scripts/ingest_health_docs.py` — loads health docs into Qdrant | ✅ Phase 2 |
@@ -69,19 +71,19 @@ updated to follow them.
 
 | Gap | Task |
 |---|---|
-| Three competing PE integration registries in `config/` | T2 |
+| ~~Three competing PE integration registries in `config/`~~ | T2 ✅ |
 | Chat still makes a synchronous RE round-trip per request | T4 |
 | `push_carekit_signal()` has no non-test caller | T5 |
 | `/health` does not report CareKit state | T6 |
-| No Swift ↔ Python band-threshold parity check | T7 |
-| iOS bridge and localAI health machine read **different regions** — no end-to-end path | T8 |
+| ~~No Swift ↔ Python band-threshold parity check~~ | T7 ✅ |
+| ~~iOS bridge and localAI health machine read different regions~~ | T8 ✅ |
 | CareKit sync absent from the Swift bridge (upstream, deferred to its v0.2) | T9 |
 | Personalisation feedback loop — health state → RAG re-rank | T10 |
-| All three health machine JSONs carry stale offsets in their prose metadata | T11 |
+| ~~All localAI machine JSONs carry stale offsets in their prose metadata~~ | T11 ✅ |
 
 ---
 
-## Perceptual space layout (verified 2026-09-16)
+## Perceptual space layout (verified 2026-09-23)
 
 Authority for every offset below is `services/api/core/reality_bridge.py`
 (`_EXPECTED_MACHINE_OFFSETS`, `_RAG_SENSORS`, `_HEALTH_SENSORS`,
@@ -106,14 +108,18 @@ corpus.
 [7500:7504]  session_rag_context output   [last_generate, last_rewrite, last_abort, _]
 [7504:7508]  session_agent_context output [agent_ever_engaged, tools_ever_used, _, _]
 [7500:7508]  ai_load_bridge input
-[7574:7577]  personal health sensors      hr.ok, hrv.ok, sleep.ok          Phase 1
-[7574:7578]  personal_health_baseline input window
+[7574:7578]  health roll-up sensor         one-hot, worst band wins          T8
+             = personal_health_baseline input window
 [7578:7582]  personal_health_baseline output  [thriving, balanced, watch, attention]
 [7582:7585]  CareKit sensors              med_adherence, task_completion, symptom_ok
 [7582:7586]  medication_adherence input window                             Phase 4a
 [7586:7590]  medication_adherence output  [adherent, partial, lapsed, concern]
 [7590:7594]  session_health_context carry [thriving, balanced, watch, attention]
-[7594:7952]  free — 358 bytes                                              Phase 4b
+[7594:7600]  free — 6 bytes
+[7600:7632]  health band slots            one per band in HealthKit scope    T8
+             (ok 1.0 / watch 0.5 / concern 0.0), allocated dynamically;
+             a band out of scope has no slot and no source
+[7632:7952]  free — 320 bytes
 ─────────────────────────────────────────────────────────────────────────────
 
 Outside the band (written by localAI, read elsewhere):
@@ -127,7 +133,8 @@ routinely confused with localAI's:
 
 - `[4320:4344]` — the **corpus** HealthKit regions that `localHealthkitBridge`
   posts into, consumed by `RealityEngine_Machines/machines/domains/health-personal/`.
-  This is **not** localAI's `[7574:7578]`. See T8.
+  localAI *reads* them (the scope follower grades each family) and writes
+  only its own band. See T8.
 - `[0:186]` — the pre-migration layout this document used to print. Historical.
 
 ---
@@ -148,9 +155,12 @@ yuma.lateraledge.cloud:1883 (MQTT broker)
 ### Health pipeline (personal domain)
 
 ```
-scripts/simulate_health_push.py   (see T8 for the iOS path, which is not yet wired)
-  → band normalization (HR [60,100], HRV ≥30 ms, Sleep ≥6.5 h → 0.0/1.0)
-  → PE sensor sources: localai_health_{hr,hrv,sleep}_ok  [7574:7577]
+iOS bridge → PE ingest → corpus lanes [4320:4344]      (device path)
+  → core/health_scope.py, every HEALTH_SCOPE_INTERVAL_S per PE:
+      grade each in-scope family ok/watch/concern (data/health/health_bands.json)
+      → slot sensors [7600:7632]; roll-up sensor localai_health_rollup [7574:7578]
+scripts/simulate_health_push.py                        (simulated path)
+  → grades made-up readings with the same table → roll-up sensor [7574:7578]
   → PE /api/push → RE /api/perceive
   → personal_health_baseline fires (thriving/balanced/watch/attention)
   → perceptualSpace[7578:7582] decoded by get_health_state()
@@ -161,9 +171,9 @@ scripts/simulate_health_push.py   (see T8 for the iOS path, which is not yet wir
 
 | Yuma/MQTT | Health |
 |---|---|
-| MQTT broker | `simulate_health_push.py` (iOS HealthKit path open — T8) |
-| Band normalization rules (JSON) | Band thresholds in `reality_bridge.py` |
-| 16 sensor regions | 3 sensor regions `[7574:7577]` |
+| MQTT broker | iOS HealthKit bridge, or `simulate_health_push.py` |
+| Band normalization rules (JSON) | `data/health/health_bands.json` |
+| 16 sensor regions | roll-up `[7574:7578]` + up to 32 band slots `[7600:7632]` |
 | AGX001 … AGX032 machines | `personal_health_baseline` + `medication_adherence` |
 | GREEN/AMBER/RED governance | thriving→GREEN, watch→AMBER, attention→RED |
 | Prometheus paging decisions | GraphQL events ring buffer → Loki/Grafana |
@@ -176,7 +186,8 @@ scripts/simulate_health_push.py   (see T8 for the iOS path, which is not yet wir
 
 - `data/machines/personal_health_baseline.json` — 4-state classifier,
   `PASSTHROUGH` arbiter, `gte` match, input `[7574:7578]`, output `[7578:7582]`
-- `_HEALTH_SENSORS` + `push_health_signal()` + `get_health_state()`
+- `_HEALTH_SENSORS` + `push_health_signal()` + `get_health_state()` (the three
+  per-measure sensors were replaced by the roll-up in T8)
 - `import_health_machines()` wired into `main.py` startup
 - Health machine in the `_EXPECTED_MACHINE_OFFSETS` drift guard
 - `scripts/simulate_health_push.py` — `--scenario thriving|balanced|watch|attention|cycle`
@@ -287,7 +298,7 @@ Shipped against it, none of it localAIStack work:
 | Per-engine parity | `RealityEngine_Machines/tests/integration/healthkit-ingest-contract.spec.ts` |
 | iOS bridge | `localHealthkitBridge` — M0–M5, device e2e green 2026-07-24 |
 
-What remains for localAIStack is wiring, not building: T7 and T8.
+What remained for localAIStack was wiring, not building: T7 and T8, both done 2026-09-23.
 
 ---
 
@@ -298,37 +309,22 @@ What remains for localAIStack is wiring, not building: T7 and T8.
 This document. Status tables, offsets, test counts and the Phase 4c contract
 now match the code, and the corrections are recorded rather than silently applied.
 
-### T2 — Collapse three PE integration registries into one
+### T2 — Collapse three PE integration registries into one ✅ 2026-09-23
 
-`config/` holds three PE integration registries with no declared authority:
+`config/integrations.json` is the only one left. `pe-integrations.json` and
+`integrations.healthkit-localai.json` are deleted, and the `test_phase2` and
+`test_phase4` PE-integration-registry tests point at the survivor.
 
-| File | Shape | Loaded by | Tested by |
-|---|---|---|---|
-| `integrations.json` | canonical `healthkit:<type>` ids; health + CareKit + `openclaw-xacp` | the `INTEGRATIONS_CONFIG` target | — |
-| `pe-integrations.json` | canonical, but a strict **subset** — health only, no ACP | nothing | `test_phase4.py:822-917`, 7 tests |
-| `integrations.healthkit-localai.json` | `sourceMappings[].hkTypeIdentifier` — **unresolvable** by any PE | nothing | `test_phase2.py:66` |
+T8 changed what the survivor holds: it no longer maps HealthKit sensors at all.
+Its three HR/HRV/sleep mappings wrote `[7574:7577]`, inside the roll-up's
+window, so leaving them would have put two writers on one window. HealthKit
+families reach the PE through the lane mappings in RealityEngine_CI's
+`config/integrations.json`. Tests now assert that localAIStack's config maps no
+HealthKit sensor and writes nothing into `[7574:7578]` or `[7600:7632]`.
 
-Three failures compound here. The stale file's keys cannot be matched by the
-canonical lookup, so it would silently resolve nothing if it were ever loaded.
-`pe-integrations.json` duplicates the six health mappings verbatim and drops
-ACP — and it is the file the CareKit region-parity tests assert against, so the
-offsets guarding those sensors are checked against a PE integration registry no
-runtime reads. `pe-integrations.json:99` then cites the stale file as the
-authority for band thresholds, a third copy pointing at the one that cannot be
-loaded.
-
-This is the duplication failure the engineering contract's qualifier rule warns
-about, in `config/`: copies drift, and with no authority a reader cannot tell
-which is current.
-
-- Keep `config/integrations.json` as the sole PE integration registry.
-- Delete `config/pe-integrations.json` and `config/integrations.healthkit-localai.json`.
-- Repoint `test_phase2.py:66` and the seven `test_phase4.py` PE-integration-registry tests at the survivor.
-- Preserve the band-threshold assertions — they are the only check locking the
-  JSON to the Python constants — against `integrations.json`.
-
-Phase 4a's instruction to add a `carekitSourceMappings` key to the stale file is
-withdrawn: the CareKit mappings already exist correctly in `integrations.json`.
+The band-threshold assertions this task said to preserve had nothing left to
+lock: the Python constants they compared against are gone, replaced by
+`data/health/health_bands.json`. The check that matters now is T7's.
 
 ### T3 — (withdrawn, folded into T2)
 
@@ -352,32 +348,77 @@ so the CareKit leg is exercisable the way the health leg is.
 `routers/health.py:48-55` decodes `health_state` only. Add `carekit_state` and
 the CareKit sensor count to the `re` / `pe` sub-objects, mirroring Phase 3.
 
-### T7 — Swift ↔ Python band-threshold parity check
+### T7 — Swift ↔ Python band-threshold parity check ✅ 2026-09-23
 
-`_HR_LOW_BPM` / `_HR_HIGH_BPM` / `_HRV_OK_MS` / `_SLEEP_OK_HOURS` in
-`reality_bridge.py` have no counterpart assertion in `localHealthkitBridge` —
-no `bandThresholds` reference exists anywhere in that repo. Note this is a
-cross-repo gap and not merely a missing assert: the Swift normalizer targets the
-corpus families at `[4320:4344]`, so a parity check must first decide *which*
-thresholds it is locking together. Sequence it after T8.
+T8 settled the question this task was waiting on: which thresholds lock
+together. The bridge normalises every lane value to `[0,1]` against a declared
+`sourceRange` (`localHealthkitBridge/docs/lane-semantics.json`), and localAI
+de-normalises with its own copy of that range before grading in raw units. If
+the two ranges differ, localAI grades a different reading from the one taken.
 
-### T8 — End-to-end iOS → localAI health machine
+`tests/test_health_bands.py::test_band_lanes_match_lane_semantics` asserts,
+per band, that the lane region, axis index, axis name and `sourceRange` match
+`lane-semantics.json`. It needs a sibling `localHealthkitBridge` checkout and
+skips without one, the same posture as `scripts/validate-machines.sh`.
 
-**No path connects the shipped iOS bridge to `personal_health_baseline` today.**
-The bridge posts family vectors into the corpus regions `[4320:4344]`;
-localAI's machine reads `[7574:7578]`. Both halves work; they are not joined.
+### T8 — End-to-end iOS → localAI health machine ✅ 2026-09-23
 
-Two routes, and the choice is the real decision in this task:
+**The premise was wrong.** This task assumed the bridge sends heart rate, HRV and
+sleep, and that joining the two regions was only a routing question. The bridge
+delivers **blood-pressure** (systolic, diastolic, pulse), **workout** (energy,
+exercise minutes, steps) and **sleep** (total, REM, core) families, each with a
+confidence axis, into `[4320:4344]`. It sends no HRV and no standalone heart
+rate. Neither of the two routes listed here could have worked, because both
+mapped HealthKit types the bridge does not send.
 
-1. Run a PE with `INTEGRATIONS_CONFIG=localAIStack/config/integrations.json` and
-   have the bridge post `bridgeId: healthkit-localai`. The mappings already
-   resolve to the localAI sensors. Costs a dedicated PE or a merged PE integration registry.
-2. Add localAI band-mode mappings to the shared PE integration registry so one PE feeds both
-   region sets. Tracked upstream as `localHealthkitBridge` post-MVP
-   ("localAI band-mode target").
+**The data scope is dynamic.** Which HealthKit types flow changes through an
+authorization workflow tied to the owner's Solid pod, driven by the Swift bridge
+and/or the OpenCommons PIM workflow. localAI and every engine must accept
+add / lock / remove as they happen. The authorization workflow itself does not
+exist yet. The scope semantics below are provisional, and pod semantics do not
+include resync.
 
-This is the roadmap's one genuine remaining integration item. Everything else
-under Phase 4c is upstream and green.
+What was built:
+
+1. **Scope and resync in the contract, 3-of-3 plus the TS PE.**
+   `localHealthkitBridge/docs/INGEST_CONTRACT.md` "Scope and resync":
+   `POST /api/integrations/healthkit/scope {bridgeId, action add|lock|remove, types[], source}`
+   and `POST /api/integrations/healthkit/resync {bridgeId, types?, requestedBy}`,
+   with a `scope` block on `/status`. A bridge is open until its first
+   declaration; `lock` refuses new samples; `remove` refuses them and removes
+   the type's sources from the PE (absent, not zero). Resync is a consumer
+   request made through the PE and fulfilled by an ingest carrying `resyncId`.
+   Implemented in C++, LSP, Scala and the TS PE. Agreement is enforced by
+   `RealityEngine_Machines/tests/integration/healthkit-scope-quorum.spec.ts`,
+   which fails unless all three native engines agree.
+2. **localAI re-based onto the delivered families.**
+   `data/health/health_bands.json` grades each family ok / watch / concern in raw
+   units: pulse 60–100 bpm ok, 50–120 watch; blood pressure < 130/80 ok,
+   < 140/90 watch; sleep ≥ 6.5 h ok, ≥ 5 h watch; exercise ≥ 30 min ok, ≥ 10 min
+   watch. HRV (≥ 30 ms ok, ≥ 20 ms watch) is dormant until a lane exists. A
+   family below the confidence floor, or with no current reading, is not graded
+   at all rather than graded as a failure. The watch zones are provisional.
+3. **Worst band wins.** Any concern → attention; otherwise one watch → balanced,
+   two or more → watch; all ok → thriving; nothing graded → no state. An
+   all-zero roll-up fires a fifth sequence, `health-none`, which writes
+   `[0,0,0,0]`. Without it, the output region would keep showing the last state
+   after every measure had left scope (seen live, then fixed). `personal_health_baseline` now reads
+   that one-hot roll-up rather than one element per measure, so the machine's
+   shape does not change as scope does.
+4. **Dynamic slots.** `core/health_scope.py` runs from the API lifespan every
+   `HEALTH_SCOPE_INTERVAL_S` (default 30; 0 disables it), once per PE. It
+   gives each in-scope band a slot in `[7600:7632]`: stable, lowest free index,
+   capacity 32. A locked type holds its last grade. A removed type's slot
+   source is deleted. An active type with no current data gets one resync
+   request per scope generation (`requestedBy: localAIStack`).
+5. `push_health_signal(hr, hrv, sleep)` remains as the simulator and
+   compatibility path. It grades raw readings against the same table and writes
+   the roll-up. The three legacy sensors (`localai_health_{hr,hrv,sleep}_ok`)
+   are removed from any PE at registration, because they sit inside the
+   roll-up's window.
+
+Not verified here: the device path end to end on hardware, and the scope
+follower against a live universe beyond the probes recorded in the PR.
 
 ### T9 — CareKit sync in the Swift bridge (blocked upstream)
 
@@ -399,40 +440,37 @@ of general ones.
 - Re-rank retrieved documents by health relevance before the grade step.
 - Tests: per-state ordering, and no-op when the carry is cold.
 
-### T11 — Stale offsets inside the machine JSON metadata
+### T11 — Stale offsets inside the machine JSON metadata ✅ 2026-09-23
 
-All three health machine JSONs carry the pre-migration layout in their prose —
-`metadata.eventSpace`, `metadata.outputSpace`, and every
-`metadata.sensorSources[].region` — five stale strings per file, fifteen total:
+The problem was wider than the three health machines: all eight localAI
+machines had pre-migration offsets in their prose. Every reference was rebased
+by the migration's uniform +7388. The exceptions are the references that
+correctly point outside the band: `ai_load_bridge`'s corpus outputs
+`[272:280]`, the corpus AI window it narrowed from, the HealthKit lanes, and
+`session_agent_context`'s element-relative slices.
 
-| File | Says | Actual `perceptualMapping` |
-|---|---|---|
-| `medication_adherence.json` | `[194:198]` → `[198:202]` | `[7582:7586]` → `[7586:7590]` |
-| `session_health_context.json` | pre-migration | `[7578:7582]` → `[7590:7594]` |
-| `personal_health_baseline.json` | pre-migration | `[7574:7578]` → `[7578:7582]` |
-
-The drift guard checks `perceptualMapping`, which is correct in all three — it
-does not read prose, so nothing catches this. The risk is a reader trusting the
-description over the mapping. Consider extending `verify_machine_offsets()` to
-assert the `sensorSources` region strings parse to the mapped window, which
-would make this class of drift impossible to reintroduce.
+`tests/test_machine_prose_offsets.py` fails on any region reference in machine
+prose that falls outside the localAI band and is not one of those named
+exceptions. It fails on the pre-T11 tree.
 
 ### Sequencing
 
-T2 and T11 are config and data hygiene — one sitting, no dependencies.
-T4, T5, T6 are small, self-contained code changes. T8 is the decision that
-unblocks T7, and both need a live universe to verify. T10 is the only
-multi-day feature and reads best after T4. T9 is a note, not work.
+T2, T7, T8 and T11 are done. T4, T5 and T6 are small, self-contained code
+changes. T10 is the only multi-day feature and reads best after T4. T9 is a
+note, not work.
 
 ---
 
-## Test coverage matrix (verified 2026-09-16)
+## Test coverage matrix (verified 2026-09-23)
 
 | Test file | Type | Count | Flag | Network |
 |---|---|---|---|---|
 | `tests/test_reality_bridge.py` | unit (fake client) | 28 | (default) | no |
-| `tests/test_health_integration.py` | health unit | 22 | (default) | no |
-| `tests/test_phase2.py` | Phase 2 unit | 36 | (default) | no |
+| `tests/test_health_integration.py` | health unit | 29 | (default) | no |
+| `tests/test_health_bands.py` | bands, roll-up, slots, T7 parity | 30 | (default) | no |
+| `tests/test_health_scope.py` | scope follower (fake PE) | 13 | (default) | no |
+| `tests/test_machine_prose_offsets.py` | T11 prose guard | 1 | (default) | no |
+| `tests/test_phase2.py` | Phase 2 unit | 31 | (default) | no |
 | `tests/test_phase4.py` | Phase 4a+4b unit | 70 | (default) | no |
 | `tests/test_bridge_binding.py` | binding unit | 15 | (default) | no |
 | `tests/test_model_registry.py` | model registry unit | 18 | (default) | no |
@@ -443,9 +481,9 @@ multi-day feature and reads best after T4. T9 is a note, not work.
 | `tests/e2e/test_health_pipeline.py` | full live stack | 21 | `--live` | PE+RE+API |
 | `tests/e2e/test_patient_wellness_workflow.py` | live workflow | 1 | `--live` | PE+RE+API |
 
-**Default run:** 211 collected, 210 pass, 1 skip
+**Default run:** 257 collected, 256 pass, 1 skip
 (`test_machine_schema.py:102`, topology builder needs `langchain_core`).
-**Full collection:** 248 — the 37 e2e tests are collected and skip without their flag.
+**Full collection:** 294 — the 37 e2e tests are collected and skip without their flag.
 
 ```bash
 # Unit tests

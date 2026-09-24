@@ -2,14 +2,14 @@
   "version": "1.0.0",
   "machine": {
     "name": "localai/agent_activity_classifier",
-    "description": "Classifies the LangGraph agent's current turn into one of three activity tiers based on the localai_agent_activity sensor at [64:68]. Structurally parallel to rag_corrective_cycle: reads normalized activity signals and asserts exactly one of productive / normal / struggling on its output window [68:72]. Downstream consumers can observe the classification directly on perceptual space without coupling to agent_graph internals.",
+    "description": "Classifies the LangGraph agent's current turn into one of three activity tiers based on the localai_agent_activity sensor at [7452:7456]. Structurally parallel to rag_corrective_cycle: reads normalized activity signals and asserts exactly one of productive / normal / struggling on its output window [7456:7460]. Downstream consumers can observe the classification directly on perceptual space without coupling to agent_graph internals.",
     "metadata": {
       "category": "ai-pipeline",
       "author": "localAIStack agent_activity_classifier",
       "created": "2026-04-19T00:00:00Z",
       "pattern": "signal-classifier",
-      "eventSpace": "4D activity vector at [64:68]: [tool_calls_norm, tool_errors_norm, reasoning_depth_norm, _]",
-      "outputSpace": "4D classification at [68:72]: [productive, normal, struggling, _]",
+      "eventSpace": "4D activity vector at [7452:7456]: [tool_calls_norm, tool_errors_norm, reasoning_depth_norm, _]",
+      "outputSpace": "4D classification at [7456:7460]: [productive, normal, struggling, _]",
       "tags": [
         "agent",
         "activity",

@@ -2,14 +2,14 @@
   "version": "1.0.0",
   "machine": {
     "name": "localai/session_rag_context",
-    "description": "Bistable flip-flop that carries the last RAG routing decision forward through PE perceptual space persist semantics. Each RAG grading cycle fires exactly one sequence (generate / rewrite / abort) and writes a sticky carry to [112:116]. When no sequence fires (no RAG call this push cycle), the PE's carry-forward semantics hold the prior carry value — this IS the bistable hold state.",
+    "description": "Bistable flip-flop that carries the last RAG routing decision forward through PE perceptual space persist semantics. Each RAG grading cycle fires exactly one sequence (generate / rewrite / abort) and writes a sticky carry to [7500:7504]. When no sequence fires (no RAG call this push cycle), the PE's carry-forward semantics hold the prior carry value — this IS the bistable hold state.",
     "metadata": {
       "category": "ai-pipeline",
       "author": "localAIStack session context builder",
       "created": "2026-04-17T00:00:00Z",
       "pattern": "bistable-flip-flop",
-      "eventSpace": "4D routing signal vector at [60:64]: [generate, rewrite, abort, _]",
-      "outputSpace": "4D carry vector at [112:116]: [last_generate, last_rewrite, last_abort, _]",
+      "eventSpace": "4D routing signal vector at [7448:7452]: [generate, rewrite, abort, _]",
+      "outputSpace": "4D carry vector at [7500:7504]: [last_generate, last_rewrite, last_abort, _]",
       "bistableNote": "SET: one of three sequences fires → writes 1.0 to the matching carry element and 0.0 to the others. HOLD: no sequence fires (no RAG call this cycle) → PE carry-forward preserves the output region unchanged. The three guards partition [0,1]^3 routing-signal space; mutual exclusivity is guaranteed by rag_corrective_cycle upstream.",
       "sequenceCount": 3,
       "machineClass": "signal-monitor",
@@ -44,7 +44,7 @@
             ],
             "ragStatusCode": "GREEN",
             "processStatus": "info",
-            "description": "Fires when rag_corrective_cycle asserts generate (ps[60] >= 0.5). Sets last_generate carry HIGH, clears rewrite/abort carry. PE carry-forward maintains this until the next RAG grading cycle fires a different sequence."
+            "description": "Fires when rag_corrective_cycle asserts generate (ps[7448] >= 0.5). Sets last_generate carry HIGH, clears rewrite/abort carry. PE carry-forward maintains this until the next RAG grading cycle fires a different sequence."
           },
           {
             "sequenceId": "sess-rag-rewrite",
@@ -56,7 +56,7 @@
             ],
             "ragStatusCode": "GREEN",
             "processStatus": "info",
-            "description": "Fires when rag_corrective_cycle asserts rewrite (ps[61] >= 0.5). Sets last_rewrite carry HIGH, clears generate/abort carry."
+            "description": "Fires when rag_corrective_cycle asserts rewrite (ps[7449] >= 0.5). Sets last_rewrite carry HIGH, clears generate/abort carry."
           },
           {
             "sequenceId": "sess-rag-abort",
@@ -68,7 +68,7 @@
             ],
             "ragStatusCode": "GREEN",
             "processStatus": "info",
-            "description": "Fires when rag_corrective_cycle asserts abort (ps[62] >= 0.5). Sets last_abort carry HIGH — signals downstream consumers that the prior RAG call exhausted its rewrite budget."
+            "description": "Fires when rag_corrective_cycle asserts abort (ps[7450] >= 0.5). Sets last_abort carry HIGH — signals downstream consumers that the prior RAG call exhausted its rewrite budget."
           }
         ]
       }
@@ -91,8 +91,8 @@
         "id": "sess-rag-generate",
         "name": "Carry: last RAG call routed to generate",
         "metadata": {
-          "description": "Fires when rag_corrective_cycle asserts generate (ps[60] >= 0.5). Sets last_generate carry HIGH, clears rewrite/abort carry. PE carry-forward maintains this until the next RAG grading cycle fires a different sequence.",
-          "trigger": "ps[60] HIGH",
+          "description": "Fires when rag_corrective_cycle asserts generate (ps[7448] >= 0.5). Sets last_generate carry HIGH, clears rewrite/abort carry. PE carry-forward maintains this until the next RAG grading cycle fires a different sequence.",
+          "trigger": "ps[7448] HIGH",
           "carryOutput": "[1, 0, 0, 0]"
         },
         "events": [
@@ -138,7 +138,7 @@
             ],
             "metadata": {
               "name": "SESS_RAG_GENERATE",
-              "description": "element[0]: ps[60] generate HIGH (GTE split at 0.5); elements[1-3]: wildcards (Threshold ±0.5 spans [0,1])"
+              "description": "element[0]: ps[7448] generate HIGH (GTE split at 0.5); elements[1-3]: wildcards (Threshold ±0.5 spans [0,1])"
             }
           }
         ]
@@ -147,8 +147,8 @@
         "id": "sess-rag-rewrite",
         "name": "Carry: last RAG call needed a query rewrite",
         "metadata": {
-          "description": "Fires when rag_corrective_cycle asserts rewrite (ps[61] >= 0.5). Sets last_rewrite carry HIGH, clears generate/abort carry.",
-          "trigger": "ps[61] HIGH",
+          "description": "Fires when rag_corrective_cycle asserts rewrite (ps[7449] >= 0.5). Sets last_rewrite carry HIGH, clears generate/abort carry.",
+          "trigger": "ps[7449] HIGH",
           "carryOutput": "[0, 1, 0, 0]"
         },
         "events": [
@@ -194,7 +194,7 @@
             ],
             "metadata": {
               "name": "SESS_RAG_REWRITE",
-              "description": "element[1]: ps[61] rewrite HIGH; elements[0,2,3]: wildcards"
+              "description": "element[1]: ps[7449] rewrite HIGH; elements[0,2,3]: wildcards"
             }
           }
         ]
@@ -203,8 +203,8 @@
         "id": "sess-rag-abort",
         "name": "Carry: last RAG call aborted after max rewrites",
         "metadata": {
-          "description": "Fires when rag_corrective_cycle asserts abort (ps[62] >= 0.5). Sets last_abort carry HIGH — signals downstream consumers that the prior RAG call exhausted its rewrite budget.",
-          "trigger": "ps[62] HIGH",
+          "description": "Fires when rag_corrective_cycle asserts abort (ps[7450] >= 0.5). Sets last_abort carry HIGH — signals downstream consumers that the prior RAG call exhausted its rewrite budget.",
+          "trigger": "ps[7450] HIGH",
           "carryOutput": "[0, 0, 1, 0]"
         },
         "events": [
@@ -250,7 +250,7 @@
             ],
             "metadata": {
               "name": "SESS_RAG_ABORT",
-              "description": "element[2]: ps[62] abort HIGH; elements[0,1,3]: wildcards"
+              "description": "element[2]: ps[7450] abort HIGH; elements[0,1,3]: wildcards"
             }
           }
         ]
@@ -272,7 +272,7 @@
         "metadata": {
           "expectedOutput": "[1, 0, 0, 0]",
           "activeSequence": "sess-rag-generate",
-          "notes": "ps[60]=0.9 >= 0.5 HIGH → sess-rag-generate fires"
+          "notes": "ps[7448]=0.9 >= 0.5 HIGH → sess-rag-generate fires"
         }
       },
       {
@@ -290,7 +290,7 @@
         "metadata": {
           "expectedOutput": "[0, 1, 0, 0]",
           "activeSequence": "sess-rag-rewrite",
-          "notes": "ps[61]=0.9 >= 0.5 HIGH → sess-rag-rewrite fires"
+          "notes": "ps[7449]=0.9 >= 0.5 HIGH → sess-rag-rewrite fires"
         }
       },
       {
@@ -308,7 +308,7 @@
         "metadata": {
           "expectedOutput": "[0, 0, 1, 0]",
           "activeSequence": "sess-rag-abort",
-          "notes": "ps[62]=0.9 >= 0.5 HIGH → sess-rag-abort fires"
+          "notes": "ps[7450]=0.9 >= 0.5 HIGH → sess-rag-abort fires"
         }
       },
       {

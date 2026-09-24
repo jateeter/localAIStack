@@ -5,18 +5,22 @@ Personal health baseline simulation — the localAIStack analog of the Yuma/MQTT
 Demonstrates the full loop without an iOS device:
 
   simulated health readings
-    → PE sensor registration (localai_health_hr_ok / hrv_ok / sleep_ok)
-    → band normalization (in-range → 1.0, out-of-range → 0.0)
+    → graded ok / watch / concern against data/health/health_bands.json
+    → worst band wins → roll-up one-hot written to sensor localai_health_rollup [7574:7578]
     → PE /api/push  (assembles perceptual vector, calls RE /api/perceive)
     → personal_health_baseline CES machine fires in RE
-    → health state decoded from perceptualSpace[190:194]
+    → health state decoded from perceptualSpace[7578:7582]
     → GraphQL trigger posted to localAI (POST /graphql)
+
+On a device the bridge's families reach the PE directly and localAIStack's
+scope follower grades them (services/api/core/health_scope.py). This script
+grades readings it makes up, with the same table.
 
 Analogous to the Yuma/MQTT end-to-end:
   MQTT broker → mapping registry → PE → RE → CES → governance trigger
 
 This script replaces "MQTT broker" with synthetic health readings and
-"mapping registry" with the band-normalization logic in reality_bridge.py.
+"mapping registry" with the band table in data/health/health_bands.json.
 
 Usage
 -----
@@ -31,54 +35,36 @@ Options
   --interval S        Seconds between cycle steps               [default: 2]
   --no-graphql        Skip the GraphQL trigger to localAI
 
-Health scenarios
-  thriving   HR=72, HRV=45ms, Sleep=7.5h   → all three sensors HIGH
-  balanced   HR=75, HRV=38ms, Sleep=5.5h   → vitals good, sleep below target
-  watch      HR=70, HRV=18ms, Sleep=6.0h   → HR ok, HRV low (poor recovery)
-  attention  HR=105, HRV=25ms, Sleep=7.0h  → HR above 100bpm ceiling
-
-These mirror the inputSequences in personal_health_baseline.json.
+Health scenarios (grades: pulse / hrv / sleep; worst band wins)
+  thriving   HR=72,  HRV=45ms, Sleep=7.5h  → ok / ok / ok
+  balanced   HR=75,  HRV=38ms, Sleep=5.5h  → ok / ok / watch       (one watch)
+  watch      HR=110, HRV=25ms, Sleep=7.0h  → watch / watch / ok    (two watch)
+  attention  HR=70,  HRV=18ms, Sleep=6.0h  → ok / concern / watch  (any concern)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 import sys
 import time
 from typing import NamedTuple
 
 import httpx
 
-# ── Sensor / machine constants (mirrors reality_bridge.py) ────────────────────
+# The band table and roll-up are the service's own, not a copy that can drift.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "services" / "api"))
+from core import health_bands  # noqa: E402
 
-_HR_LOW_BPM = 60.0
-_HR_HIGH_BPM = 100.0
-_HRV_OK_MS = 30.0
-_SLEEP_OK_HOURS = 6.5
+_HEALTH_OUTPUT_OFFSET = 7578  # [thriving, balanced, watch, attention]
 
-_HEALTH_OUTPUT_OFFSET = 190  # [thriving, balanced, watch, attention]
-
-_HEALTH_SENSORS = [
-    {
-        "sensorId": "localai_health_hr_ok",
-        "name": "localai/health/hr_ok",
-        "region": {"offset": 186, "length": 1},
-        "ttlMs": 300_000,
-    },
-    {
-        "sensorId": "localai_health_hrv_ok",
-        "name": "localai/health/hrv_ok",
-        "region": {"offset": 187, "length": 1},
-        "ttlMs": 900_000,
-    },
-    {
-        "sensorId": "localai_health_sleep_ok",
-        "name": "localai/health/sleep_ok",
-        "region": {"offset": 188, "length": 1},
-        "ttlMs": 86_400_000,
-    },
-]
+_ROLLUP_SENSOR = {
+    "sensorId": "localai_health_rollup",
+    "name": "localai/health/rollup",
+    "region": {"offset": 7574, "length": 4},
+    "ttlMs": 86_400_000,
+}
 
 # GraphQL trigger template — mirrors the machine triggerConfig pattern
 _GRAPHQL_UPDATE = """
@@ -103,9 +89,9 @@ _STATE_TO_RAG = {
 
 _STATE_TO_DESCRIPTION = {
     "thriving": "All baseline health metrics are in nominal range.",
-    "balanced": "Cardiovascular metrics healthy but sleep is below target.",
-    "watch": "Heart rate nominal but HRV indicates low recovery.",
-    "attention": "Heart rate is outside the nominal range. Recommend a health check-in.",
+    "balanced": "One health measure is slightly outside its nominal range.",
+    "watch": "Several health measures are slightly outside their nominal ranges.",
+    "attention": "At least one health measure is well outside its nominal range.",
 }
 
 
@@ -119,20 +105,22 @@ class HealthReading(NamedTuple):
 
 _SCENARIOS: dict[str, HealthReading] = {
     "thriving": HealthReading("All nominal — thriving", 72.0, 45.0, 7.5, "thriving"),
-    "balanced": HealthReading("Good vitals, poor sleep — balanced", 75.0, 38.0, 5.5, "balanced"),
-    "watch": HealthReading("HR ok, HRV low — watch", 70.0, 18.0, 6.0, "watch"),
-    "attention": HealthReading("HR out of range — attention", 105.0, 25.0, 7.0, "attention"),
+    "balanced": HealthReading("Short sleep — balanced", 75.0, 38.0, 5.5, "balanced"),
+    "watch": HealthReading("Pulse and HRV slightly off — watch", 110.0, 25.0, 7.0, "watch"),
+    "attention": HealthReading("HRV well below range — attention", 70.0, 18.0, 6.0, "attention"),
 }
 
 
 # ── PE interaction helpers ────────────────────────────────────────────────────
 
 
-def _band(hr: float, hrv: float, sleep: float) -> tuple[float, float, float]:
-    hr_ok = 1.0 if _HR_LOW_BPM <= hr <= _HR_HIGH_BPM else 0.0
-    hrv_ok = 1.0 if hrv >= _HRV_OK_MS else 0.0
-    sleep_ok = 1.0 if sleep >= _SLEEP_OK_HOURS else 0.0
-    return hr_ok, hrv_ok, sleep_ok
+def _grades(hr: float, hrv: float, sleep: float) -> dict[str, str]:
+    table = health_bands.load_bands()
+    return {
+        "pulse": health_bands.grade_raw(health_bands.band(table, "pulse"), hr),
+        "hrv": health_bands.grade_raw(health_bands.band(table, "hrv"), hrv),
+        "sleep": health_bands.grade_raw(health_bands.band(table, "sleep"), sleep),
+    }
 
 
 def _decode_health_state(ps: list[float]) -> str | None:
@@ -151,7 +139,7 @@ def _decode_health_state(ps: list[float]) -> str | None:
 
 
 def ensure_sensors_registered(pe_url: str) -> None:
-    """Register health sensor sources in PE if not already present."""
+    """Register the roll-up sensor source in the PE if not already present."""
     with httpx.Client(timeout=5) as client:
         try:
             resp = client.get(f"{pe_url}/api/sources")
@@ -165,7 +153,7 @@ def ensure_sensors_registered(pe_url: str) -> None:
             print(f"  [warn] Cannot list PE sources: {exc}", file=sys.stderr)
             existing = set()
 
-        for sensor in _HEALTH_SENSORS:
+        for sensor in [_ROLLUP_SENSOR]:
             sid = sensor["sensorId"]
             if sid in existing:
                 print(f"  [PE]   sensor already registered: {sid}")
@@ -174,7 +162,7 @@ def ensure_sensors_registered(pe_url: str) -> None:
                 "type": "sensor",
                 "name": sensor["name"],
                 "region": sensor["region"],
-                "active": True,
+                "active": False,  # activated by its first value
                 "sensorId": sid,
                 "lastValue": [],
                 "lastUpdated": None,
@@ -188,33 +176,42 @@ def ensure_sensors_registered(pe_url: str) -> None:
                 print(f"  [warn] Could not register {sid}: {exc}", file=sys.stderr)
 
 
+def _activate(client: httpx.Client, pe_url: str, sensor_id: str) -> None:
+    """Activate a sensor source after its value is written, never before."""
+    sources = client.get(f"{pe_url}/api/sources").json().get("sources", [])
+    src = next((x for x in sources if x.get("sensorId") == sensor_id), None)
+    if src and not src.get("active"):
+        client.patch(f"{pe_url}/api/sources/{src['id']}", json={"active": True}).raise_for_status()
+
+
 def push_health_reading(
     pe_url: str,
     reading: HealthReading,
 ) -> tuple[str | None, int | None]:
     """
-    Write band values to PE sensors, trigger /api/push, decode health state.
+    Grade the reading, write the roll-up, trigger /api/push, decode health state.
     Returns (state, global_step).
     """
-    hr_ok, hrv_ok, sleep_ok = _band(reading.hr_bpm, reading.hrv_sdnn_ms, reading.sleep_hours)
+    grades = _grades(reading.hr_bpm, reading.hrv_sdnn_ms, reading.sleep_hours)
+    rollup = health_bands.rollup(list(grades.values()))
 
     print(
         f"\n  Reading:  HR={reading.hr_bpm}bpm  HRV={reading.hrv_sdnn_ms}ms  "
         f"Sleep={reading.sleep_hours}h"
     )
-    print(f"  Bands:    hr.ok={hr_ok}  hrv.ok={hrv_ok}  sleep.ok={sleep_ok}")
+    print("  Grades:   " + "  ".join(f"{b}={g}" for b, g in grades.items()))
+    print(f"  Roll-up:  {rollup}")
 
+    sid = _ROLLUP_SENSOR["sensorId"]
     with httpx.Client(timeout=5) as client:
-        for sid, val in [
-            ("localai_health_hr_ok", hr_ok),
-            ("localai_health_hrv_ok", hrv_ok),
-            ("localai_health_sleep_ok", sleep_ok),
-        ]:
-            try:
-                r = client.post(f"{pe_url}/api/sensors/{sid}", json={"values": [val]})
-                r.raise_for_status()
-            except Exception as exc:
-                print(f"  [warn] sensor write failed ({sid}): {exc}", file=sys.stderr)
+        try:
+            r = client.post(
+                f"{pe_url}/api/sensors/{sid}", json={"values": health_bands.rollup_vector(rollup)}
+            )
+            r.raise_for_status()
+            _activate(client, pe_url, sid)
+        except Exception as exc:
+            print(f"  [warn] sensor write failed ({sid}): {exc}", file=sys.stderr)
 
         try:
             push_resp = client.post(f"{pe_url}/api/push")
@@ -313,11 +310,11 @@ def main() -> None:
     print("\n[3/3] Verify in Grafana / localAI:")
     print(f"  Recent triggers: GET {args.localai_url}/graphql/events")
     print(f"  PE sources:      GET {args.pe_url}/api/sources")
-    print(f"  PE state:        GET {args.pe_url}/api/state  (perceptualSpace[186:194])")
+    print(f"  PE state:        GET {args.pe_url}/api/state  (perceptualSpace[7574:7582])")
     print()
     print("Analogous Yuma/MQTT pipeline:")
     print("  yuma.lateraledge.cloud:1883 → MQTT mappings → PE → RE → CES → GraphQL")
-    print("  simulated HealthKit readings → band values   → PE → RE → CES → GraphQL")
+    print("  simulated HealthKit readings → graded roll-up → PE → RE → CES → GraphQL")
     print()
 
 

@@ -8,11 +8,13 @@ from config import get_settings
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+# Worst band wins over the measures in scope (data/health/health_bands.json), so
+# a state does not say which measure drove it; the hints must not guess.
 _HEALTH_HINTS: dict[str, str] = {
-    "thriving": "The user's health metrics are all in nominal range. They are rested, recovered, and at full capacity.",
-    "balanced": "The user's cardiovascular metrics are good but sleep is below target. They may benefit from an early wind-down today.",
-    "watch": "The user's HRV indicates low recovery today. Consider recommending lighter activities and extra rest.",
-    "attention": "The user's heart rate is outside the nominal range. Gently recommend a check-in with a healthcare provider if this persists.",
+    "thriving": "The user's health measures are all in nominal range. They are rested, recovered, and at full capacity.",
+    "balanced": "One of the user's health measures, most often sleep, is slightly outside its nominal range. A gentle nudge is enough; they may benefit from an early wind-down today.",
+    "watch": "Several of the user's health measures are slightly outside their nominal ranges, which often means incomplete recovery. Consider recommending lighter activities and extra rest.",
+    "attention": "At least one of the user's health measures is well outside its nominal range. Do not diagnose; gently recommend a check-in with a healthcare provider if this persists.",
 }
 
 

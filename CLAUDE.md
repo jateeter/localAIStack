@@ -1,6 +1,6 @@
 # localAIStack Guidance
 
-Last reviewed: 2026-06-22
+Last reviewed: 2026-09-23
 
 See `/Users/johnt/workspace/GitHub/CLAUDE.md` for the integrated application map. Update both this file and the root map when local AI provider responsibilities, bridge endpoints, or runtime composition changes.
 
@@ -13,6 +13,12 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
 - `services/api/main.py`: FastAPI entrypoint.
 - `services/api/config.py`: runtime configuration.
 - `services/api/core/reality_bridge.py`: RE/PE bridge.
+- `services/api/core/health_bands.py`, `data/health/health_bands.json`: grade
+  the HealthKit bridge's families ok / watch / concern and roll them up, worst
+  band wins (pure; no I/O).
+- `services/api/core/health_scope.py`: HealthKit scope follower. Run from the
+  lifespan every `HEALTH_SCOPE_INTERVAL_S` against each PE, it gives in-scope
+  bands slots in `[7600:7632]` and writes the roll-up to `[7574:7578]`.
 - `services/api/core/embeddings.py`: embedding support.
 - `services/api/core/vector_store.py`: vector store behavior.
 - `services/api/core/topology_builder.py`: topology/graph construction.
@@ -70,6 +76,13 @@ make model-pull ID=<model-id>  # pull a registered model
   registering active changes what an engine perceives before any localAI data
   exists. Declaration fans out to every engine; activation follows that
   engine's own data flow. See `core/pe_sources.py`.
+- **HealthKit scope is dynamic and the PE is its authority.** Which types flow
+  changes through an authorization workflow (Solid pod, Swift bridge,
+  OpenCommons PIM). localAI follows add / lock / remove from each PE's
+  `/api/integrations/healthkit/status` and never assumes a fixed set of
+  measures. A removed measure is absent, not zero. localAI may request a
+  resync through the PE; the pod workflow does not. Contract:
+  `localHealthkitBridge/docs/INGEST_CONTRACT.md` "Scope and resync".
 - **One interaction, one engine.** `X-RE-Instance: <registry instance id>`
   names the initiating engine; `core/bridge_binding.py` pins it for the whole
   request, so the sensor write, the push, and the perceptual space the response

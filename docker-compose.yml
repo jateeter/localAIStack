@@ -176,6 +176,9 @@ services:
       # MACHINES_DIR is deliberately not set here: it means the corpus repo
       # everywhere else in the workspace, and reality_bridge no longer reads it.
       LOCALAI_MACHINES_DIR: "/app/data/machines"
+      # Resync requests to the PE are authenticated like ingest. startUniverse.sh
+      # exports the universe's token; empty means the PE runs without auth.
+      HEALTHKIT_BRIDGE_TOKEN: "${HEALTHKIT_BRIDGE_TOKEN:-}"
       # Model registry — config/ is mounted below; without this the loader's
       # repo-root walk overshoots to / because services/api mounts at /app.
       MODELS_REGISTRY_PATH: "/app/config/models.registry.json"
@@ -185,6 +188,8 @@ services:
     volumes:
       - ./data/documents:/app/data/documents
       - ./data/machines:/app/data/machines:ro
+      # health_bands.json, resolved beside LOCALAI_MACHINES_DIR (core/health_bands.py)
+      - ./data/health:/app/data/health:ro
       - ./config:/app/config:ro
       - ./services/api:/app  # live-reload in dev
     depends_on:
