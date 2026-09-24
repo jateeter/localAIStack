@@ -1285,6 +1285,15 @@ def import_machines_everywhere(machines: list[tuple[str, dict]], label: str) -> 
                 for name, machine_json in machines:
                     content_hash = machine_content_hash(machine_json)
                     held = existing.get(name, [])
+                    # Only a copy localAI stamped is localAI's to replace. An
+                    # unstamped copy was loaded by someone else, typically the
+                    # engine's own corpus (the regression corpus ships three of
+                    # these machines). Replacing it re-interns its test sources
+                    # on the PE and duplicates them (regression run
+                    # 20260924T165353Z, reset-contract).
+                    if held and not any(h["hash"] for h in held):
+                        skipped += 1
+                        continue
                     if len(held) == 1 and held[0]["hash"] == content_hash:
                         skipped += 1
                         continue
