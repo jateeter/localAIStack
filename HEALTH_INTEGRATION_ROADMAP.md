@@ -216,7 +216,7 @@ as its HealthKit config. That file is not loadable by any PE — see T2.
   `live_pe`, `live_re` fixtures, `poll_until()`
 - `tests/e2e/test_api_integration.py` (15) and `tests/e2e/test_health_pipeline.py` (21)
 - `.github/workflows/e2e.yml` + `docker-compose.ci.yml`
-- 9 health knowledge documents, now in `documents/health/` (git tracked since 2026-09-24; they were gitignored under `data/documents/` until then)
+- 9 health knowledge documents, now in `data/health/documents/` (git tracked since 2026-09-24; gitignored under `data/documents/` before that)
 
 **Correction:** e2e tests are *collected* in a default run and skip on the
 missing flag; they are not excluded from collection as this document claimed.

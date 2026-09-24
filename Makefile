@@ -57,7 +57,7 @@ provider-conformance:
 	@node --test scripts/pe-completion-conformance.test.mjs
 
 # ── RAG operations ────────────────────────────────────────────────────────────
-# Usage: make ingest FILE=./documents/spec.pdf
+# Usage: make ingest FILE=./data/<domain>/documents/spec.pdf
 ingest:
 	@python3 scripts/ingest.py $(FILE)
 
