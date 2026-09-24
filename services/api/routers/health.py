@@ -22,10 +22,25 @@ async def _check_pe(pe_url: str, ssl_verify: bool | str) -> dict:
             health_sensors = [
                 s for s in sources if s.get("sensorId", "").startswith("localai_health_")
             ]
+            carekit_sensors = [
+                s for s in sources if s.get("sensorId", "").startswith("localai_carekit_")
+            ]
+            from core.health_scope import last_summary
+
+            scope = last_summary(pe_url)
             return {
                 "status": "ok",
                 "sensor_count": len(sources),
                 "health_sensors": len(health_sensors),
+                "carekit_sensors": len(carekit_sensors),
+                # The scope follower's last reconciliation of this PE, or None
+                # before the first one (core/health_scope.py).
+                "health_scope": {
+                    k: scope.get(k)
+                    for k in ("declared", "generation", "state", "slots", "overCapacity", "error")
+                }
+                if scope
+                else None,
             }
     except Exception as exc:
         return {"status": "unreachable", "error": str(exc)[:200]}
@@ -45,14 +60,16 @@ async def _check_re(re_url: str, ssl_verify: bool | str) -> dict:
         data = state_r.json()
         ps = data.get("state", {}).get("perceptualSpace", [])
 
-        from core.reality_bridge import get_health_state
+        from core.reality_bridge import get_carekit_state, get_health_state
 
         health_state = get_health_state(ps)
+        carekit_state = get_carekit_state(ps)
 
         machine_count = len(machines_r.json().get("machines", []))
         return {
             "status": "ok",
             "health_state": health_state,
+            "carekit_state": carekit_state,
             "machine_count": machine_count,
             "ps_length": len(ps),
         }

@@ -85,9 +85,9 @@ async def chat(
         inject_health = s.health_context_enabled
 
     if inject_health:
-        from core.reality_bridge import get_current_health_state
+        from core.reality_bridge import current_health_state
 
-        health_state = get_current_health_state()
+        health_state = current_health_state()
         if health_state:
             lc_messages = _inject_health_context(lc_messages, health_state)
 

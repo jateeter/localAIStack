@@ -260,6 +260,46 @@ def send_graphql_trigger(localai_url: str, state: str, reading: HealthReading) -
         print(f"  [warn] GraphQL trigger failed: {exc}", file=sys.stderr)
 
 
+# ── CareKit leg (T5) ──────────────────────────────────────────────────────────
+# Pre-normalised ratios, no band step (medication_adherence.json). Sensor
+# definitions and the decoder are the service's own, not copies.
+
+_CAREKIT_SCENARIOS: dict[str, tuple[float, float, float]] = {
+    # (med_adherence, task_completion, symptom_ok)
+    "adherent": (1.0, 1.0, 1.0),
+    "partial": (1.0, 0.2, 1.0),
+    "lapsed": (0.2, 0.5, 1.0),
+    "concern": (0.0, 0.3, 0.0),
+}
+
+
+def run_carekit(pe_url: str, scenario: str, interval: float) -> None:
+    from core import reality_bridge
+
+    names = list(_CAREKIT_SCENARIOS) if scenario == "cycle" else [scenario]
+    with httpx.Client(timeout=5) as client:
+        existing = reality_bridge.get_sensor_sources(client, pe_url)
+        reality_bridge._register_sensor_list(
+            client, reality_bridge._CAREKIT_SENSORS, existing, pe_url
+        )
+        for name in names:
+            values = _CAREKIT_SCENARIOS[name]
+            for sensor, value in zip(reality_bridge._CAREKIT_SENSORS, values, strict=True):
+                sid = sensor["sensorId"]
+                client.post(
+                    f"{pe_url}/api/sensors/{sid}", json={"values": [value]}
+                ).raise_for_status()
+                _activate(client, pe_url, sid)
+            r = client.post(f"{pe_url}/api/push")
+            r.raise_for_status()
+            ps = r.json().get("step", {}).get("perceptualSpace", [])
+            state = reality_bridge.get_carekit_state(ps)
+            mark = "✓" if state == name else "✗"
+            print(f"  CareKit {name:9s} med/task/symptom={values}  →  {state}  {mark}")
+            if len(names) > 1:
+                time.sleep(interval)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
@@ -273,6 +313,11 @@ def main() -> None:
     parser.add_argument("--scenario", default="cycle", choices=[*_SCENARIOS, "cycle"])
     parser.add_argument("--interval", type=float, default=2.0, help="Seconds between cycle steps")
     parser.add_argument("--no-graphql", action="store_true")
+    parser.add_argument(
+        "--carekit",
+        choices=[*_CAREKIT_SCENARIOS, "cycle"],
+        help="Drive the CareKit leg instead: medication_adherence scenarios",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -282,6 +327,10 @@ def main() -> None:
     print(f"  localAI: {args.localai_url}")
     print(f"  Scenario: {args.scenario}")
     print()
+
+    if args.carekit:
+        run_carekit(args.pe_url, args.carekit, args.interval)
+        return
 
     print("[1/3] Ensuring PE health sensors are registered …")
     ensure_sensors_registered(args.pe_url)

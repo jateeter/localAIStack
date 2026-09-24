@@ -62,6 +62,10 @@ _slots: dict[str, dict[str, int]] = {}
 _held: dict[str, dict[str, str]] = {}
 _resync_asked: dict[str, set[tuple[int, str]]] = {}
 _last: dict[str, dict] = {}
+# Engines on which the follower itself has asserted a state. It retracts only
+# those: a roll-up written by push_health_signal (the simulator) is not the
+# follower's to clear just because no HealthKit family is present.
+_asserted: dict[str, bool] = {}
 
 
 def _table() -> BandTable:
@@ -183,7 +187,9 @@ def _reconcile(pe_url: str, client: httpx.Client, table: BandTable) -> dict:
         activate_sensor_source(client, pe_url, sid)
 
     state = rollup([grades[b] for b in slots], table.rollup)
-    write_rollup(client, pe_url, state, existing)
+    if state is not None or _asserted.get(pe_url):
+        write_rollup(client, pe_url, state, existing)
+        _asserted[pe_url] = state is not None
 
     resync = None
     if resync_types:
@@ -281,3 +287,4 @@ def reset() -> None:
         _held.clear()
         _resync_asked.clear()
         _last.clear()
+        _asserted.clear()

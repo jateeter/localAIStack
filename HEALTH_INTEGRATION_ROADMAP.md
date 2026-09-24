@@ -72,9 +72,9 @@ updated to follow them.
 | Gap | Task |
 |---|---|
 | ~~Three competing PE integration registries in `config/`~~ | T2 ✅ |
-| Chat still makes a synchronous RE round-trip per request | T4 |
-| `push_carekit_signal()` has no non-test caller | T5 |
-| `/health` does not report CareKit state | T6 |
+| ~~Chat still makes a synchronous RE round-trip per request~~ | T4 ✅ |
+| ~~No operator-facing CareKit driver~~ | T5 ✅ |
+| ~~`/health` does not report CareKit state~~ | T6 ✅ |
 | ~~No Swift ↔ Python band-threshold parity check~~ | T7 ✅ |
 | ~~iOS bridge and localAI health machine read different regions~~ | T8 ✅ |
 | CareKit sync absent from the Swift bridge (upstream, deferred to its v0.2) | T9 |
@@ -328,25 +328,33 @@ lock: the Python constants they compared against are gone, replaced by
 
 ### T3 — (withdrawn, folded into T2)
 
-### T4 — Chat warm path: read the carry, not the network
+### T4 — Chat warm path: no network round trip per turn ✅ 2026-09-24
 
-`routers/chat.py:86-90` calls `get_current_health_state()` on every request with
-health context enabled — an HTTP round-trip to the RE per chat turn. Phase 4b
-built the carry precisely to remove it.
+`routers/chat.py` now calls `current_health_state()`. That function takes the
+scope follower's last state for the bound engine, which localAI computes itself
+every `HEALTH_SCOPE_INTERVAL_S` and which costs nothing to read. It falls back
+to reading the RE (live output, then carry) only when the follower has no state,
+and caches that read per engine for 30 s.
 
-Prefer the `health_state` already present in the most recent push response via
-`get_session_context()`, and fall back to the poll only when the carry is cold.
+This supersedes the plan above (read the carry from the last push response). The
+follower's state is fresher than the carry and needs no push.
 
-### T5 — Operator-facing CareKit driver
+### T5 — Operator-facing CareKit driver ✅ 2026-09-24
 
-`push_carekit_signal()` has no non-test caller. `scripts/simulate_health_push.py`
-exposes only the health scenarios. Add `--carekit adherent|partial|lapsed|concern`
-so the CareKit leg is exercisable the way the health leg is.
+`scripts/simulate_health_push.py --carekit adherent|partial|lapsed|concern|cycle`
+registers the CareKit sensors (declared inactive, activated after their first
+value), writes each scenario, pushes, and decodes `medication_adherence`'s
+output. It uses the service's own sensor definitions and decoder. Verified live
+on cpp-1, lsp-1 and scala-1: all four states correct on each.
 
-### T6 — `/health` reports CareKit
+### T6 — `/health` reports CareKit ✅ 2026-09-24
 
-`routers/health.py:48-55` decodes `health_state` only. Add `carekit_state` and
-the CareKit sensor count to the `re` / `pe` sub-objects, mirroring Phase 3.
+`re` gains `carekit_state`. `pe` gains `carekit_sensors` and `health_scope`,
+the follower's last reconciliation of that PE (declared, generation, state,
+slots). Verified live, except where an engine returns the state in a different
+shape: LSP's `GET /api/perceptual-simulation/state` is flat where C++ and Scala
+nest it under `state`, so every reader, `/health` included, sees no state on
+lsp-1. Filed as RealityEngine_CI#453. Deliberately not masked here.
 
 ### T7 — Swift ↔ Python band-threshold parity check ✅ 2026-09-23
 
