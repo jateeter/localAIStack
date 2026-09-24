@@ -147,8 +147,6 @@ def _reconcile(pe_url: str, client: httpx.Client, table: BandTable) -> dict:
         _slots[pe_url] = slots
         over_capacity = [b for b in wanted if b not in slots]
         resync_types = sorted(t for t in needs_data if (generation, t) not in asked)
-        for t in resync_types:
-            asked.add((generation, t))
 
     existing = {
         s.get("sensorId"): s for s in sources if s.get("type") == "sensor" and s.get("sensorId")
@@ -201,6 +199,20 @@ def _reconcile(pe_url: str, client: httpx.Client, table: BandTable) -> dict:
             },
         )
         resync = {"status": r.status_code, "types": resync_types}
+        # Asked once the PE has answered: 202 accepted, 409 refused (locked or
+        # out of scope). Anything else, 401 above all, is retried next pass,
+        # and loudly, because a request that never lands looks like silence.
+        if r.status_code in (202, 409):
+            with _lock:
+                asked.update((generation, t) for t in resync_types)
+        else:
+            log.warning(
+                "health_scope.resync_failed",
+                pe_url=pe_url,
+                status=r.status_code,
+                types=resync_types,
+                token_configured=bool(_bridge_token()),
+            )
 
     summary = {
         "pe_url": pe_url,

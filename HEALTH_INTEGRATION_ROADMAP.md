@@ -466,7 +466,7 @@ note, not work.
 | `tests/test_reality_bridge.py` | unit (fake client) | 28 | (default) | no |
 | `tests/test_health_integration.py` | health unit | 29 | (default) | no |
 | `tests/test_health_bands.py` | bands, roll-up, slots, T7 parity | 30 | (default) | no |
-| `tests/test_health_scope.py` | scope follower (fake PE) | 12 | (default) | no |
+| `tests/test_health_scope.py` | scope follower (fake PE) | 13 | (default) | no |
 | `tests/test_machine_prose_offsets.py` | T11 prose guard | 1 | (default) | no |
 | `tests/test_phase2.py` | Phase 2 unit | 31 | (default) | no |
 | `tests/test_phase4.py` | Phase 4a+4b unit | 70 | (default) | no |
@@ -479,9 +479,9 @@ note, not work.
 | `tests/e2e/test_health_pipeline.py` | full live stack | 21 | `--live` | PE+RE+API |
 | `tests/e2e/test_patient_wellness_workflow.py` | live workflow | 1 | `--live` | PE+RE+API |
 
-**Default run:** 256 collected, 255 pass, 1 skip
+**Default run:** 257 collected, 256 pass, 1 skip
 (`test_machine_schema.py:102`, topology builder needs `langchain_core`).
-**Full collection:** 293 — the 37 e2e tests are collected and skip without their flag.
+**Full collection:** 294 — the 37 e2e tests are collected and skip without their flag.
 
 ```bash
 # Unit tests

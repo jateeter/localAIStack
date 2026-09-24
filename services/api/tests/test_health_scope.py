@@ -279,3 +279,25 @@ def test_reconcile_never_raises_on_a_missing_band_table(monkeypatch):
     monkeypatch.setattr(health_scope, "_table", _missing)
     s = health_scope.reconcile({"pe_url": PE}, client=FakePE())
     assert "health_bands.json" in s["error"]
+
+
+def test_failed_resync_is_retried_not_forgotten():
+    """A 401 (no token) must not mark the type as asked: the next pass retries."""
+    pe = FakePE(scope=_scope(1, **{WORKOUT: "active"}))
+    calls = []
+    orig = pe.post
+
+    def post(url, json=None, headers=None, **kw):
+        if url.endswith("/resync"):
+            calls.append(url)
+            if len(calls) == 1:
+                return _Resp(401, {"error": "unauthorized"})
+        return orig(url, json=json, headers=headers, **kw)
+
+    pe.post = post
+    s = health_scope.reconcile({"pe_url": PE}, client=pe)
+    assert s["resync"]["status"] == 401
+    health_scope.reconcile({"pe_url": PE}, client=pe)
+    assert len(calls) == 2 and len(pe.resyncs) == 1
+    health_scope.reconcile({"pe_url": PE}, client=pe)
+    assert len(calls) == 2  # accepted: not asked again this generation
