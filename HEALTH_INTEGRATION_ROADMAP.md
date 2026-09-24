@@ -78,7 +78,7 @@ updated to follow them.
 | ~~No Swift ↔ Python band-threshold parity check~~ | T7 ✅ |
 | ~~iOS bridge and localAI health machine read different regions~~ | T8 ✅ |
 | CareKit sync absent from the Swift bridge (upstream, deferred to its v0.2) | T9 |
-| Personalisation feedback loop — health state → RAG re-rank | T10 |
+| ~~Personalisation feedback loop — health state → RAG re-rank~~ | T10 ✅ |
 | ~~All localAI machine JSONs carry stale offsets in their prose metadata~~ | T11 ✅ |
 
 ---
@@ -436,17 +436,23 @@ stack's Phase 4a machine as its prerequisite — which is now done. Recorded her
 as a dependency, not as ready work. The PE-side CareKit ingest it will target is
 already shipped in all four runtimes.
 
-### T10 — Personalisation feedback loop
+### T10 — Personalisation feedback loop ✅ 2026-09-24
 
-The one unbuilt feature. No `rerank` / `re_rank` code exists anywhere in
-`services/api/`. Health state should re-rank RAG retrieval — a user in
-`attention` or `watch` should surface recovery and intervention documents ahead
-of general ones.
+`core/health_rerank.py` re-orders retrieved documents by health state; it never
+drops or adds one. Documents about bands the follower graded concern come
+first, then watch (for example sleep → `sleep_quality.md`, pulse →
+`heart_rate_guide.md`), then the state's guidance (attention → interventions
+and recovery; watch → recovery and stress; balanced → sleep and recovery), then
+everything else. Within each group the retriever's similarity order is kept, so
+thriving or no state is a no-op.
 
-- Consume `get_session_context()["health_state"]` in `graphs/rag_graph.py`
-  (free to read once T4 lands).
-- Re-rank retrieved documents by health relevance before the grade step.
-- Tests: per-state ordering, and no-op when the carry is cold.
+It is applied where the health documents are actually read, in the agent's
+`health_search` tool (fetch 8, re-rank, keep 4), and in `graphs/rag_graph.py`
+`retrieve` before grading. It is keyed on `metadata.source`. Tests assert every
+mapped document exists and every live band has guidance.
+
+Not exercised live: the regression universe's Qdrant has no `health_docs`
+collection, and the dockerised API cannot currently run (Docker store damage).
 
 ### T11 — Stale offsets inside the machine JSON metadata ✅ 2026-09-23
 

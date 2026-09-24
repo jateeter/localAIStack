@@ -50,7 +50,11 @@ def retrieve(state: RAGState) -> dict:
         k=s.retrieval_top_k,
         score_threshold=s.retrieval_score_threshold,
     )
-    docs = [doc for doc, _ in scored]
+    from core.health_rerank import health_focus, rerank
+
+    # T10: health-relevant documents first when the user's state calls for it.
+    # Order only; the set is unchanged, so the retrieval signal below is too.
+    docs = rerank([doc for doc, _ in scored], *health_focus())
     avg_score = sum(sc for _, sc in scored) / max(len(scored), 1)
 
     from core.reality_bridge import push_retrieval_signal
