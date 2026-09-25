@@ -64,6 +64,71 @@ def get_sensor_sources(client: httpx.Client, pe_url: str) -> dict:
         return {}
 
 
+# Only localAIStack's own machines' bootstrap replays are ever claimed; a corpus
+# machine's test source is not this service's to remove.
+_CLAIMABLE_TEST_PREFIX = "localai/"
+
+
+def _all_sources(client: httpx.Client, pe_url: str) -> list[dict]:
+    resp = client.get(f"{pe_url}/api/sources")
+    resp.raise_for_status()
+    raw = resp.json()
+    return raw if isinstance(raw, list) else raw.get("sources", [])
+
+
+def _overlaps(a: dict, b: dict) -> bool:
+    try:
+        a0, a1 = int(a["offset"]), int(a["offset"]) + int(a.get("length", 1))
+        b0, b1 = int(b["offset"]), int(b["offset"]) + int(b.get("length", 1))
+    except (KeyError, TypeError, ValueError):
+        return False
+    return a0 < b1 and b0 < a1
+
+
+def claim_window(
+    client: httpx.Client, pe_url: str, region: dict, sources: list[dict] | None = None
+) -> int:
+    """The live source wants its window: remove the bootstrap replay over it.
+
+    Ingesting a machine interns its `inputSequences` as a test source over the
+    machine's own input region (SURFACE_SPEC.md "Machine ingestion"), which is
+    the same window localAIStack's live sensor writes. The replay was assembled
+    after the sensor, so the machine read canned examples instead of the live
+    value: an iPhone reporting *attention* reached personal_health_baseline as
+    the replay's *watch*.
+
+    Owner's rule (2026-09-24): the bootstrap keeps the replay **until the live
+    source wants the window**. Called when a sensor has a value and is active;
+    removes `test` sources named `localai/...` that overlap `region`, on this
+    engine only. Before any live value the replay stays, so a universe with no
+    live data, the regression harness included, is unchanged. Returns the number
+    removed; never raises.
+    """
+    try:
+        items = sources if sources is not None else _all_sources(client, pe_url)
+        removed = 0
+        for src in items:
+            if src.get("type") != "test" or not src.get("id"):
+                continue
+            if not str(src.get("name") or "").startswith(_CLAIMABLE_TEST_PREFIX):
+                continue
+            if not _overlaps(src.get("region") or {}, region):
+                continue
+            r = client.delete(f"{pe_url}/api/sources/{src['id']}")
+            if r.status_code < 300 or r.status_code == 404:
+                removed += 1
+                log.info(
+                    "pe_sources.window_claimed",
+                    pe_url=pe_url,
+                    replay=src.get("name"),
+                    region=region,
+                )
+        return removed
+    except Exception as exc:  # noqa: BLE001 - claiming is best-effort
+        log.warning("pe_sources.claim_failed", pe_url=pe_url, region=region, error=str(exc))
+        return 0
+
+
 def activate_sensor_source(
     client: httpx.Client, pe_url: str, sensor_id: str, ttl_ms: float | None = None
 ) -> None:
@@ -89,6 +154,9 @@ def activate_sensor_source(
         return
     if ttl_ms is None and source.get("ttlMs"):
         _activated[key] = (time.monotonic(), float(source["ttlMs"]))
+    if source.get("region"):
+        # The first value is when the live source wants its window.
+        claim_window(client, pe_url, source["region"])
     if source.get("active"):
         return
     try:

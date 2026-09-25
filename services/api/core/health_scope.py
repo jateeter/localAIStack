@@ -37,7 +37,7 @@ from core.health_bands import (
     rollup,
     rollup_vector,
 )
-from core.pe_sources import activate_sensor_source, forget_activation
+from core.pe_sources import activate_sensor_source, claim_window, forget_activation
 
 log = structlog.get_logger()
 
@@ -190,6 +190,11 @@ def _reconcile(pe_url: str, client: httpx.Client, table: BandTable) -> dict:
     if state is not None or _asserted.get(pe_url):
         write_rollup(client, pe_url, state, existing)
         _asserted[pe_url] = state is not None
+    if _asserted.get(pe_url):
+        # Keep the window claimed while the roll-up is live: a re-bootstrap
+        # (skip-if-present) recreates the replay, and this pass removes it
+        # again. Uses the source list already read above.
+        claim_window(client, pe_url, ROLLUP_REGION, sources)
 
     resync = None
     if resync_types:
