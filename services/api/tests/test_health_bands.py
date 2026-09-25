@@ -82,6 +82,15 @@ def test_missing_or_short_family_is_not_graded():
     assert hb.grade_band(_band("pulse"), [0.5, 0.5], 0.5) is None
 
 
+def test_pulse_not_measured_is_not_graded():
+    """Pulse 0 means not measured (lane-semantics absentValue): a manual Health
+    blood-pressure entry has no heart rate and was graded a 0 bpm concern."""
+    fam = _bp_family(132, 86, 0)
+    assert hb.grade_band(_band("pulse"), fam, TABLE.min_confidence) is None
+    # The rest of the family is unaffected.
+    assert hb.grade_band(_band("blood_pressure"), fam, TABLE.min_confidence) == "watch"
+
+
 def test_dormant_band_is_never_graded_from_a_family():
     hrv = _band("hrv")
     assert hrv.dormant
@@ -168,6 +177,10 @@ def test_band_lanes_match_lane_semantics(lanes):
             la = axes.get(axis.index)
             assert la, f"band {band.id}: axis {axis.index} not in lane {band.lane}"
             assert axis.name == la["name"], f"band {band.id}: axis {axis.index} name drift"
+            assert axis.absent_value == la.get("absentValue"), (
+                f"band {band.id}.{axis.name}: absentValue {axis.absent_value} "
+                f"!= lane-semantics {la.get('absentValue')}"
+            )
             assert list(axis.source_range) == la["sourceRange"], (
                 f"band {band.id}.{axis.name}: sourceRange {list(axis.source_range)} "
                 f"!= lane-semantics {la['sourceRange']}"
