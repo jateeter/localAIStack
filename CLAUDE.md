@@ -1,6 +1,6 @@
 # localAIStack Guidance
 
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-25
 
 See `/Users/johnt/workspace/GitHub/CLAUDE.md` for the integrated application map. Update both this file and the root map when local AI provider responsibilities, bridge endpoints, or runtime composition changes.
 
@@ -22,7 +22,7 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
 - `services/api/core/embeddings.py`: embedding support.
 - `services/api/core/vector_store.py`: vector store behavior.
 - `services/api/core/topology_builder.py`: topology/graph construction.
-- `services/api/core/model_registry.py`: model registry loader; joins registry
+- `services/api/core/model_registry.py`: model registry loader; joins model registry
   metadata with the `.env` selection and live Ollama tags.
 - `services/api/graphs/`: agent and RAG graph flows.
 - `services/api/routers/`: chat, graph, GraphQL, health, models, and RAG routes.
@@ -49,7 +49,7 @@ make stop
 make health
 make query
 make agent
-make models                    # registry + installed state
+make models                    # model registry + installed state
 make model-pull ID=<model-id>  # pull a registered model
 
 # Machine contract gates (need a sibling RealityEngine_Machines checkout)
@@ -59,8 +59,8 @@ make model-pull ID=<model-id>  # pull a registered model
 
 ## Runtime Contract
 
-- Use the registry-selected RE/PE endpoints when launched by `RealityEngine_CI/startUniverse.sh`.
-- Verify environment values against the live registry, not just static `.env` defaults.
+- Use the RE/PE endpoints selected from the instance registry when launched by `RealityEngine_CI/startUniverse.sh`.
+- Verify environment values against the live instance registry, not just static `.env` defaults.
 - Models are declared in `config/models.registry.json`, selected in `.env`, and
   installed in Ollama. Check `GET /models` before debugging a model problem —
   it separates "not pulled" from "not registered" from "too big for this host".
@@ -89,13 +89,13 @@ make model-pull ID=<model-id>  # pull a registered model
   measures. A removed measure is absent, not zero. localAI may request a
   resync through the PE; the pod workflow does not. Contract:
   `localHealthkitBridge/docs/INGEST_CONTRACT.md` "Scope and resync".
-- **One interaction, one engine.** `X-RE-Instance: <registry instance id>`
+- **One interaction, one engine.** `X-RE-Instance: <instance registry id>`
   names the initiating engine; `core/bridge_binding.py` pins it for the whole
   request, so the sensor write, the push, and the perceptual space the response
   is normalized from all belong to that engine. A named engine that is not
   running resolves to nothing — the call degrades to its safe default rather
   than writing to a substitute. Without the header the bridge uses the
-  registry-selected target, as before.
+  target selected from the instance registry, as before.
 
 ## LSP Support
 
@@ -108,18 +108,18 @@ Use Pyright and Ruff for Python/FastAPI, Docker/YAML support for stack files, JS
 
 ## Standing rules — authoritative in `../RealityEngine_CI/docs/ENGINEERING_CONTRACT.md`
 
-These apply here and are **not** restated in this file. They were previously
-copied into eighteen `CLAUDE.md` files across six repositories, which is the
-duplication problem the rules themselves warn about: copies drift, a rule added
-to one applies only where someone looked, and with no authority a reader cannot
-tell which copy is current.
+These apply here and are **not** restated in this file. The table is an index
+to the contract, not a copy of it: it names every rule so you know what to look
+up, and the contract's wording governs wherever the two differ.
 
 | Rule | In short |
 | --- | --- |
 | Qualify every "registry" | Never the bare word — instance / machine / cesgen / arbitration / domain / semantic-bus / tag. |
+| Regenerate a stale `<name>` registry, don't fail it | Each `<name>` registry is a view of the running system. A gate regenerates it and fails only on a disagreement that survives regeneration. |
 | Verify a merge beyond the hosted checks | A green PR is not a verified PR; the hosted path cannot reach the integration points. Name what you could not exercise, and record what you noticed but did not chase. |
-| Never commit to main | Branch from `origin/main`, PR, verify, squash-merge, clean up. |
 | _CI is the authority | Peripheral repos keep minimal CI that forces local validation; RealityEngine_CI verifies fixes against a live universe. Check its `docs/` before adding CI anywhere else. |
+| Name it `CLAUDE.md` | Uppercase, always. On a case-insensitive filesystem `claude.md` is the same inode; dedupe on `st_ino`, never on a resolved path. |
+| Never commit to main | Branch from `origin/main`, PR, verify, squash-merge, clean up. |
 | Use bash, not zsh | Shell work runs in `/opt/homebrew/bin/bash` (5.x), not zsh or macOS `/bin/bash` 3.2: any loop, unquoted variable, glob or `set --` goes through it with `set -euo pipefail`, and you check the command's exit status, not the pipeline tail. |
 
 Read the contract for the full text, the qualifier table, and the cleanup steps.
