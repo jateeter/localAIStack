@@ -1,6 +1,6 @@
 # localAIStack — PE/RE Health Integration Audit & Roadmap
 
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-24
 
 ## Status of this document
 
@@ -426,8 +426,20 @@ What was built:
    are removed from any PE at registration, because they sit inside the
    roll-up's window.
 
-Not verified here: the device path end to end on hardware, and the scope
-follower against a live universe beyond the probes recorded in the PR.
+**Verified on hardware, 2026-09-24.** Physical iPhone 17 Pro, the bridge app
+(localHealthkitBridge) posting to the C++ PE of a live universe over LAN with
+token auth. The walk-through found four defects, all fixed:
+
+| Found | Fix |
+|---|---|
+| The phone's real state (*attention*, from 2 exercise minutes) reached `personal_health_baseline` as *watch*. The PE's bootstrap `test` source replays the machine's `inputSequences` into the **same** input window, assembled after localAI's roll-up | **Owner's rule: the bootstrap keeps the replay until the live source wants the window.** `pe_sources.claim_window` removes overlapping `localai/*` test sources on that engine when a live sensor activates, and the follower re-claims after a re-bootstrap (#106). The machine then asserts *attention*, steady across pushes |
+| A Health blood-pressure entry has no heart rate; the bridge sends pulse 0 and the pulse band graded it a **concern** | Pulse 0 is declared **not measured** (`absentValue`) in the bridge's `lane-semantics.json` (localHealthkitBridge#38). The band table honours it, and T7 parity checks it (#107). Verified on a real 124/82 entry: pulse not graded, blood pressure *watch* |
+| The phone never answered localAI's resync requests | The bridge now fulfils them (localHealthkitBridge#37). An exercise resync was answered in 9 s with real data; a sleep resync stays pending because the phone has no sleep to send |
+| A restarted phone never woke the bridge for new samples | `HKObserverQuery` with completion, registered at launch (localHealthkitBridge#39). A Health entry reached the PE 11 s after a restart, app never opened |
+
+Still to note: `-autoTestPush` (the device e2e) sends a fixed connectivity
+batch, so only observer deliveries carry real Health data. Of this phone's
+families, only exercise was real.
 
 ### T9 — CareKit sync in the Swift bridge (blocked upstream)
 
@@ -470,9 +482,11 @@ exceptions. It fails on the pre-T11 tree.
 
 ### Sequencing
 
-T2, T7, T8 and T11 are done. T4, T5 and T6 are small, self-contained code
-changes. T10 is the only multi-day feature and reads best after T4. T9 is a
-note, not work.
+Everything except T9 is done: T1-T8, T10 and T11, with T8 verified on hardware
+on 2026-09-24. **T9 (CareKit sync in the Swift bridge) is the only open item,
+blocked upstream on the bridge's v0.2.** The PE-side CareKit ingest it targets
+is shipped in all four runtimes, and `simulate_health_push.py --carekit` drives
+the localAI leg today.
 
 ---
 
