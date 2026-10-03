@@ -62,7 +62,7 @@ import pathlib
 import httpx
 import structlog
 
-from core import engine_fanout, health_bands, health_scope
+from core import engine_fanout, health_bands, health_scope, source_observations
 from core.bridge_binding import bind
 from core.pe_sources import (
     activate_sensor_source,
@@ -525,6 +525,7 @@ def _remove_legacy_health_sensors(client: "httpx.Client", existing: dict, pe_url
             continue
         r = client.delete(f"{pe_url}/api/sources/{source['id']}")
         r.raise_for_status()
+        source_observations.record_removal("source", pe_url, source, "legacy_sensor_retired")
         log.info("reality_bridge.legacy_health_sensor_removed", sensor_id=sid, pe_url=pe_url)
 
 
@@ -1327,6 +1328,9 @@ def import_machines_everywhere(machines: list[tuple[str, dict]], label: str) -> 
                         # or the name ends up held twice.
                         for entry in held:
                             client.delete(f"{re_url}/api/machines/{entry['id']}").raise_for_status()
+                            source_observations.record_removal(
+                                "machine", re_url, {"name": name, **entry}, "machine_replaced"
+                            )
                         r = client.post(
                             f"{re_url}/api/machines", json=_stamped(machine_json, content_hash)
                         )

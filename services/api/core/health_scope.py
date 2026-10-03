@@ -28,6 +28,7 @@ import threading
 import httpx
 import structlog
 
+from core import source_observations
 from core.health_bands import (
     GRADE_VALUE,
     BandTable,
@@ -160,6 +161,7 @@ def _reconcile(pe_url: str, client: httpx.Client, table: BandTable) -> dict:
         src = existing.get(_SLOT_PREFIX + band_id)
         if src and src.get("id"):
             client.delete(f"{pe_url}/api/sources/{src['id']}")
+            source_observations.record_removal("source", pe_url, src, "slot_left_scope")
             forget_activation(pe_url, _SLOT_PREFIX + band_id)
     for band_id, index in slots.items():
         sid = _SLOT_PREFIX + band_id
@@ -167,6 +169,7 @@ def _reconcile(pe_url: str, client: httpx.Client, table: BandTable) -> dict:
         src = existing.get(sid)
         if src and (src.get("region") or {}) != region and src.get("id"):
             client.delete(f"{pe_url}/api/sources/{src['id']}")  # moved slot: re-declare
+            source_observations.record_removal("source", pe_url, src, "slot_moved")
             forget_activation(pe_url, sid)
             src = None
         if src is None:

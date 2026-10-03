@@ -171,6 +171,7 @@ services:
       # defaults above), the bridge re-targets to a live instance from this
       # registry instead of silently degrading (RealityEngine_CI#44).
       RE_REGISTRY_URL: "${RE_REGISTRY_URL:-http://host.docker.internal:5999/re-registry.json}"
+      LOCALAI_STATE_DIR: "/app/state"
       RE_SSL_VERIFY: "false"
       # This stack's own machines, not the RealityEngine_Machines corpus.
       # MACHINES_DIR is deliberately not set here: it means the corpus repo
@@ -191,6 +192,9 @@ services:
       - ./data/health:/app/data/health:ro
       - ./config:/app/config:ro
       - ./services/api:/app  # live-reload in dev
+      # Durable localAI state: the record of every source and machine localAI
+      # removed from an engine (core/source_observations.py, RealityEngine_CI#518).
+      - ./volumes/state:/app/state
     depends_on:
       qdrant:
         condition: service_healthy

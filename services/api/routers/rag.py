@@ -90,3 +90,32 @@ async def query(req: QueryRequest):
         sources=sources,
         rewrite_count=result.get("rewrite_count", 0),
     )
+
+
+class RetrieveRequest(BaseModel):
+    question: str
+
+
+class RetrieveResponse(BaseModel):
+    doc_count: int
+    sources: list[str]
+
+
+@router.post("/retrieve", response_model=RetrieveResponse)
+async def retrieve_only(req: RetrieveRequest):
+    """Retrieval alone: search, re-rank, and write the retrieval signal — no LLM.
+
+    The same ``retrieve`` step the RAG graph runs, so the engine sees the same
+    retrieval signal a full query would write. An engine that names itself
+    (``X-RE-Instance``) gets the signal alone; otherwise every registered engine
+    gets it (core/engine_fanout). This is what a test uses to give each engine
+    under test its own retrieval without depending on a generation model
+    (RealityEngine_CI#518).
+    """
+    from graphs.rag_graph import retrieve
+
+    docs = retrieve({"question": req.question, "documents": [], "rewrite_count": 0})["documents"]
+    return RetrieveResponse(
+        doc_count=len(docs),
+        sources=sorted({d.metadata.get("source", "unknown") for d in docs}),
+    )

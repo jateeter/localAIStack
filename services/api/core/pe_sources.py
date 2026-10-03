@@ -23,6 +23,8 @@ import time
 import httpx
 import structlog
 
+from core import source_observations
+
 log = structlog.get_logger()
 
 # (pe_url, sensorId) -> (written_at_monotonic, ttl_ms) for sources this bridge
@@ -117,6 +119,8 @@ def claim_window(
             r = client.delete(f"{pe_url}/api/sources/{src['id']}")
             if r.status_code < 300 or r.status_code == 404:
                 removed += 1
+                # Removed, but its existence is kept (core/source_observations).
+                source_observations.record_removal("source", pe_url, src, "window_claimed")
                 log.info(
                     "pe_sources.window_claimed",
                     pe_url=pe_url,
