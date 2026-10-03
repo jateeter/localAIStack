@@ -17,7 +17,7 @@ Each sibling repository contains a `CLAUDE.md` at its root with repo-specific te
 | RealityEngine_CI | `RealityEngine_CI/CLAUDE.md` | Orchestration, startUniverse, e2e entry points |
 | RealityEngine_Machines | `RealityEngine_Machines/CLAUDE.md` | Corpus validation, contracts, seeding |
 | RealityEngine_Manager | `RealityEngine_Manager/CLAUDE.md` | Visualizer, PE proxy, MQTT, OpenClaw |
-| RealityEngine_Scala | `RealityEngine_Scala/CLAUDE.md` | JVM reference runtime, parity baseline |
+| RealityEngine_Scala | `RealityEngine_Scala/CLAUDE.md` | Scala/Akka (JVM) runtime, one of three held to 3-of-3 parity |
 | RealityEngine_CPP | `RealityEngine_CPP/CLAUDE.md` | C++20 runtime, startup/corpus root causes |
 | RealityEngine_LSP | `RealityEngine_LSP/CLAUDE.md` | Common Lisp runtime, JSON serialization parity |
 | localAIStack | `localAIStack/CLAUDE.md` | RAG/FastAPI/Qdrant, endpoint alignment |
