@@ -27,7 +27,13 @@ def _clean(monkeypatch):
     health_scope.reset()
     pe_sources.clear_activation_memo()
     reality_bridge._health_state_cache.clear()
-    monkeypatch.setattr(reality_bridge, "bind", lambda: {"pe_url": PE, "re_url": "http://re"})
+    from core import engine_fanout
+
+    monkeypatch.setattr(
+        engine_fanout,
+        "interaction_targets",
+        lambda: [{"pe_url": PE, "re_url": "http://re", "instance": None}],
+    )
     yield
     health_scope.reset()
 
@@ -40,7 +46,7 @@ def test_chat_state_comes_from_the_follower_without_network(monkeypatch):
     pe.family(4340, _sleep(5.5))  # sleep watch → balanced
     health_scope.reconcile({"pe_url": PE}, client=pe)
 
-    def _no_network():
+    def _no_network(*_a):
         raise AssertionError("fell back to the RE although the follower knew the state")
 
     monkeypatch.setattr(reality_bridge, "get_current_health_state", _no_network)
@@ -50,7 +56,7 @@ def test_chat_state_comes_from_the_follower_without_network(monkeypatch):
 def test_chat_state_falls_back_to_a_cached_re_read(monkeypatch):
     calls = []
 
-    def _read():
+    def _read(*_a):
         calls.append(1)
         return "watch"
 
@@ -63,7 +69,7 @@ def test_chat_state_falls_back_to_a_cached_re_read(monkeypatch):
 def test_cache_expires(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        reality_bridge, "get_current_health_state", lambda: calls.append(1) or "thriving"
+        reality_bridge, "get_current_health_state", lambda *_a: calls.append(1) or "thriving"
     )
     monkeypatch.setattr(reality_bridge, "_HEALTH_STATE_CACHE_S", 0.0)
     reality_bridge.current_health_state()

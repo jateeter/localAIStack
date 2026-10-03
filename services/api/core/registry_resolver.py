@@ -9,13 +9,19 @@ that do not exist in native mode, silently degrading the bridge
 
 Resolution order:
 
-  1. The configured env/settings targets, if both RE and PE answer
-     ``/api/health`` — an explicit, working configuration always wins.
-  2. The first registry instance whose RE and PE answer ``/api/health``.
-  3. The first ``running`` registry instance (bridge will surface degraded
+  1. The first registry instance whose RE and PE answer ``/api/health``.
+  2. The first ``running`` registry instance (bridge will surface degraded
      probes against a live target rather than a dead default).
-  4. The env/settings targets unchanged (registry absent — Docker
-     single-engine mode).
+  3. The env/settings targets (``RE_URL``/``PE_URL``) — only when the
+     instance registry is absent or lists nothing running.
+
+The instance registry wins over a live env target. It used to be the other way
+round, and in the Docker lane the env defaults answer: they are Manager's TLS
+pair, whose TypeScript PE is not an engine instance. Every single-target write
+then landed on a PE no engine comparison reads, while the registered engines
+got nothing (RealityEngine_CI#363). An engine the registry lists is the
+deployment's statement of what to address; env targets are the fallback for a
+deployment that publishes none.
 
 Results are cached for a short TTL so the per-request bridge hot path in
 ``reality_bridge`` does not re-probe on every call.
@@ -97,27 +103,25 @@ def resolve_bridge_targets(force_refresh: bool = False) -> dict:
     }
     targets = env_targets
 
-    env_alive = _probe_health(s.re_url) and _probe_health(s.pe_url)
-    if not env_alive:
-        registry_url = os.getenv("RE_REGISTRY_URL", "")
-        registry = _fetch_registry(registry_url) if registry_url else None
-        if registry:
-            running = _running_instances(registry)
-            chosen = next(
-                (
-                    inst
-                    for inst in running
-                    if _probe_health(inst["re_url"]) and _probe_health(inst["pe_url"])
-                ),
-                running[0] if running else None,
-            )
-            if chosen is not None:
-                targets = {
-                    "re_url": chosen["re_url"],
-                    "pe_url": chosen["pe_url"],
-                    "source": "registry",
-                    "instance": chosen.get("id"),
-                }
+    registry_url = os.getenv("RE_REGISTRY_URL", "")
+    registry = _fetch_registry(registry_url) if registry_url else None
+    if registry:
+        running = _running_instances(registry)
+        chosen = next(
+            (
+                inst
+                for inst in running
+                if _probe_health(inst["re_url"]) and _probe_health(inst["pe_url"])
+            ),
+            running[0] if running else None,
+        )
+        if chosen is not None:
+            targets = {
+                "re_url": chosen["re_url"],
+                "pe_url": chosen["pe_url"],
+                "source": "registry",
+                "instance": chosen.get("id"),
+            }
 
     _cache["at"] = now
     _cache["targets"] = targets
@@ -143,8 +147,9 @@ def resolve_all_bridge_targets(force_refresh: bool = False) -> list[dict]:
       passed its probes, so the single path deliberately targets one that just
       failed. Here an unreachable instance is reported, not selected.
 
-    The env target is included when the registry does not name it, so a
-    registry-less deployment still works.
+    The env target is included only when the registry names no running
+    instance, so a registry-less deployment still works — and, as in
+    resolve_bridge_targets, a live env target never joins a registered set.
     """
     registry_url = os.getenv("RE_REGISTRY_URL", "")
     registry = _fetch_registry(registry_url) if registry_url else None
@@ -168,19 +173,15 @@ def resolve_all_bridge_targets(force_refresh: bool = False) -> list[dict]:
         )
 
     s = get_settings()
-    if (s.re_url, s.pe_url) not in seen:
+    if not targets:
         env_alive = _probe_health(s.re_url) and _probe_health(s.pe_url)
-        # Only when the registry named nothing, or it named nothing live: a
-        # configured env target that duplicates a registry instance under a
-        # different URL would otherwise double-write that engine.
-        if not targets or (env_alive and not any(t["healthy"] for t in targets)):
-            targets.append(
-                {
-                    "re_url": s.re_url,
-                    "pe_url": s.pe_url,
-                    "source": "env",
-                    "instance": None,
-                    "healthy": env_alive,
-                }
-            )
+        targets.append(
+            {
+                "re_url": s.re_url,
+                "pe_url": s.pe_url,
+                "source": "env",
+                "instance": None,
+                "healthy": env_alive,
+            }
+        )
     return targets

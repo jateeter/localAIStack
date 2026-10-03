@@ -62,7 +62,7 @@ import pathlib
 import httpx
 import structlog
 
-from core import health_bands, health_scope
+from core import engine_fanout, health_bands, health_scope
 from core.bridge_binding import bind
 from core.pe_sources import (
     activate_sensor_source,
@@ -754,24 +754,28 @@ def current_health_state() -> str | None:
     off), fall back to reading the RE, cached for _HEALTH_STATE_CACHE_S so a
     conversation does not pay a round trip on every turn.
     """
+    # Every addressed engine's state, held to parity (core.engine_fanout).
+    return engine_fanout.agree("health_state", engine_fanout.fan_out(health_state_for), None)
+
+
+def health_state_for(target: dict) -> str | None:
+    """current_health_state() for one engine."""
     import time
 
-    target = bind()
-    if target is not None:
-        summary = health_scope.last_summary(target["pe_url"])
-        if summary and summary.get("state"):
-            return summary["state"]
-    key = (target or {}).get("re_url") or _re_url()
+    summary = health_scope.last_summary(target["pe_url"])
+    if summary and summary.get("state"):
+        return summary["state"]
+    key = target["re_url"]
     now = time.monotonic()
     hit = _health_state_cache.get(key)
     if hit and now - hit[0] < _HEALTH_STATE_CACHE_S:
         return hit[1]
-    state = get_current_health_state()
+    state = get_current_health_state(key)
     _health_state_cache[key] = (now, state)
     return state
 
 
-def get_current_health_state() -> str | None:
+def get_current_health_state(re_url: str | None = None) -> str | None:
     """
     Read the current health state from the RE perceptual space without
     triggering a new PE push. Uses GET /api/perceptual-simulation/state on the
@@ -784,7 +788,7 @@ def get_current_health_state() -> str | None:
     """
     try:
         with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
-            r = client.get(f"{_re_url()}/api/perceptual-simulation/state")
+            r = client.get(f"{re_url or _re_url()}/api/perceptual-simulation/state")
             r.raise_for_status()
             ps = r.json().get("state", {}).get("perceptualSpace", [])
             # Prefer live output; fall back to carry when classifier is silent.
@@ -846,19 +850,24 @@ def push_health_signal(
     grades = health_grades(hr_bpm, hrv_sdnn_ms, sleep_hours)
     state = health_bands.rollup(list(grades.values()))
 
-    target = bind()
-    if target is None:
-        log.warning("reality_bridge.write_unbound", sensor_id=health_scope.ROLLUP_SENSOR_ID)
-        return "watch"
-    try:
-        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
-            health_scope.write_rollup(client, target["pe_url"], state)
-    except Exception as exc:
-        log.debug(
-            "reality_bridge.write_skipped", sensor_id=health_scope.ROLLUP_SENSOR_ID, error=str(exc)
-        )
+    # Graded once, written identically to every addressed engine
+    # (core.engine_fanout); each engine's decoded state is held to parity.
+    def one(target: dict) -> str:
+        try:
+            with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
+                health_scope.write_rollup(client, target["pe_url"], state)
+        except Exception as exc:
+            log.debug(
+                "reality_bridge.write_skipped",
+                sensor_id=health_scope.ROLLUP_SENSOR_ID,
+                error=str(exc),
+            )
+        return _trigger_push_and_read_health(target)
 
-    return _trigger_push_and_read_health(target)
+    results = engine_fanout.fan_out(one)
+    if not results:
+        log.warning("reality_bridge.write_unbound", sensor_id=health_scope.ROLLUP_SENSOR_ID)
+    return engine_fanout.agree("health_signal", results, "watch")
 
 
 def health_grades(hr_bpm: float, hrv_sdnn_ms: float, sleep_hours: float) -> dict[str, str]:
@@ -921,12 +930,13 @@ def push_carekit_signal(
     task = max(0.0, min(1.0, task_completion_ratio))
     symp = max(0.0, min(1.0, symptom_ok))
 
-    target = bind()
-    _write_sensor("localai_carekit_med_adherence", [med], target)
-    _write_sensor("localai_carekit_task_completion", [task], target)
-    _write_sensor("localai_carekit_symptom_ok", [symp], target)
+    def one(target: dict) -> str:
+        _write_sensor("localai_carekit_med_adherence", [med], target)
+        _write_sensor("localai_carekit_task_completion", [task], target)
+        _write_sensor("localai_carekit_symptom_ok", [symp], target)
+        return _trigger_push_and_read_carekit(target)
 
-    return _trigger_push_and_read_carekit(target)
+    return engine_fanout.agree("carekit_signal", engine_fanout.fan_out(one), "partial")
 
 
 def _trigger_push_and_read_carekit(target: dict | None = None) -> str:
@@ -1065,7 +1075,7 @@ def push_retrieval_signal(doc_count: int, avg_score: float) -> None:
         0.0,
         0.0,
     ]
-    _write_sensor("localai_rag_retrieval", values)
+    engine_fanout.fan_out(lambda target: _write_sensor("localai_rag_retrieval", values, target))
 
 
 def push_grading_signal(
@@ -1091,9 +1101,12 @@ def push_grading_signal(
         0.0,
         0.0,
     ]
-    target = bind()
-    _write_sensor("localai_rag_grading", values, target)
-    return _trigger_push_and_read_routing(target)
+
+    def one(target: dict) -> str:
+        _write_sensor("localai_rag_grading", values, target)
+        return _trigger_push_and_read_routing(target)
+
+    return engine_fanout.agree("rag_routing", engine_fanout.fan_out(one), "rewrite")
 
 
 def push_agent_activity_signal(
@@ -1122,9 +1135,14 @@ def push_agent_activity_signal(
         min(reasoning_steps / 10.0, 1.0),
         0.0,
     ]
-    target = bind()
-    _write_sensor("localai_agent_activity", values, target)
-    return _trigger_push_and_read_session(target)
+
+    def one(target: dict) -> dict:
+        _write_sensor("localai_agent_activity", values, target)
+        return _trigger_push_and_read_session(target)
+
+    return engine_fanout.agree(
+        "agent_activity", engine_fanout.fan_out(one), _trigger_push_and_read_session_default()
+    )
 
 
 # ── Per-request: node activity signals ───────────────────────────────────────
@@ -1148,10 +1166,13 @@ def push_node_signal(
     node_info = _TOPOLOGY_BINDINGS.get(graph_name, {}).get("nodes", {}).get(node_name)
     if not node_info:
         return
-    target = bind()
-    _write_sensor(node_info["sensor_id"], [value, 0.0], target)
-    if trigger_push:
-        _trigger_push_fire_and_forget(target)
+
+    def one(target: dict) -> None:
+        _write_sensor(node_info["sensor_id"], [value, 0.0], target)
+        if trigger_push:
+            _trigger_push_fire_and_forget(target)
+
+    engine_fanout.fan_out(one)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -1462,6 +1483,11 @@ def _trigger_push_and_read_session(target: dict | None = None) -> dict:
                 return session
         except Exception as exc:
             log.debug("reality_bridge.agent_push_skipped", error=str(exc))
+    return _trigger_push_and_read_session_default()
+
+
+def _trigger_push_and_read_session_default() -> dict:
+    """The session context an unreachable bridge degrades to."""
     return {
         "rag": None,
         "agent": {"ever_engaged": False, "tools_ever_used": False},

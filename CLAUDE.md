@@ -60,6 +60,13 @@ make model-pull ID=<model-id>  # pull a registered model
 ## Runtime Contract
 
 - Use the RE/PE endpoints selected from the instance registry when launched by `RealityEngine_CI/startUniverse.sh`.
+- Address every engine the instance registry lists (`core/engine_fanout.py`).
+  An interaction no engine initiated computes its values once — LLM-derived
+  ones included — and writes the same values to every engine; each engine's
+  reading is held to parity by `agree()`, divergences reported on `/health`
+  (`engine_parity`). An engine that names itself (`X-RE-Instance`) is answered
+  alone. The registry wins over a live `RE_URL`/`PE_URL`, which are the
+  fallback for a registry-less deployment only (RealityEngine_CI#363).
 - Verify environment values against the live instance registry, not just static `.env` defaults.
 - Models are declared in `config/models.registry.json`, selected in `.env`, and
   installed in Ollama. Check `GET /models` before debugging a model problem —

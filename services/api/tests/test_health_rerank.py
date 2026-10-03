@@ -73,10 +73,14 @@ def test_every_live_band_has_guidance():
 
 
 def test_health_focus_reads_the_followers_flagged_bands(monkeypatch):
-    from core import health_scope, reality_bridge
+    from core import engine_fanout, health_scope, reality_bridge
 
-    monkeypatch.setattr(reality_bridge, "current_health_state", lambda: "watch")
-    monkeypatch.setattr("core.bridge_binding.bind", lambda: {"pe_url": "http://pe"})
+    monkeypatch.setattr(reality_bridge, "health_state_for", lambda target: "watch")
+    monkeypatch.setattr(
+        engine_fanout,
+        "interaction_targets",
+        lambda: [{"pe_url": "http://pe", "re_url": "http://re", "instance": None}],
+    )
     monkeypatch.setattr(
         health_scope,
         "last_summary",
@@ -91,5 +95,5 @@ def test_health_focus_never_raises(monkeypatch):
     def boom():
         raise RuntimeError("RE down")
 
-    monkeypatch.setattr(reality_bridge, "current_health_state", boom)
+    monkeypatch.setattr(reality_bridge, "health_state_for", lambda target: boom())
     assert hr.health_focus() == (None, [])

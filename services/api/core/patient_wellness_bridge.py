@@ -15,8 +15,7 @@ from typing import Any
 import httpx
 import structlog
 
-from config import get_settings
-from core.bridge_binding import bind
+from core import engine_fanout
 from core.pe_sources import (
     activate_sensor_source,
     get_sensor_sources,
@@ -107,17 +106,6 @@ class WellnessFeedback:
     normalized_feedback: dict[str, Any]
 
 
-def _pe_url() -> str:
-    """The PE this interaction is pinned to.
-
-    Binds to the initiating engine so a wellness assessment written into one
-    engine is never read back out of another. Falls back to the configured
-    target when nothing is bound (no registry, or a call outside a request).
-    """
-    target = bind()
-    return target["pe_url"] if target else get_settings().pe_url
-
-
 def _safe_slice(values: list[float], offset: int, length: int) -> list[float]:
     if len(values) < offset + length:
         return []
@@ -125,10 +113,18 @@ def _safe_slice(values: list[float], offset: int, length: int) -> list[float]:
 
 
 def register_patient_wellness_sources() -> bool:
-    """Idempotently create the PE sources used by the PatientWellness e2e flow."""
+    """Idempotently create the PatientWellness PE sources on every addressed engine.
+
+    One engine at a time used to get them, so the others ran the workflow's
+    machines with no source over their regions (core.engine_fanout).
+    """
+    results = engine_fanout.fan_out(lambda target: _register_on(target["pe_url"]))
+    return bool(results) and all(ok for _, ok in results)
+
+
+def _register_on(pe_url: str) -> bool:
     try:
         with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
-            pe_url = _pe_url()
             existing = get_sensor_sources(client, pe_url)
             for source in _PATIENT_WELLNESS_SOURCES:
                 sid = source["sensorId"]
@@ -163,21 +159,20 @@ def register_patient_wellness_sources() -> bool:
         log.warning(
             "patient_wellness.source_registration_failed",
             error=str(exc),
-            pe_url=_pe_url(),
+            pe_url=pe_url,
         )
         return False
 
 
-def _write_sensor(client: httpx.Client, sensor_id: str, values: list[float]) -> None:
-    pe_url = _pe_url()
+def _write_sensor(client: httpx.Client, pe_url: str, sensor_id: str, values: list[float]) -> None:
     resp = client.post(f"{pe_url}/api/sensors/{sensor_id}", json={"values": values})
     resp.raise_for_status()
     # After the write, never before — see core.pe_sources.
     activate_sensor_source(client, pe_url, sensor_id)
 
 
-def _trigger_push(client: httpx.Client) -> dict[str, Any]:
-    resp = client.post(f"{_pe_url()}/api/push")
+def _trigger_push(client: httpx.Client, pe_url: str) -> dict[str, Any]:
+    resp = client.post(f"{pe_url}/api/push")
     resp.raise_for_status()
     return resp.json()
 
@@ -250,14 +245,40 @@ def simulate_alert_decline_workflow() -> dict[str, Any]:
     if not register_patient_wellness_sources():
         raise RuntimeError("PatientWellness PE sources could not be registered")
 
+    # The same steps on every addressed engine. What each engine computed from
+    # them is held to parity; globalStep is the engine's own counter and is not.
+    runs = engine_fanout.fan_out(lambda target: _run_alert_decline(target["pe_url"]))
+    if not runs:
+        raise RuntimeError("no Perception Engine to run the PatientWellness workflow on")
+    engine_fanout.agree(
+        "patient_wellness_alert_decline",
+        [
+            (
+                instance,
+                (
+                    run["patientWellnessOutput"],
+                    run["feedbackVector"],
+                    run["feedbackRegionValue"],
+                ),
+            )
+            for instance, run in runs
+        ],
+        None,
+    )
+    result = runs[0][1]
+    result["engines"] = [instance for instance, _ in runs]
+    return result
+
+
+def _run_alert_decline(pe_url: str) -> dict[str, Any]:
     push_results: list[dict[str, Any]] = []
     patient_wellness_output: list[float] = []
 
     with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
         for step in ALERT_DECLINE_STEPS:
             vector = [float(v) for v in step["vector"]]
-            _write_sensor(client, PATIENT_WELLNESS_ASSESSMENT_SOURCE_ID, vector)
-            push = _trigger_push(client)
+            _write_sensor(client, pe_url, PATIENT_WELLNESS_ASSESSMENT_SOURCE_ID, vector)
+            push = _trigger_push(client, pe_url)
             ps = push.get("step", {}).get("perceptualSpace", [])
             patient_wellness_output = _safe_slice(
                 ps,
@@ -279,10 +300,11 @@ def simulate_alert_decline_workflow() -> dict[str, Any]:
         )
         _write_sensor(
             client,
+            pe_url,
             PATIENT_WELLNESS_FEEDBACK_SOURCE_ID,
             feedback.feedback_vector,
         )
-        feedback_push = _trigger_push(client)
+        feedback_push = _trigger_push(client, pe_url)
         ps = feedback_push.get("step", {}).get("perceptualSpace", [])
         feedback_region = _safe_slice(
             ps,

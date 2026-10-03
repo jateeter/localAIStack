@@ -54,15 +54,25 @@ def _patch_probes(monkeypatch, alive: set[str], registry: dict | None = REGISTRY
     monkeypatch.setattr(registry_resolver, "_fetch_registry", lambda url: registry)
 
 
-def test_env_targets_win_when_alive(monkeypatch):
+def test_registry_wins_over_a_live_env_target(monkeypatch):
+    """A live RE_URL/PE_URL no longer pins localAI to one PE (RealityEngine_CI#363)."""
+    s = registry_resolver.get_settings()
+    _patch_probes(
+        monkeypatch,
+        alive={s.re_url, s.pe_url, "http://192.168.1.16:5101", "http://192.168.1.16:5100"},
+    )
+
+    t = registry_resolver.resolve_bridge_targets(force_refresh=True)
+    assert t["source"] == "registry"
+    assert t["instance"] == "scala-1"
+
+
+def test_env_target_never_joins_a_registered_set(monkeypatch):
     s = registry_resolver.get_settings()
     _patch_probes(monkeypatch, alive={s.re_url, s.pe_url})
 
-    t = registry_resolver.resolve_bridge_targets(force_refresh=True)
-    assert t["source"] == "env"
-    assert t["re_url"] == s.re_url
-    assert t["pe_url"] == s.pe_url
-    assert t["instance"] is None
+    targets = registry_resolver.resolve_all_bridge_targets()
+    assert targets and all(t["source"] == "registry" for t in targets)
 
 
 def test_dead_env_retargets_to_first_healthy_registry_instance(monkeypatch):

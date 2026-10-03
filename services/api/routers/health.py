@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from qdrant_client import QdrantClient
 
 from config import get_settings
+from core import engine_fanout
 from core.registry_resolver import resolve_bridge_targets
 
 router = APIRouter()
@@ -125,6 +126,8 @@ async def health():
     loop = asyncio.get_event_loop()
     # Registry-aware target resolution (blocking urllib probes → executor)
     bridge_targets = await loop.run_in_executor(None, resolve_bridge_targets)
+    # Every engine an unaddressed interaction writes to (core.engine_fanout).
+    bridge_engines = await loop.run_in_executor(None, engine_fanout.interaction_targets)
     await asyncio.gather(
         _check_ollama(),
         loop.run_in_executor(None, _check_qdrant),
@@ -142,6 +145,9 @@ async def health():
         "status": "ok" if core_ok else "degraded",
         "bridge": "ok" if bridge_ok else "degraded",
         "bridge_target": bridge_targets,
+        "bridge_engines": [t.get("instance") or t["pe_url"] for t in bridge_engines],
+        # Whether engines given identical localAI input answered alike.
+        "engine_parity": engine_fanout.parity_report(),
         "services": services,
     }
 

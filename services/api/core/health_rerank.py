@@ -63,18 +63,21 @@ def rerank(docs: Sequence[Any], state: str | None, flagged: Sequence[tuple[str, 
 def health_focus() -> tuple[str | None, list[tuple[str, str]]]:
     """(state, [(band, grade)] for bands not ok) for the bound engine. Never raises."""
     try:
-        from core import health_scope
-        from core.bridge_binding import bind
-        from core.reality_bridge import current_health_state
+        from core import engine_fanout, health_scope
+        from core.reality_bridge import health_state_for
 
-        state = current_health_state()
-        target = bind()
-        summary = health_scope.last_summary(target["pe_url"]) if target else None
-        flagged = [
-            (band, v["grade"])
-            for band, v in sorted(((summary or {}).get("slots") or {}).items())
-            if v.get("grade") in ("watch", "concern")
-        ]
-        return state, flagged
+        # Read on every addressed engine and held to parity (core.engine_fanout):
+        # engines in parity flag the same bands, so the re-rank is the same
+        # whichever engine is asked.
+        def one(target: dict) -> tuple[str | None, list[tuple[str, str]]]:
+            summary = health_scope.last_summary(target["pe_url"])
+            flagged = [
+                (band, v["grade"])
+                for band, v in sorted(((summary or {}).get("slots") or {}).items())
+                if v.get("grade") in ("watch", "concern")
+            ]
+            return health_state_for(target), flagged
+
+        return engine_fanout.agree("health_focus", engine_fanout.fan_out(one), (None, []))
     except Exception:  # noqa: BLE001 - re-ranking is best-effort, never a failure
         return None, []
