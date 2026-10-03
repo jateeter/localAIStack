@@ -131,5 +131,31 @@ def test_unhealthy_engines_are_skipped_but_one_is_always_addressed(monkeypatch):
     assert [t["instance"] for t in engine_fanout.interaction_targets()] == ["cpp-1", "lsp-1"]
 
 
+def test_difference_is_zero_for_parity_and_one_for_a_split_decision():
+    assert engine_fanout.difference("generate", "generate") == 0.0
+    assert engine_fanout.difference("generate", "rewrite") == 1.0
+    assert engine_fanout.difference(0.25, 0.75) == 0.5
+    assert engine_fanout.difference(0.0, 3.0) == 1.0
+    assert engine_fanout.difference([0.0, 1.0], [0.0, 0.5]) == 0.25
+    assert engine_fanout.difference([0.0], [0.0, 1.0]) == 0.5
+    assert engine_fanout.difference({"a": 1, "b": "x"}, {"a": 1, "b": "y"}) == 0.5
+    assert engine_fanout.difference(None, "watch") == 1.0
+
+
+def test_spread_is_the_largest_pairwise_difference():
+    assert engine_fanout.spread([0.1, 0.1, 0.1]) == 0.0
+    assert engine_fanout.spread([0.1, 0.2, 0.6]) == 0.5
+
+
+def test_parity_report_carries_the_difference_per_label():
+    engine_fanout.agree("routing", [("a", "generate"), ("b", "generate")], "rewrite")
+    engine_fanout.agree("routing", [("a", "generate"), ("b", "rewrite")], "rewrite")
+    engine_fanout.agree("health", [("a", 0.2), ("b", 0.4)], 0.0)
+    report = engine_fanout.parity_report()
+    assert report["difference"]["routing"] == {"interactions": 2, "mean": 0.5, "max": 1.0}
+    assert report["difference"]["health"]["max"] == pytest.approx(0.2)
+    assert report["recentDivergences"][-1]["difference"] == pytest.approx(0.2)
+
+
 def test_no_engines_returns_the_default():
     assert engine_fanout.agree("x", [], "rewrite") == "rewrite"

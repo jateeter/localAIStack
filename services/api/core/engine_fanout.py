@@ -28,6 +28,18 @@ The rule this module implements:
 What is compared is what an engine computed from localAI's input, never LLM
 text: two engines in parity given identical values must decode identical
 states, while two LLM generations need not match and are not asked to.
+
+**Parity is measured, not only judged.** Every interaction ``agree()`` sees is
+given a *difference* in [0, 1] — 0 when the engines' readings are identical —
+and ``parity_report()`` aggregates it per interaction label. Agreement is the
+special case difference == 0; the metric is what makes a near-miss visible as
+a small number rather than a binary failure.
+
+**LLM responses are never cached to manufacture parity.** Where engines each
+initiate their own LLM call, the generations may drift, and that drift is kept:
+it is the raw material for difference-net training in the near-miss learning
+cycles (RealityEngine_CI#518). Memoizing a response per request and engine step
+would erase exactly the signal those cycles need.
 """
 
 from __future__ import annotations
@@ -57,6 +69,9 @@ _targets_lock = threading.Lock()
 _MAX_DIVERGENCES = 50
 _divergences: deque[dict] = deque(maxlen=_MAX_DIVERGENCES)
 _counts = {"agreed": 0, "diverged": 0, "single": 0}
+# Per interaction label: how many multi-engine interactions, and their
+# difference summed and at its largest (see difference()).
+_differences: dict[str, dict[str, float]] = {}
 _record_lock = threading.Lock()
 
 
@@ -110,6 +125,55 @@ def fan_out(fn: Callable[[dict], T]) -> list[tuple[str | None, T]]:
     return [(t.get("instance"), fn(t)) for t in interaction_targets()]
 
 
+def difference(a: Any, b: Any) -> float:
+    """How far apart two engines' readings are, in [0, 1]; 0 means identical.
+
+    * equal values: 0
+    * numbers: their absolute difference, capped at 1 — localAI's signals and
+      the regions it decodes are normalised to [0, 1]
+    * anything else that differs (a routing decision, a health state, a type
+      mismatch, a value against nothing): 1
+    * mappings: the mean over the union of their keys
+    * sequences: the mean over the longer length, a missing element counting 1
+    """
+    if a == b:
+        return 0.0
+    if isinstance(a, bool) or isinstance(b, bool):
+        return 1.0
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return min(1.0, abs(float(a) - float(b)))
+    if isinstance(a, dict) and isinstance(b, dict):
+        keys = set(a) | set(b)
+        return sum(difference(a.get(k), b.get(k)) for k in keys) / len(keys) if keys else 0.0
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        n = max(len(a), len(b))
+        if n == 0:
+            return 0.0
+        return (
+            sum(difference(a[i], b[i]) if i < len(a) and i < len(b) else 1.0 for i in range(n)) / n
+        )
+    return 1.0
+
+
+def spread(values: list[Any]) -> float:
+    """The largest pairwise difference among engines' readings."""
+    return max(
+        (
+            difference(values[i], values[j])
+            for i in range(len(values))
+            for j in range(i + 1, len(values))
+        ),
+        default=0.0,
+    )
+
+
+def _record_difference(label: str, value: float) -> None:
+    entry = _differences.setdefault(label, {"interactions": 0, "sum": 0.0, "max": 0.0})
+    entry["interactions"] += 1
+    entry["sum"] += value
+    entry["max"] = max(entry["max"], value)
+
+
 def agree(label: str, results: list[tuple[str | None, T]], default: T) -> T:
     """Reduce per-engine readings of one interaction to a single answer.
 
@@ -125,22 +189,27 @@ def agree(label: str, results: list[tuple[str | None, T]], default: T) -> T:
         with _record_lock:
             _counts["single"] += 1
         return first
+    measured = spread([value for _, value in results])
     if all(value == first for _, value in results[1:]):
         with _record_lock:
             _counts["agreed"] += 1
+            _record_difference(label, measured)
         return first
     record = {
         "label": label,
         "at": time.time(),
+        "difference": measured,
         "readings": {str(instance): value for instance, value in results},
         "proceededWith": results[0][0],
     }
     with _record_lock:
         _counts["diverged"] += 1
+        _record_difference(label, measured)
         _divergences.append(record)
     log.warning(
         "engine_fanout.parity_divergence",
         label=label,
+        difference=round(measured, 4),
         readings=record["readings"],
         proceeded_with=record["proceededWith"],
     )
@@ -148,10 +217,22 @@ def agree(label: str, results: list[tuple[str | None, T]], default: T) -> T:
 
 
 def parity_report() -> dict[str, Any]:
-    """Counts of agreed, diverged and single-engine interactions, and recent divergences."""
+    """Counts, the difference metric per interaction label, and recent divergences.
+
+    ``difference`` per label: multi-engine interactions seen, their mean
+    difference and the largest. 0 throughout is parity.
+    """
     with _record_lock:
         return {
             "counts": dict(_counts),
+            "difference": {
+                label: {
+                    "interactions": int(d["interactions"]),
+                    "mean": d["sum"] / d["interactions"] if d["interactions"] else 0.0,
+                    "max": d["max"],
+                }
+                for label, d in sorted(_differences.items())
+            },
             "recentDivergences": list(_divergences),
         }
 
@@ -159,5 +240,6 @@ def parity_report() -> dict[str, Any]:
 def reset_parity_report() -> None:
     with _record_lock:
         _divergences.clear()
+        _differences.clear()
         for key in _counts:
             _counts[key] = 0
