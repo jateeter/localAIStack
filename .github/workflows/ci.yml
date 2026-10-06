@@ -102,9 +102,13 @@ jobs:
           repository: jateeter/RealityEngine_Machines
           path: .corpus
 
+      # The corpus's Node, not ours: npm ci runs inside .corpus, whose
+      # engines.node is >=26.0.0. "20" (end of life) installed it with
+      # EBADENGINE on every run. Same pin as RealityEngine_CI and
+      # RealityEngine_Machines workflows.
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "26.8"
 
       # The validator and the schema both come from the corpus repo on purpose,
       # so "validate against the canonical schema" cannot drift into a second
