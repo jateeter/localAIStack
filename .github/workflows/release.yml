@@ -9,7 +9,10 @@ jobs:
 
   release:
     name: Create release
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: ubuntu-latest becomes Ubuntu 26 on 2026-10-19,
+    # and on 2026-10-05 its hosted pool could not supply runners. The toolchain
+    # here was verified on 24.04; moving to 26 is its own change.
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
 

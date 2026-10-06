@@ -14,7 +14,10 @@ jobs:
   # PE/RE are unreachable — validates bridge-optional behaviour and /health structure.
   api-integration:
     name: API integration (compose)
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: ubuntu-latest becomes Ubuntu 26 on 2026-10-19,
+    # and on 2026-10-05 its hosted pool could not supply runners. The toolchain
+    # here was verified on 24.04; moving to 26 is its own change.
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v7
@@ -91,7 +94,7 @@ jobs:
   # ── Unit tests (sanity-check that unit suite still passes) ───────────────────
   unit:
     name: Unit tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v7
