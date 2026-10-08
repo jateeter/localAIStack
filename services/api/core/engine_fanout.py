@@ -206,6 +206,11 @@ def agree(label: str, results: list[tuple[str | None, T]], default: T) -> T:
         _counts["diverged"] += 1
         _record_difference(label, measured)
         _divergences.append(record)
+    # The same corpus as engine-initiated LLM drift: both are near-misses the
+    # difference-net is trained on, and the in-memory deque keeps only 50.
+    from core import llm_drift
+
+    llm_drift.record_divergence(record)
     log.warning(
         "engine_fanout.parity_divergence",
         label=label,
@@ -234,7 +239,14 @@ def parity_report() -> dict[str, Any]:
                 for label, d in sorted(_differences.items())
             },
             "recentDivergences": list(_divergences),
+            "llmDrift": _llm_drift_report(),
         }
+
+
+def _llm_drift_report() -> dict[str, Any]:
+    from core import llm_drift
+
+    return llm_drift.report()
 
 
 def reset_parity_report() -> None:
@@ -243,3 +255,6 @@ def reset_parity_report() -> None:
         _differences.clear()
         for key in _counts:
             _counts[key] = 0
+    from core import llm_drift
+
+    llm_drift.reset()

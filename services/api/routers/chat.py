@@ -5,6 +5,7 @@ from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 
 from config import get_settings
+from core import llm_drift
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -100,4 +101,17 @@ async def chat(
         return StreamingResponse(_stream(), media_type="text/plain")
 
     response = llm.invoke(lc_messages)
+    # Engine-initiated chats each get their own generation; record the drift
+    # between engines asking the same thing (core/llm_drift). A streamed reply is
+    # not observed: it reaches the engine before it is complete.
+    llm_drift.observe(
+        "chat",
+        {
+            "messages": [m.model_dump() for m in req.messages],
+            "model": model,
+            "temperature": req.temperature,
+            "healthContext": inject_health,
+        },
+        {"content": response.content},
+    )
     return {"role": "assistant", "content": response.content, "model": model}

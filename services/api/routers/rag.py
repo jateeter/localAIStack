@@ -12,6 +12,7 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel
 
+from core import llm_drift
 from core.vector_store import get_vector_store
 from graphs.rag_graph import get_rag_graph
 
@@ -84,9 +85,23 @@ async def query(req: QueryRequest):
     result = graph.invoke({"question": req.question, "documents": [], "rewrite_count": 0})
 
     sources = list({d.metadata.get("source", "unknown") for d in result.get("documents", [])})
+    answer = result.get("generation", "No answer generated.")
+
+    # An engine-initiated query got its own generation; record it against other
+    # engines' answers to the same question. Observed, never cached
+    # (core/llm_drift, RealityEngine_CI#518).
+    llm_drift.observe(
+        "rag.query",
+        {"question": req.question},
+        {
+            "answer": answer,
+            "sources": sorted(sources),
+            "rewrite_count": result.get("rewrite_count", 0),
+        },
+    )
 
     return QueryResponse(
-        answer=result.get("generation", "No answer generated."),
+        answer=answer,
         sources=sources,
         rewrite_count=result.get("rewrite_count", 0),
     )
