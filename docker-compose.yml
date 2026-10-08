@@ -170,6 +170,13 @@ services:
       # (engines run natively on registry-assigned ports, not the Docker
       # defaults above), the bridge re-targets to a live instance from this
       # registry instead of silently degrading (RealityEngine_CI#44).
+      #
+      # The default is the fixed-port registry only. startUniverse.sh exports
+      # the address its universe actually serves, which under --free-ports is
+      # not :5999; a hand-run `docker compose up` must pass it the same way:
+      #   RE_REGISTRY_URL="$(cat ../RealityEngine_CI/.universe-registry-url)" docker compose up -d
+      # Compose cannot read that file itself, so the literal stays as the
+      # fixed-port fallback rather than the address.
       RE_REGISTRY_URL: "${RE_REGISTRY_URL:-http://host.docker.internal:5999/re-registry.json}"
       LOCALAI_STATE_DIR: "/app/state"
       RE_SSL_VERIFY: "false"

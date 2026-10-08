@@ -1,8 +1,10 @@
 """Registry-aware RE/PE bridge target resolution.
 
 In native multi-engine mode the universe publishes an instance registry
-(``RE_REGISTRY_URL``; from Docker the host default is
-``http://host.docker.internal:5999/re-registry.json``). The static
+(``RE_REGISTRY_URL``). startUniverse.sh exports the address it serves; the
+compose fallback ``http://host.docker.internal:5999/re-registry.json`` is the
+fixed-port registry only, since under ``--free-ports`` the port is OS-assigned
+(RealityEngine_CI ``.universe-registry-url`` records it). The static
 ``PE_URL``/``RE_URL`` compose defaults point at Docker single-engine ports
 that do not exist in native mode, silently degrading the bridge
 (RealityEngine_CI#44).

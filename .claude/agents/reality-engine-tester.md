@@ -180,7 +180,7 @@ cd RealityEngine_CI
 - Scala: RE=5001, PE=5000
 - CPP: RE=5301, PE=5300
 - LSP: RE=5601, PE=5600
-- Registry: `/tmp/re-registry/re-registry.json` served on port 5999
+- Registry: `/tmp/re-registry/re-registry.json`, served on 5999 with fixed ports and on an OS-assigned port under `--free-ports`; read the address from `../RealityEngine_CI/.universe-registry-url`
 
 **When to use this script vs. individual test commands:**
 - Use `test-three-engine-full.sh` when the user asks for a "complete test", "full integration test", "3-engine test", or "fresh deployment test"
