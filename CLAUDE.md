@@ -67,6 +67,15 @@ make model-pull ID=<model-id>  # pull a registered model
   (`engine_parity`). An engine that names itself (`X-RE-Instance`) is answered
   alone. The registry wins over a live `RE_URL`/`PE_URL`, which are the
   fallback for a registry-less deployment only (RealityEngine_CI#363).
+- **LLM answers are never cached to make engines agree; their drift is recorded.**
+  Engine-initiated `/rag/query` and non-streamed `/chat` answers are compared
+  across engines asking the same request within `LOCALAI_DRIFT_WINDOW_S`
+  (`core/llm_drift.py`), scored with the `engine_fanout` difference metric and
+  appended with every engine's full reading to `llm-drift.jsonl` in
+  `LOCALAI_STATE_DIR`, alongside broadcast divergences from `agree()`. Read back
+  with `GET /observations/drift`; summarised under `engine_parity.llmDrift` on
+  `/health`. It is the training corpus for difference-net / near-miss learning
+  (RealityEngine_CI#518).
 - Verify environment values against the live instance registry, not just static `.env` defaults.
 - Models are declared in `config/models.registry.json`, selected in `.env`, and
   installed in Ollama. Check `GET /models` before debugging a model problem —
