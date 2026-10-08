@@ -157,6 +157,7 @@ def test_rag_query_route_records_drift_without_changing_the_answer(monkeypatch):
 
 
 def test_drift_route_returns_records_and_summary():
+    pytest.importorskip("fastapi")  # the hosted unit job's minimal environment has none
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
