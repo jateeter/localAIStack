@@ -163,3 +163,24 @@ def test_graphql_events_endpoint_reachable(live_api: str) -> None:
     assert r.status_code == 200
     data = r.json()
     assert "events" in data
+
+
+# ── /observations/drift (CI#518) ─────────────────────────────────────────────
+# The unit tests for this route skip on the hosted unit job, which installs no
+# fastapi; this is where the route itself runs on a hosted lane.
+
+
+@pytest.mark.integration
+def test_drift_route_returns_records_and_summary(live_api: str) -> None:
+    r = httpx.get(f"{live_api}/observations/drift", params={"limit": 5}, timeout=10)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert isinstance(data["records"], list)
+    assert data["count"] == len(data["records"]) <= 5
+    assert isinstance(data["summary"], dict)
+
+
+@pytest.mark.integration
+def test_health_engine_parity_carries_llm_drift(live_api: str) -> None:
+    r = httpx.get(f"{live_api}/health", timeout=10)
+    assert isinstance(r.json()["engine_parity"]["llmDrift"], dict)
