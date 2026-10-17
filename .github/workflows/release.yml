@@ -61,7 +61,7 @@ jobs:
             |---|---|
             | Qdrant | `qdrant/qdrant:v1.14.1` |
             | Redis  | `redis:7.4-alpine` |
-            | Open WebUI | `ghcr.io/open-webui/open-webui:main` |
+            | Open WebUI | `ghcr.io/open-webui/open-webui:v0.11.3` |
 
             ## Quick start
             ```bash
