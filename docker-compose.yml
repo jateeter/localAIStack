@@ -225,7 +225,7 @@ services:
 
   # ── Browser UI (chat with Ollama models) ─────────────────────────────────────
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:v0.11.3
     container_name: localai_webui
     restart: unless-stopped
     ports:
