@@ -1,0 +1,13 @@
+# Build context for services/api/Dockerfile, which builds from the repository
+# root. Only services/api, data/ and config/ are copied; keep everything else,
+# above all the runtime volumes, out of the context.
+.git
+volumes/
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.venv
+services/api/tests/
+docs/
+scripts/

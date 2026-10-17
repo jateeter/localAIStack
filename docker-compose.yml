@@ -141,9 +141,16 @@ services:
   # ── RAG / LangGraph Orchestration API ────────────────────────────────────────
   api:
     build:
-      context: ./services/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/api/Dockerfile
     container_name: localai_api
+    # Development only: the image runs without --reload; this stack mounts the
+    # source over /app (below) and reloads on change.
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # The image runs as an unprivileged user; this stack bind-mounts source and
+    # state from the host, which a Linux runner creates root-owned, so the
+    # development container keeps running as root as it always has.
+    user: "0:0"
     restart: unless-stopped
     ports:
       - "4000:8000"

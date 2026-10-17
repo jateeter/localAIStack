@@ -64,7 +64,8 @@ jobs:
       - name: Build API image
         uses: docker/build-push-action@v7
         with:
-          context: ./services/api
+          context: .
+          file: services/api/Dockerfile
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max

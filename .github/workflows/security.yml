@@ -67,7 +67,8 @@ jobs:
       - name: Build image for scanning
         uses: docker/build-push-action@v7
         with:
-          context: ./services/api
+          context: .
+          file: services/api/Dockerfile
           push: false
           load: true
           tags: localaistack-api:scan
