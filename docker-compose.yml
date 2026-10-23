@@ -160,7 +160,7 @@ services:
       QDRANT_HOST: "qdrant"
       QDRANT_PORT: "6333"
       REDIS_URL: "redis://redis:6379"
-      LLM_MODEL: "${LLM_MODEL:-llama3.1:8b}"
+      LLM_MODEL: "${LLM_MODEL:-tinyllama-mlx}"
       EMBED_MODEL: "${EMBED_MODEL:-ternary-bonsai:4}"
       EMBED_DIM: "${EMBED_DIM:-768}"
       COLLECTION_NAME: "${COLLECTION_NAME:-localai_docs}"

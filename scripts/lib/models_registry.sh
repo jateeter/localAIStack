@@ -93,6 +93,60 @@ print("\n* = installed on this Ollama host.  Pull one with: make model-pull ID=<
 PY
 }
 
+# _registry_source_field <id> <key> — one field of a model's `source` block.
+_registry_source_field() {
+    _registry_query "next((m[\"source\"].get(\"$2\", \"\") for m in models if m[\"id\"] == \"$1\"), \"\")"
+}
+
+# _registry_hf_download <repo> <dir> <file>... — fetch files from a Hugging Face
+# repo. Uses `hf` when installed, else runs it through uvx. The `huggingface-cli`
+# that older huggingface_hub releases ship has no `download`, so it is not tried.
+_registry_hf_download() {
+    local repo="$1" dir="$2"; shift 2
+    if command -v hf >/dev/null 2>&1; then
+        hf download "$repo" "$@" --local-dir "$dir"
+    elif command -v uvx >/dev/null 2>&1; then
+        uvx --from "huggingface_hub[cli]" hf download "$repo" "$@" --local-dir "$dir"
+    else
+        _registry_err "Need the Hugging Face CLI to fetch $repo: 'brew install uv' (runs it via uvx) or 'pip install -U \"huggingface_hub[cli]\"'."
+        return 1
+    fi
+}
+
+# registry_build_hf_modelfile <id> — build a modelfile-sourced model whose
+# weights are a Hugging Face safetensors repo (source.hf_repo). Downloads
+# source.hf_files into source.safetensors, then `ollama create`s the tag from
+# source.modelfile. Idempotent: files already present are not fetched again, and
+# an existing tag is rebuilt in place.
+registry_build_hf_modelfile() {
+    local id="$1" root repo dir modelfile tag f
+    root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    repo="$(_registry_source_field "$id" hf_repo)"
+    dir="$root/$(_registry_source_field "$id" safetensors)"
+    modelfile="$root/$(_registry_source_field "$id" modelfile)"
+    tag="$(registry_field "$id" tag)"
+    [[ -f "$modelfile" ]] || { _registry_err "Missing Modelfile for '$id': $modelfile"; return 1; }
+
+    local missing=() files=()
+    while IFS= read -r f; do
+        [[ -n "$f" ]] || continue
+        files+=("$f")
+        [[ -s "$dir/$f" ]] || missing+=("$f")
+    done < <(_registry_query "next((m[\"source\"].get(\"hf_files\", []) for m in models if m[\"id\"] == \"$id\"), [])")
+    [[ ${#files[@]} -gt 0 ]] || { _registry_err "'$id' lists no source.hf_files."; return 1; }
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        _registry_info "Downloading ${#missing[@]} file(s) from huggingface.co/$repo ($(registry_field "$id" size_gb) GB)"
+        mkdir -p "$dir"
+        _registry_hf_download "$repo" "$dir" "${missing[@]}" || return 1
+    else
+        _registry_info "Weights already present: $dir"
+    fi
+
+    _registry_info "Building $tag from $modelfile"
+    (cd "$(dirname "$modelfile")" && ollama create "$tag" -f "$(basename "$modelfile")")
+}
+
 # registry_pull <id> — pull a library model, or build a modelfile-sourced one.
 registry_pull() {
     local id="$1"
@@ -108,6 +162,11 @@ registry_pull() {
     status="$(registry_field "$id" status)"
 
     [[ "$status" == "broken" ]] && _registry_warn "'$id' is marked status=broken: $(registry_field "$id" notes)"
+
+    if [[ "$kind" == "modelfile" ]] && [[ -n "$(_registry_source_field "$id" hf_repo)" ]]; then
+        registry_build_hf_modelfile "$id"
+        return
+    fi
 
     if [[ "$kind" != "ollama-library" ]]; then
         _registry_err "'$id' has source.kind=$kind and is not pullable from the Ollama library. See scripts/setup.sh for its build path."

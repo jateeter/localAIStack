@@ -58,6 +58,11 @@ class ModelSource(BaseModel):
     modelfile: str | None = None
     gguf: str | None = None
     download_url: str | None = None
+    # A Hugging Face safetensors repo: fetched into `safetensors` (the directory a
+    # Modelfile's FROM names), which routes the model to Ollama's MLX runner.
+    safetensors: str | None = None
+    hf_repo: str | None = None
+    hf_files: list[str] = Field(default_factory=list)
 
 
 class ModelEntry(BaseModel):
