@@ -1,0 +1,24 @@
+# TinyLlama 1.1B Chat (bf16 safetensors) — the development model for the
+# RealityEngine universe, run on Ollama's MLX runner.
+#
+# Source:  https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0
+# License: Apache 2.0
+#
+# FROM a safetensors directory (not a GGUF) is what routes the model to the MLX
+# runner: Ollama selects it from the manifest's `safetensors` model format. The
+# directory is fetched by `make model-pull ID=tinyllama-mlx`
+# (scripts/lib/models_registry.sh), which downloads the files listed in
+# source.hf_files in config/models.registry.json.
+FROM ./safetensors
+
+# TinyLlama-Chat's template. /api/chat renders the tokenizer's own chat template,
+# but /api/generate renders this one — without it a raw prompt gets the base
+# model's continuation and TinyLlama answers with an immediate end-of-sequence.
+TEMPLATE """{{ if .System }}<|system|>
+{{ .System }}</s>
+{{ end }}{{ if .Prompt }}<|user|>
+{{ .Prompt }}</s>
+{{ end }}<|assistant|>
+{{ .Response }}</s>
+"""
+PARAMETER stop "</s>"

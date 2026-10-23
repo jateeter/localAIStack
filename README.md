@@ -82,28 +82,37 @@ registry is legitimate while testing.
 
 | ID | Tag | Role | Size | Context | Notes |
 |---|---|---|---|---|---|
+| `tinyllama-mlx` | `tinyllama-mlx` | llm | 2.2 GB | 2K | **Default** — RealityEngine development model, MLX runner; no tools or JSON mode |
 | `llama3.1-8b` | `llama3.1:8b` | llm | 4.9 GB | 128K | General chat/RAG baseline |
 | `llama3.2-3b` | `llama3.2:3b` | llm | 2.0 GB | 128K | Fast smoke tests |
 | `mistral-7b` | `mistral:7b-instruct-q4_K_M` | llm | 4.4 GB | 32K | RAG grading A/B |
 | `phi3.5-mini` | `phi3.5:3.8b` | llm | 2.2 GB | 128K | No tool-calling |
-| `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.8 GB | 256K | Default NVIDIA agentic — tools + thinking |
+| `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.8 GB | 256K | NVIDIA agentic — tools + thinking (use for the agent graph) |
 | `nemotron-3-nano-30b` | `nemotron-3-nano:30b` | llm | 24 GB | 1M | Needs ≥48 GB RAM |
 | `nomic-embed-text` | `nomic-embed-text` | embedding | 274 MB | 2K | Default embedder, 768-dim |
 | `ternary-bonsai-4b` | `ternary-bonsai:4` | embedding | 546 MB | 32K | **broken** — see known issue below |
 
-**NVIDIA Nemotron 3 Nano 4B** is the registry's default agent model on a
-16 GB host: hybrid Mamba-2/MoE, native tool-calling and reasoning modes, and a
-256K context at 2.8 GB — roughly half the footprint of `llama3.1-8b` with twice
-the context.
+**TinyLlama 1.1B Chat** (`tinyllama-mlx`) is the default LLM for RealityEngine
+development and testing. It is built locally from the bf16 safetensors on
+Hugging Face, which makes Ollama serve it on its **MLX runner** (about 110
+tok/s on Apple silicon). It has a 2048-token context and **no tool-calling and
+no structured output** — the MLX runner refuses `format=json` — so the agent
+graph (`bind_tools`) and the PE's Ollama dispatch do not work against it. Select
+`nemotron-3-nano-4b` or `llama3.1-8b` in `.env` for those.
 
 ```bash
-make model-pull ID=nemotron-3-nano-4b
+make model-pull ID=tinyllama-mlx    # downloads ~2.2 GB, then `ollama create tinyllama-mlx`
 curl -s -X POST localhost:4000/chat -H 'Content-Type: application/json' \
-  -d '{"model":"nemotron-3-nano:4b","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"tinyllama-mlx","messages":[{"role":"user","content":"hi"}]}'
 ```
 
-Fresh `.env` files select it with `LLM_MODEL=nemotron-3-nano:4b`, and
-`setup.sh` pulls that tag by default. The 30B variant is registered but not for
+**NVIDIA Nemotron 3 Nano 4B** is the model registry's agent model on a 16 GB host:
+hybrid Mamba-2/MoE, native tool-calling and reasoning modes, and a 256K context
+at 2.8 GB — roughly half the footprint of `llama3.1-8b` with twice the context.
+`make model-pull ID=nemotron-3-nano-4b` pulls it.
+
+Fresh `.env` files select `LLM_MODEL=tinyllama-mlx`, and `setup.sh` builds it
+through the model registry (an existing `.env` keeps whatever it selects). The Nemotron 30B variant is registered but not for
 this baseline: `nemotron-3-nano:latest` resolves to it, which is why the
 registry pins explicit `:4b` / `:30b` tags.
 

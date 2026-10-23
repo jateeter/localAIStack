@@ -30,7 +30,7 @@ else
 fi
 
 source .env
-LLM_MODEL="${LLM_MODEL:-nemotron-3-nano:4b}"
+LLM_MODEL="${LLM_MODEL:-tinyllama-mlx}"
 EMBED_MODEL="${EMBED_MODEL:-ternary-bonsai:4}"
 
 # ── Registry check ────────────────────────────────────────────────────────────
@@ -57,7 +57,15 @@ ok "Ollama is running"
 
 # ── Pull models ────────────────────────────────────────────────────────────────
 info "Pulling LLM model: $LLM_MODEL"
-ollama pull "$LLM_MODEL"
+# A model the model registry builds locally (tinyllama-mlx) is not in the
+# Ollama library, so `ollama pull` cannot fetch it; the model registry knows how
+# to build it.
+LLM_ID="$(registry_id_for_tag "$LLM_MODEL" || true)"
+if [[ -n "$LLM_ID" && "$(_registry_source_field "$LLM_ID" kind)" != "ollama-library" ]]; then
+    registry_pull "$LLM_ID"
+else
+    ollama pull "$LLM_MODEL"
+fi
 ok "LLM model ready: $LLM_MODEL"
 
 # ── Register Ternary Bonsai 4B from local Modelfile ───────────────────────────

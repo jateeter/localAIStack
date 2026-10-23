@@ -24,5 +24,8 @@ volumes/
 # Downloaded GGUF weights — fetched by scripts/setup.sh from HuggingFace
 models/*/gguf/
 
+# Downloaded safetensors weights — fetched by `make model-pull` (models/tinyllama-mlx)
+models/*/safetensors/
+
 # Local machine files
 .claude/settings.local.json
