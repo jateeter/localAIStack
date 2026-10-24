@@ -45,16 +45,14 @@ if str(_SERVICES_API) not in sys.path:
 # ── Imports (require services/api deps to be installed) ───────────────────────
 
 try:
-    from langchain_community.document_loaders import UnstructuredMarkdownLoader
     from langchain_qdrant import QdrantVectorStore
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
     from qdrant_client import QdrantClient
+
+    from core.health_docs import SPLITTER, load_health_documents  # noqa: F401  (shared with reembed_cli)
 except ImportError as exc:
     print(f"[error] Missing dependency: {exc}")
     print("  Run: cd services/api && pip install -r requirements.txt")
     sys.exit(1)
-
-SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
 
 
 def get_embeddings(model_name: str):
@@ -71,30 +69,6 @@ def get_embeddings(model_name: str):
         from langchain_community.embeddings import OllamaEmbeddings  # type: ignore
 
         return OllamaEmbeddings(model=model_name, base_url=base_url)
-
-
-def load_health_documents(docs_dir: pathlib.Path) -> list:
-    docs = []
-    md_files = sorted(docs_dir.glob("*.md"))
-    if not md_files:
-        print(f"[warn] No .md files found in {docs_dir}")
-        return docs
-
-    for md_path in md_files:
-        print(f"  Loading: {md_path.name}")
-        try:
-            loader = UnstructuredMarkdownLoader(str(md_path))
-            loaded = loader.load()
-            for d in loaded:
-                d.metadata["source"] = f"health/{md_path.name}"
-                d.metadata["category"] = md_path.stem.replace("_", " ")
-            chunks = SPLITTER.split_documents(loaded)
-            docs.extend(chunks)
-            print(f"    → {len(loaded)} document(s), {len(chunks)} chunk(s)")
-        except Exception as exc:
-            print(f"  [warn] Failed to load {md_path.name}: {exc}")
-
-    return docs
 
 
 def main() -> None:

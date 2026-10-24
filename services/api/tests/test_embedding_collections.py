@@ -380,3 +380,19 @@ def test_derived_queries_are_each_documents_title():
     q = dict((src, text) for text, src in rb.derive_queries(_docs()))
     assert q["health/hrv.md"].startswith("Heart rate variability")
     assert len(q) == 4
+
+
+def test_the_shared_loader_chunks_the_tracked_health_corpus():
+    """scripts/ingest_health_docs.py and reembed_cli must chunk the same files the same way."""
+    pytest.importorskip("unstructured")
+    from core import health_docs
+
+    docs_dir = health_docs.default_docs_dir()
+    assert docs_dir == REPO / "data" / "health" / "documents"
+    chunks = health_docs.load_health_documents(docs_dir, verbose=False)
+    assert len(chunks) > 20
+    assert {c.metadata["source"] for c in chunks} == {
+        f"health/{p.name}" for p in docs_dir.glob("*.md")
+    }
+    # every document yields a title the verification can query by
+    assert len(rb.derive_queries(chunks)) == len(list(docs_dir.glob("*.md")))
