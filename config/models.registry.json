@@ -59,8 +59,8 @@
   },
   "roles": {
     "llm": {
-      "default": "tinyllama-mlx",
-      "_comment": "Matches .env.example LLM_MODEL, setup.sh and config.py's fallback: tinyllama-mlx. The tool-using default it replaced, nemotron-3-nano-4b, is still registered."
+      "default": "nemotron-3-nano-4b",
+      "_comment": "Matches .env.example LLM_MODEL, setup.sh, docker-compose.yml and config.py's fallback: nemotron-3-nano:4b, the RealityEngine universe model. It calls tools, but Ollama refuses format=json for it, so the PEs omit format for it (RealityEngine_CI docs/OLLAMA_INTEGRATION.md). Switch with `make model-use ID=<id>`. tinyllama-mlx, the development default it replaced, is still registered."
     },
     "embedding": {
       "default": "nomic-embed-text",
@@ -100,7 +100,7 @@
       "install": "modelfile",
       "status": "experimental",
       "license": "Apache-2.0",
-      "notes": "Development default for the RealityEngine universe: small, fast (about 110 tok/s on Apple silicon) and served by Ollama's MLX runner, whose llama architecture is the target for neural-mesh taps. A 1.1B chat model with a 2048-token context and NO tool-calling or structured output (the MLX runner refuses format=json), so the agent graph's bind_tools path and the PE's Ollama dispatch (which sends format=json) do not work against it. Select nemotron-3-nano-4b or llama3.1-8b for those."
+      "notes": "Former development default for the RealityEngine universe (replaced by nemotron-3-nano-4b): small, fast (about 110 tok/s on Apple silicon) and served by Ollama's MLX runner, whose llama architecture is the target for neural-mesh taps. A 1.1B chat model with a 2048-token context and NO tool-calling or structured output (the MLX runner refuses format=json), so the agent graph's bind_tools path and the PE's Ollama dispatch (which sends format=json) do not work against it. Select nemotron-3-nano-4b or llama3.1-8b for those."
     },
     {
       "id": "llama3.1-8b",
@@ -194,10 +194,10 @@
       "context_length": 262144,
       "capabilities": ["completion", "tools", "thinking"],
       "min_ram_gb": 8,
-      "install": "on-demand",
+      "install": "selected",
       "status": "supported",
       "license": "NVIDIA Open Model License Agreement",
-      "notes": "The agentic generator for tool use and reasoning, with a unified reasoning/non-reasoning mode. 256K context at 2.8 GB makes it the best tool-calling fit on a 16 GB host for /graph/agent — it carries far more retrieved context than llama3.1-8b at half the footprint. Languages: en, de, es, fr, it, ja."
+      "notes": "Default for the RealityEngine universe. The agentic generator for tool use and reasoning, with a unified reasoning/non-reasoning mode. 256K context at 2.8 GB makes it the best tool-calling fit on a 16 GB host for /graph/agent — it carries far more retrieved context than llama3.1-8b at half the footprint. Languages: en, de, es, fr, it, ja. Ollama refuses format (json and schema) for it with 'structured output is unavailable'; the PEs omit format for this model family, and thinking is on by default."
     },
     {
       "id": "nemotron-3-nano-30b",

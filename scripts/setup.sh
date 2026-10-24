@@ -30,7 +30,7 @@ else
 fi
 
 source .env
-LLM_MODEL="${LLM_MODEL:-tinyllama-mlx}"
+LLM_MODEL="${LLM_MODEL:-nemotron-3-nano:4b}"
 EMBED_MODEL="${EMBED_MODEL:-ternary-bonsai:4}"
 
 # ── Registry check ────────────────────────────────────────────────────────────
@@ -141,5 +141,5 @@ echo "  Next steps:"
 echo "    make ingest FILE=./data/<domain>/documents/your_doc.pdf"
 echo "    make query  Q='What is in my knowledge base?'"
 echo "    make models                              # registry + what's installed"
-echo "    make model-pull ID=nemotron-3-nano-4b    # add another registered model"
+echo "    make model-use ID=<id>                   # switch the selected model"
 echo ""
