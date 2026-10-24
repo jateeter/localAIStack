@@ -105,7 +105,7 @@ echo "  Grafana   http://localhost:4002           (localAIStack Overview dashboa
 echo "  Loki API  http://localhost:4100"
 echo ""
 # Resolve the actual configured embed model / dim (fall back to defaults) for the banner.
-EMBED_MODEL_DISPLAY="${EMBED_MODEL:-ternary-bonsai:4}"
+EMBED_MODEL_DISPLAY="${EMBED_MODEL:-embeddinggemma-2:270m}"
 EMBED_DIM_DISPLAY="${EMBED_DIM:-768}"
 echo "  Unified Qdrant collections (localhost:4333):"
 echo "    localai_docs     — document embeddings (${EMBED_DIM_DISPLAY}-dim, ${EMBED_MODEL_DISPLAY})"
@@ -125,6 +125,6 @@ if [[ "$EMBED_MODEL_DISPLAY" == "ternary-bonsai:4" ]]; then
     echo    "     prism-ml's Q1_0 (BitNet ternary) GGUF is unrecognized by Ollama's"
     echo    "     bundled GGML (file_type=unknown).  Selecting it in Open WebUI or"
     echo    "     using it as EMBED_MODEL returns HTTP 500.  Override in .env, e.g.:"
-    echo    "       EMBED_MODEL=nomic-embed-text   EMBED_DIM=768"
+    echo    "       EMBED_MODEL=embeddinggemma-2:270m   EMBED_DIM=768   (make model-use ID=embeddinggemma-2-270m)"
     echo ""
 fi

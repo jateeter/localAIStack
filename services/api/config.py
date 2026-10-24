@@ -10,9 +10,12 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:4379"
 
     llm_model: str = "nemotron-3-nano:4b"
-    embed_model: str = "ternary-bonsai:4"
-    # Output dimension of embed_model. Must match the existing Qdrant collection;
-    # recreate the collection if you swap to a model with a different dim.
+    # The default embedder runs on MLX (registry role default; owner rule
+    # RealityEngine_CI#593). Switch with `make model-use ID=<id>`, then re-embed.
+    embed_model: str = "embeddinggemma-2:270m"
+    # Output dimension of embed_model. Checked against what the model actually
+    # returns at startup (core.embeddings.probe_dimension) and against each
+    # collection's vector size (core.collections.verify).
     embed_dim: int = 768
     collection_name: str = "localai_docs"
 

@@ -85,7 +85,7 @@ services:
   # This Qdrant instance is the unified vector store for both localAIStack and
   # the RealityEngine engines.  Exposed on host ports 4333 (REST) / 4334 (gRPC).
   # Collections:
-  #   localai_docs     — document embeddings (dim = ${EMBED_DIM}, ternary-bonsai:4 by default)
+  #   localai_docs     — document embeddings (dim = ${EMBED_DIM}, embeddinggemma-2:270m by default); an alias onto localai_docs__<model>
   #   reality-events  — legacy RE perceptual vectors, same dim. The engines no longer
   #                     read or write Qdrant; nothing creates this collection now.
   # Engines connect via host.docker.internal:4333 from their Docker network.
@@ -161,7 +161,7 @@ services:
       QDRANT_PORT: "6333"
       REDIS_URL: "redis://redis:6379"
       LLM_MODEL: "${LLM_MODEL:-nemotron-3-nano:4b}"
-      EMBED_MODEL: "${EMBED_MODEL:-ternary-bonsai:4}"
+      EMBED_MODEL: "${EMBED_MODEL:-embeddinggemma-2:270m}"
       EMBED_DIM: "${EMBED_DIM:-768}"
       COLLECTION_NAME: "${COLLECTION_NAME:-localai_docs}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"

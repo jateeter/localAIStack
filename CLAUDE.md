@@ -19,8 +19,9 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
 - `services/api/core/health_scope.py`: HealthKit scope follower. Run from the
   lifespan every `HEALTH_SCOPE_INTERVAL_S` against each PE, it gives in-scope
   bands slots in `[7600:7632]` and writes the roll-up to `[7574:7578]`.
-- `services/api/core/embeddings.py`: embedding support.
+- `services/api/core/embeddings.py`: embedding support, and `probe_dimension()` (the model's real output size; metadata is not trusted).
 - `services/api/core/vector_store.py`: vector store behavior.
+- `services/api/core/collections.py`, `core/reembed.py`, `scripts/reembed.py`: a logical collection is an alias onto `<name>__<model>`, so a collection knows which embedder filled it; changing the model is a lossless migration (build beside, verify retrieval, switch the alias, keep the old). See the README, "Changing the embedding model".
 - `services/api/core/topology_builder.py`: topology/graph construction.
 - `services/api/core/model_registry.py`: model registry loader; joins model registry
   metadata with the `.env` selection and live Ollama tags.
@@ -91,6 +92,7 @@ make model-pull ID=<model-id>  # pull a registered model
   `make model-use ID=<id>` switches the model on command: it validates against
   the model registry, pulls it, and writes `LLM_MODEL` (or `EMBED_MODEL` for an
   embedding) to `.env`. `tinyllama-mlx` (2K context, no tools) stays registered.
+- **Each role's default model must run on MLX; any other model may run on MLX or ggml** (owner rule, RealityEngine_CI#593, 2026-10-24). Registry entries declare the `runner` they were observed on, `GET /models` shows Ollama's live runner beside it, and `tests/test_embedding_collections.py` fails if a default does not declare `mlx`. The embedding default is `embeddinggemma-2:270m` (768-dim); `nomic-embed-text` runs on ggml and is no longer the default. Vectors from two embedders do not mix even at the same dimension, so changing `EMBED_MODEL` means `make reembed`; a mismatch raises `CollectionMismatch` and is reported by `/health`.
 - Models are declared in `config/models.registry.json`, selected in `.env`, and
   installed in Ollama. Check `GET /models` before debugging a model problem —
   it separates "not pulled" from "not registered" from "too big for this host".

@@ -45,17 +45,14 @@ if str(_SERVICES_API) not in sys.path:
 # ── Imports (require services/api deps to be installed) ───────────────────────
 
 try:
-    from langchain_community.document_loaders import UnstructuredMarkdownLoader
     from langchain_qdrant import QdrantVectorStore
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
     from qdrant_client import QdrantClient
-    from qdrant_client.models import Distance, VectorParams
+
+    from core.health_docs import SPLITTER, load_health_documents  # noqa: F401  (shared with reembed_cli)
 except ImportError as exc:
     print(f"[error] Missing dependency: {exc}")
     print("  Run: cd services/api && pip install -r requirements.txt")
     sys.exit(1)
-
-SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
 
 
 def get_embeddings(model_name: str):
@@ -72,30 +69,6 @@ def get_embeddings(model_name: str):
         from langchain_community.embeddings import OllamaEmbeddings  # type: ignore
 
         return OllamaEmbeddings(model=model_name, base_url=base_url)
-
-
-def load_health_documents(docs_dir: pathlib.Path) -> list:
-    docs = []
-    md_files = sorted(docs_dir.glob("*.md"))
-    if not md_files:
-        print(f"[warn] No .md files found in {docs_dir}")
-        return docs
-
-    for md_path in md_files:
-        print(f"  Loading: {md_path.name}")
-        try:
-            loader = UnstructuredMarkdownLoader(str(md_path))
-            loaded = loader.load()
-            for d in loaded:
-                d.metadata["source"] = f"health/{md_path.name}"
-                d.metadata["category"] = md_path.stem.replace("_", " ")
-            chunks = SPLITTER.split_documents(loaded)
-            docs.extend(chunks)
-            print(f"    → {len(loaded)} document(s), {len(chunks)} chunk(s)")
-        except Exception as exc:
-            print(f"  [warn] Failed to load {md_path.name}: {exc}")
-
-    return docs
 
 
 def main() -> None:
@@ -126,9 +99,7 @@ def main() -> None:
 
             embed_model = get_settings().embed_model
         except Exception:
-            embed_model = "ternary-bonsai:4"
-
-    embed_dim = 768  # must match the model's output dimension
+            embed_model = "embeddinggemma-2:270m"  # the registry's default embedder
 
     print("=" * 60)
     print("  localAIStack — Health Docs Ingestion")
@@ -160,21 +131,38 @@ def main() -> None:
         print(f"[error] Cannot connect to Qdrant at {args.qdrant_host}:{args.qdrant_port}: {exc}")
         sys.exit(1)
 
-    if args.clear and args.collection in collections:
-        print(f"  [--clear] Dropping collection: {args.collection}")
-        client.delete_collection(args.collection)
-        collections = [c.name for c in client.get_collections().collections]
+    # The dimension is what the model returns, not a number written here: a model
+    # whose metadata says one thing and whose output says another is the case this
+    # exists for (embeddinggemma-2:270m reports 512 and returns 768).
+    embeddings = get_embeddings(embed_model)
+    embed_dim = len(embeddings.embed_query("dimension probe"))
+    print(f"  embedding dimension (probed): {embed_dim}")
 
-    if args.collection not in collections:
-        print(f"  Creating collection: {args.collection} (dim={embed_dim}, COSINE)")
-        client.create_collection(
-            collection_name=args.collection,
-            vectors_config=VectorParams(size=embed_dim, distance=Distance.COSINE),
-        )
+    from core import collections as qc
+
+    if args.clear:
+        res = qc.resolve(client, args.collection)
+        if res.physical:
+            print(f"  [--clear] Dropping {res.kind} collection: {res.physical}")
+            client.delete_collection(res.physical)
+            if res.kind == "alias":
+                from qdrant_client.models import DeleteAlias, DeleteAliasOperation
+
+                client.update_collection_aliases(
+                    [DeleteAliasOperation(delete_alias=DeleteAlias(alias_name=args.collection))]
+                )
+    # --collection is a logical name: an alias onto <name>__<model>. An existing
+    # collection filled by a different model raises CollectionMismatch here, with
+    # the command that migrates it, instead of mixing vectors that do not mix.
+    try:
+        res = qc.ensure(client, args.collection, embed_model, embed_dim)
+    except qc.CollectionMismatch as exc:
+        print(f"[error] {exc}")
+        sys.exit(1)
+    print(f"  Collection: {args.collection} -> {res.physical} (dim={embed_dim}, COSINE)")
 
     print("\n[3/3] Embedding and ingesting chunks …")
     try:
-        embeddings = get_embeddings(embed_model)
         store = QdrantVectorStore(
             client=client,
             collection_name=args.collection,

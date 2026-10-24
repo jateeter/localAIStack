@@ -89,7 +89,8 @@ registry is legitimate while testing.
 | `phi3.5-mini` | `phi3.5:3.8b` | llm | 2.2 GB | 128K | No tool-calling |
 | `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.8 GB | 256K | **Default** — RealityEngine universe model; tools + thinking, no `format=json` |
 | `nemotron-3-nano-30b` | `nemotron-3-nano:30b` | llm | 24 GB | 1M | Needs ≥48 GB RAM |
-| `nomic-embed-text` | `nomic-embed-text` | embedding | 274 MB | 2K | Default embedder, 768-dim |
+| `embeddinggemma-2-270m` | `embeddinggemma-2:270m` | embedding | 378 MB | 256K | **Default** embedder — runs on **MLX**, 768-dim |
+| `nomic-embed-text` | `nomic-embed-text` | embedding | 274 MB | 2K | Previous default; runs on ggml, 768-dim |
 | `ternary-bonsai-4b` | `ternary-bonsai:4` | embedding | 546 MB | 32K | **broken** — see known issue below |
 
 **NVIDIA Nemotron 3 Nano 4B** (`nemotron-3-nano-4b`) is the default LLM for
@@ -126,9 +127,43 @@ resolves to it, which is why the registry pins explicit `:4b` / `:30b` tags.
 2. `make model-pull ID=<id>`
 3. Point `.env` at it only if it should become the selected llm/embedder.
 
-Swapping the *embedder* also means matching `EMBED_DIM` and recreating the
-`localai_docs` Qdrant collection — the registry records each embedder's
-`embed_dim` so the mismatch is visible before you hit it.
+### Defaults run on MLX
+
+Owner rule (RealityEngine_CI#593): each role's **default** model must run on
+MLX; any other model may run on MLX or ggml. Each registry entry declares the
+`runner` it was observed on, `GET /models` reports Ollama's live runner beside it,
+and a test fails if a role's default does not declare `mlx`. Today: the LLM
+default `nemotron-3-nano:4b` and the embedding default `embeddinggemma-2:270m`
+run on MLX; `llama3.1:8b` and `nomic-embed-text` run on ggml and are not defaults.
+
+### Changing the embedding model
+
+Vectors from two embedding models do not mix, even at the same dimension. So a
+collection says which model filled it, and changing the model is a migration:
+
+- **Names.** The application uses a logical name, `localai_docs` or
+  `health_docs`, which is a Qdrant alias onto `<name>__<model>`
+  (`localai_docs__embeddinggemma-2-270m`). The model is readable from the name and
+  the vector size from the collection's own config. (Qdrant 1.14 has no collection
+  metadata.)
+- **Loud, not silent.** At startup the API probes the model's real output
+  dimension (`ollama show embeddinggemma-2:270m` says 512; the model returns 768)
+  and logs `embedding_dimension_mismatch` if it differs from `EMBED_DIM`. A
+  collection filled by another model, or a populated collection from before this
+  existed (model unrecorded), raises `CollectionMismatch` naming the fix, and
+  `/health` reports it under `services.embedding`.
+- **Re-embed without losing data.** `make model-use ID=<embedder>` then
+  `make reembed` (`scripts/reembed.py run`). It builds `<name>__<new-model>`
+  beside the live collection from the source documents, checks retrieval
+  (recall@k of each document's title) against the old collection, switches the
+  alias in one atomic call, and keeps the old collection. `rollback` is a second
+  switch; `drop-old` deletes the rest; `status` shows every collection.
+  `health_docs` is rebuilt from `data/health/documents/`. A populated collection
+  with no source documents is refused unless you pass `--allow-data-loss`.
+- **A pre-existing (legacy) collection** cannot hold an alias of its own name, so
+  it is snapshotted, deleted, and replaced; `rollback` restores it from the
+  snapshot into `<name>__legacy`. Use `--old-model <tag>` to compare retrieval
+  with the model that filled it.
 
 ## Provider completion conformance
 
@@ -190,14 +225,13 @@ tail -f /tmp/ollama.log
 - **Model metadata** lives in `config/models.registry.json`, mounted into the
   api container at `/app/config` and served at `GET /models`. See
   [Model registry](#model-registry).
-- **Embedding model** defaults to `ternary-bonsai:4` (registered at setup time
-  from `hf.co/prism-ml/Bonsai-4B-gguf`).  Override via `.env` `EMBED_MODEL`.
-  > ⚠ **Known issue:** the prism-ml repo ships only a Q1_0 (BitNet ternary)
-  > GGUF, which Ollama's bundled GGML does not yet recognize — the model
-  > registers and appears in the WebUI dropdown, but inference and embeddings
-  > return HTTP 500 (`file_type=unknown`) until upstream Ollama ships GGML
-  > with TQ1_0/BitNet support.  For a working default, set
-  > `EMBED_MODEL=nomic-embed-text` + `EMBED_DIM=768` in `.env`.
+- **Embedding model** defaults to `embeddinggemma-2:270m` (MLX, 768-dim); see
+  [Changing the embedding model](#changing-the-embedding-model).  Override via
+  `.env` `EMBED_MODEL`, then `make reembed`.
+  > ⚠ `ternary-bonsai:4` is registered but **broken** (prism-ml ships only a
+  > Q1_0 BitNet GGUF that Ollama's bundled GGML does not recognise; inference
+  > and embeddings return HTTP 500). It was this repo's embedding default until
+  > RealityEngine_CI#593; do not select it.
 - **GraphQL trigger receiver** (`services/api/routers/graphql_endpoint.py`)
   exposes `POST /graphql` for machine → AI upstream pushes.  Events are retained
   in a 128-entry ring buffer; verify with `curl http://localhost:4000/graphql/events`.

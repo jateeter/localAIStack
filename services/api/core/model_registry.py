@@ -79,6 +79,11 @@ class ModelEntry(BaseModel):
     size_gb: float | None = None
     context_length: int | None = None
     embed_dim: int | None = None
+    # The runtime Ollama runs this model on, as it reports it in /api/tags
+    # (`details.runner`): "mlx" or "ggml". Declared only where it was observed;
+    # absent means not measured. The owner rule (RealityEngine_CI#593, 2026-10-24):
+    # each role's *default* must be "mlx"; any other model may be either.
+    runner: str | None = None
     capabilities: list[str] = Field(default_factory=list)
     min_ram_gb: int | None = None
     install: str = "on-demand"  # "selected" | "on-demand" | "modelfile"
@@ -123,6 +128,30 @@ class ModelRegistry(BaseModel):
     def default_for(self, role: str) -> str | None:
         entry = self.roles.get(role) or {}
         return entry.get("default")
+
+
+REQUIRED_DEFAULT_RUNNER = "mlx"
+
+
+def default_runner_problems(registry: ModelRegistry) -> list[str]:
+    """Roles whose default model does not declare the runner the owner requires.
+
+    The rule is about defaults only: a non-default model may run on MLX or ggml
+    and is never reported here. A default with no declared runner is a problem
+    too, because "not measured" cannot satisfy "must run on MLX".
+    """
+    problems: list[str] = []
+    for role in ("llm", "embedding"):
+        model_id = registry.default_for(role)
+        entry = registry.by_id(model_id) if model_id else None
+        if entry is None:
+            problems.append(f"role '{role}': default '{model_id}' is not a registered model")
+        elif entry.runner != REQUIRED_DEFAULT_RUNNER:
+            problems.append(
+                f"role '{role}': default '{entry.id}' declares runner "
+                f"{entry.runner!r}, the default must run on {REQUIRED_DEFAULT_RUNNER}"
+            )
+    return problems
 
 
 def registry_path() -> pathlib.Path:
@@ -192,6 +221,33 @@ async def installed_tags(base_url: str | None = None) -> tuple[list[str], str]:
         return [], f"unreachable: {str(exc)[:160]}"
 
 
+async def installed_runners(base_url: str | None = None) -> dict[str, str]:
+    """``{tag: runner}`` for every pulled model, from Ollama's own report.
+
+    This is the live fact the declared ``runner`` is checked against: the registry
+    says what a model should run on, /api/tags says what it does on this host.
+    Empty when Ollama is unreachable (``installed_tags`` carries the status).
+    """
+    s = get_settings()
+    url = base_url or s.ollama_base_url
+    try:
+        async with httpx.AsyncClient(timeout=_TAGS_TIMEOUT_S) as c:
+            r = await c.get(f"{url}/api/tags")
+            r.raise_for_status()
+            return {
+                m["name"]: (m.get("details") or {}).get("runner")
+                for m in r.json().get("models", [])
+                if (m.get("details") or {}).get("runner")
+            }
+    except Exception:
+        return {}
+
+
+def _live_runner(entry_tag: str, runners: dict[str, str]) -> str | None:
+    wanted = {entry_tag, f"{entry_tag}:latest"} if ":" not in entry_tag else {entry_tag}
+    return next((runners[t] for t in runners if t in wanted), None)
+
+
 async def installed_version(base_url: str | None = None) -> str | None:
     """Version reported by the live Ollama host, or None when unreachable."""
     s = get_settings()
@@ -235,12 +291,24 @@ def host_ram_gb() -> float | None:
         return None
 
 
+def _default_runner_report(registry: ModelRegistry, role: str, runners: dict[str, str]) -> dict:
+    entry = registry.by_id(registry.default_for(role) or "")
+    live = _live_runner(entry.tag, runners) if entry else None
+    declared = entry.runner if entry else None
+    return {
+        "id": entry.id if entry else None,
+        "declared": declared,
+        "live": live,
+        "ok": declared == REQUIRED_DEFAULT_RUNNER and live in (None, REQUIRED_DEFAULT_RUNNER),
+    }
+
+
 async def resolve_models(role: str | None = None) -> dict:
     """Join registry metadata with .env selection and live Ollama state."""
     registry = load_registry()
     s = get_settings()
-    (installed, ollama_status), running_version = await asyncio.gather(
-        installed_tags(), installed_version()
+    (installed, ollama_status), running_version, runners = await asyncio.gather(
+        installed_tags(), installed_version(), installed_runners()
     )
     ram = host_ram_gb()
 
@@ -250,9 +318,15 @@ async def resolve_models(role: str | None = None) -> dict:
     resolved = []
     for m in entries:
         selected_for = [r for r, tag in selected.items() if registry.by_tag(tag) is m]
+        live = _live_runner(m.tag, runners)
         resolved.append(
             {
                 **m.model_dump(),
+                "live_runner": live,
+                # None when either side is unknown; False is the finding.
+                "runner_matches_declared": None
+                if live is None or m.runner is None
+                else live == m.runner,
                 "installed": _tag_matches(m.tag, installed),
                 "selected": bool(selected_for),
                 "selected_as": selected_for or None,
@@ -286,6 +360,11 @@ async def resolve_models(role: str | None = None) -> dict:
         "selected": selected,
         "unregistered_selections": unregistered or None,
         "defaults": {r: registry.default_for(r) for r in ("llm", "embedding")},
+        # Owner rule: each role's default must run on MLX. Declared and live.
+        "default_runners": {
+            r: _default_runner_report(registry, r, runners) for r in ("llm", "embedding")
+        },
+        "default_runner_problems": default_runner_problems(registry) or None,
         "count": len(resolved),
         "models": resolved,
     }
