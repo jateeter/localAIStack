@@ -1,4 +1,4 @@
-.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-info provider-conformance clean
+.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-use model-info provider-conformance clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -48,6 +48,12 @@ ollama-check:
 # Usage: make model-pull ID=nemotron-3-nano-4b
 model-pull:
 	@bash scripts/lib/models_registry.sh --pull $(ID)
+
+# Switch the selected model on command: validates against the registry, pulls,
+# writes LLM_MODEL (or EMBED_MODEL) to .env. Restart afterwards.
+# Usage: make model-use ID=nemotron-3-nano-4b
+model-use:
+	@bash scripts/lib/models_registry.sh --use $(ID)
 
 # Usage: make model-info ID=nemotron-3-nano-4b   (requires the API to be up)
 model-info:

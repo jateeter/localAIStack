@@ -197,9 +197,49 @@ registry_check_selection() {
     fi
 }
 
+# registry_use <id> — switch the selected model on command: validate the id
+# against the registry, refuse a broken entry, pull/build it, then write the
+# selection to .env (LLM_MODEL for role llm, EMBED_MODEL for role embedding).
+# Restarting the stack is left to the caller so a running universe is never
+# changed behind its back.
+registry_use() {
+    local id="$1" tag role status var env_file
+    [[ -n "$id" ]] || { _registry_err "registry_use requires a model id (make model-use ID=<id>)"; return 1; }
+    tag="$(registry_field "$id" tag)" || return 1
+    [[ -n "$tag" ]] || {
+        _registry_err "'$id' is not in the registry. Known ids: $(registry_ids | tr '\n' ' ')"
+        return 1
+    }
+    role="$(registry_field "$id" role)"
+    status="$(registry_field "$id" status)"
+    case "$role" in
+        llm)       var=LLM_MODEL ;;
+        embedding) var=EMBED_MODEL ;;
+        *) _registry_err "'$id' has role '$role'; model-use switches llm and embedding models only"; return 1 ;;
+    esac
+    [[ "$status" == "broken" ]] && {
+        _registry_err "'$id' is marked status=broken: $(registry_field "$id" notes)"
+        return 1
+    }
+    registry_pull "$id" || return 1
+
+    env_file="${ENV_FILE:-.env}"
+    [[ -f "$env_file" ]] || { _registry_err "$env_file not found — run 'make setup' first"; return 1; }
+    if grep -q "^${var}=" "$env_file"; then
+        sed -i.bak "s|^${var}=.*|${var}=${tag}|" "$env_file" && rm -f "${env_file}.bak"
+    else
+        printf '%s=%s\n' "$var" "$tag" >> "$env_file"
+    fi
+    _registry_info "$var=$tag written to $env_file. Restart to apply: make stop && make start"
+    if [[ "$role" == "embedding" ]]; then
+        _registry_warn "EMBED_DIM must match $id's embed_dim and the localai_docs Qdrant collection — recreate the collection when you swap."
+    fi
+}
+
 # CLI entrypoints so the Makefile can call this file directly.
 case "${1:-}" in
     --list)  registry_table ;;
     --pull)  registry_pull "${2:-}" ;;
+    --use)   registry_use "${2:-}" ;;
     --ids)   registry_ids ;;
 esac

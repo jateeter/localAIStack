@@ -77,11 +77,16 @@ make model-pull ID=<model-id>  # pull a registered model
   `/health`. It is the training corpus for difference-net / near-miss learning
   (RealityEngine_CI#518).
 - Verify environment values against the live instance registry, not just static `.env` defaults.
-- The default LLM is `tinyllama-mlx`, the RealityEngine development model. It is
-  built locally from Hugging Face safetensors (`make model-pull
-  ID=tinyllama-mlx`), which routes it to Ollama's MLX runner, and it has no
-  tools or structured output: the agent graph (`bind_tools`) needs
-  `nemotron-3-nano-4b` or another tool-capable model selected in `.env`.
+- The default LLM is `nemotron-3-nano:4b` (registry id `nemotron-3-nano-4b`), the
+  RealityEngine universe model, pulled from the Ollama library (`ollama pull
+  nemotron-3-nano:4b`). It calls tools (the agent graph's `bind_tools` works)
+  and thinks by default, but Ollama refuses `format=json` for it, so any call
+  of ours that needs structured output must put the requirement in the prompt;
+  the PEs omit `format` for it identically across engines
+  (RealityEngine_CI `docs/OLLAMA_INTEGRATION.md`, "Structured output").
+  `make model-use ID=<id>` switches the model on command: it validates against
+  the model registry, pulls it, and writes `LLM_MODEL` (or `EMBED_MODEL` for an
+  embedding) to `.env`. `tinyllama-mlx` (2K context, no tools) stays registered.
 - Models are declared in `config/models.registry.json`, selected in `.env`, and
   installed in Ollama. Check `GET /models` before debugging a model problem —
   it separates "not pulled" from "not registered" from "too big for this host".
