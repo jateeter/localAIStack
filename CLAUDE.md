@@ -37,6 +37,9 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
   `scripts/ingest_health_docs.py`). New domains follow the same shape, e.g.
   `data/communityServices/*.json` and `data/communityServices/documents/*`.
 - `data/machines/`: localAI's machine definitions (contracted here, not in the corpus).
+  `data/machines/generated/` holds one `localai/<domain>_baseline` per accepted domain,
+  written by `scripts/generate_domain_machines.py` (never by hand); `config/domain-machines.index.json`
+  and `config/domain-machine-slots.json` are its inventory and its stable slot table.
 - `models/`: local model assets.
 - `scripts/`: operational helpers and examples.
 
@@ -55,6 +58,7 @@ make model-pull ID=<model-id>  # pull a registered model
 # Machine contract gates (need a sibling RealityEngine_Machines checkout)
 ./scripts/validate-machines.sh       # data/machines/*.json vs the canonical schema
 ./scripts/check_machine_regions.py   # regions vs domains/region-allocation.json
+./scripts/generate_domain_machines.py --check  # every accepted domain covered; files match a regeneration
 ```
 
 ## Runtime Contract

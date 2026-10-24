@@ -191,6 +191,8 @@ services:
       # MACHINES_DIR is deliberately not set here: it means the corpus repo
       # everywhere else in the workspace, and reality_bridge no longer reads it.
       LOCALAI_MACHINES_DIR: "/app/data/machines"
+      # The generated per-domain machines' index (scripts/generate_domain_machines.py).
+      LOCALAI_DOMAIN_MACHINES_INDEX: "/app/config/domain-machines.index.json"
       # Resync requests to the PE are authenticated like ingest. startUniverse.sh
       # exports the universe's token; empty means the PE runs without auth.
       HEALTHKIT_BRIDGE_TOKEN: "${HEALTHKIT_BRIDGE_TOKEN:-}"

@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
         from core.reality_bridge import (
             bind_graph_topology,
             import_carekit_machine,
+            import_domain_machines,
             import_health_machines,
             import_machine_if_missing,
             import_session_machines,
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
             "session_machines": import_session_machines(),
             "health_machine": import_health_machines(),
             "carekit_machine": import_carekit_machine(),
+            "domain_machines": import_domain_machines(),
             "topology": bind_graph_topology(),
         }
         failed_steps = [name for name, ok in bridge_steps.items() if not ok]

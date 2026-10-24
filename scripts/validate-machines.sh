@@ -37,7 +37,7 @@ count=$(find "$MACHINE_JSON_DIR" -name '*.json' | wc -l | tr -d ' ')
 [ "$count" -gt 0 ] || fail "no *.json under $MACHINE_JSON_DIR"
 echo "validate-machines: $count definition(s) against $MACHINES_DIR/schemas/machine.schema.json"
 
-MACHINES_DIR="$MACHINES_DIR" MACHINE_JSON_DIR="$MACHINE_JSON_DIR" \
+MACHINES_DIR="$MACHINES_DIR" MACHINE_JSON_DIR="$MACHINE_JSON_DIR" EXPECTED_COUNT="$count" \
 node --input-type=module -e '
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -60,8 +60,17 @@ for (const f of readdirSync(schemaDir).filter((n) => n.endsWith(".schema.json"))
 const validate = ajv.getSchema("https://realityengine.example.org/schemas/machine.schema.json");
 if (!validate) { console.error("[fail] machine.schema.json not registered"); process.exit(1); }
 
+// Recursive: the generated domain machines live under data/machines/generated/
+// (scripts/generate_domain_machines.py). This used to read the top level only
+// while the count above was recursive, so a subdirectory passed unvalidated.
+const files = readdirSync(jsonDir, { recursive: true }).filter((n) => n.endsWith(".json")).sort();
+const expected = Number(process.env.EXPECTED_COUNT);
+if (files.length !== expected) {
+  console.error(`[fail] validated ${files.length} definition(s) but the directory holds ${expected}`);
+  process.exit(1);
+}
 let bad = 0;
-for (const f of readdirSync(jsonDir).filter((n) => n.endsWith(".json")).sort()) {
+for (const f of files) {
   const doc = JSON.parse(readFileSync(join(jsonDir, f), "utf8"));
   if (validate(doc)) { console.log(`  ok   ${f}`); continue; }
   bad++;
