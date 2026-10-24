@@ -111,6 +111,19 @@ async def health():
             collections = [c.name for c in qc.get_collections().collections]
             services["qdrant"] = "ok"
             services["qdrant_collections"] = collections
+            # Which model filled each collection, and whether it is the configured
+            # embedder. A "mismatch" row is the finding (core.collections).
+            from core import collections as embed_collections
+
+            rows = embed_collections.inventory(
+                qc, s.embed_model, s.embed_dim, [s.collection_name, s.health_collection_name]
+            )
+            services["embedding"] = {
+                "model": s.embed_model,
+                "dim": s.embed_dim,
+                "ok": not any(r["state"] == "mismatch" for r in rows),
+                "collections": rows,
+            }
         except Exception as exc:
             services["qdrant"] = f"error: {exc}"
 

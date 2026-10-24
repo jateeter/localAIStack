@@ -1,4 +1,4 @@
-.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-use model-info provider-conformance clean
+.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-use model-info reembed reembed-status provider-conformance clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -54,6 +54,15 @@ model-pull:
 # Usage: make model-use ID=nemotron-3-nano-4b
 model-use:
 	@bash scripts/lib/models_registry.sh --use $(ID)
+
+# Rebuild the Qdrant collections after the embedding model changes (vectors from two
+# models do not mix). Builds beside the live collection, verifies retrieval, switches
+# an alias, keeps the old one. Usage: make reembed   |   make reembed-status
+reembed:
+	@python3 scripts/reembed.py run $(ARGS)
+
+reembed-status:
+	@python3 scripts/reembed.py status $(ARGS)
 
 # Usage: make model-info ID=nemotron-3-nano-4b   (requires the API to be up)
 model-info:

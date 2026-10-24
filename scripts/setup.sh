@@ -31,7 +31,7 @@ fi
 
 source .env
 LLM_MODEL="${LLM_MODEL:-nemotron-3-nano:4b}"
-EMBED_MODEL="${EMBED_MODEL:-ternary-bonsai:4}"
+EMBED_MODEL="${EMBED_MODEL:-embeddinggemma-2:270m}"
 
 # ── Registry check ────────────────────────────────────────────────────────────
 # The registry declares what is available; .env decides what is selected. This

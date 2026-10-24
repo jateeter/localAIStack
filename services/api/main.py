@@ -23,12 +23,37 @@ async def lifespan(app: FastAPI):
         embed_model=s.embed_model,
         ollama_url=s.ollama_base_url,
     )
-    # Warm up vector store connection on startup
+    # The embedder first: its real output dimension is the fact every collection is
+    # checked against. Metadata is not trusted (ollama show reports 512 for a model
+    # that returns 768), so probe it.
     try:
-        from core.vector_store import get_vector_store
+        from core.embeddings import probe_dimension
 
-        get_vector_store()
-        log.info("Qdrant vector store ready", collection=s.collection_name)
+        probed = probe_dimension()
+        if probed != s.embed_dim:
+            log.error(
+                "embedding_dimension_mismatch",
+                embed_model=s.embed_model,
+                configured=s.embed_dim,
+                probed=probed,
+                note="set EMBED_DIM to the probed value and re-embed (scripts/reembed.py)",
+            )
+        else:
+            log.info("Embedder ready", embed_model=s.embed_model, dim=probed)
+    except Exception as e:
+        log.warning("Embedder not reachable at startup", embed_model=s.embed_model, error=str(e))
+    # Warm up vector store connection on startup. A collection filled by another
+    # model is an error, not a warning: answering from it would be silently wrong.
+    try:
+        from core.collections import CollectionMismatch
+        from core.vector_store import get_health_vector_store, get_vector_store
+
+        try:
+            get_vector_store()
+            get_health_vector_store()
+            log.info("Qdrant vector store ready", collection=s.collection_name)
+        except CollectionMismatch as e:
+            log.error("collection_embedder_mismatch", error=str(e))
     except Exception as e:
         log.warning("Vector store not ready at startup", error=str(e))
     # Register Reality Engine sensor sources (graceful — PE may not be running)
