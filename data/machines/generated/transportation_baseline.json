@@ -1,0 +1,511 @@
+{
+  "version": "1.0.0",
+  "machine": {
+    "name": "localai/transportation_baseline",
+    "description": "Transportation domain state classifier, generated from domains/domain-manifest.json by scripts/generate_domain_machines.py — do not edit by hand. Reads the worst-state-wins roll-up that localAIStack writes at [7712:7716] as a one-hot [thriving, balanced, watch, attention] and asserts the matching state at [7716:7720]. All sequences are isInitial under PASSTHROUGH; the input is one-hot, so at most one fires per step, and an all-zero input (nothing graded) fires transportation-none, which retracts the output to all zero.",
+    "metadata": {
+      "category": "transportation",
+      "author": "localAIStack domain-machine generator",
+      "created": "2026-10-24T00:00:00Z",
+      "pattern": "domain-state-classifier",
+      "eventSpace": "4D roll-up one-hot at [7712:7716]: [thriving, balanced, watch, attention], written by localAIStack (sensor localai_transportation_rollup)",
+      "outputSpace": "4D classification at [7716:7720]: [thriving, balanced, watch, attention]",
+      "tags": [
+        "localai",
+        "domain-baseline",
+        "classifier",
+        "transportation"
+      ],
+      "sensorSources": {
+        "localai_transportation_rollup": {
+          "region": "[7712:7716]",
+          "description": "Worst-state-wins roll-up over the graded transportation measures, one-hot; all zero when nothing is graded. Declared inactive, active on its first value.",
+          "ttlMs": 86400000
+        }
+      },
+      "stateLogic": {
+        "thriving": "Every graded measure in the transportation domain is in its nominal range.",
+        "balanced": "Exactly one graded measure in the transportation domain is slightly outside its nominal range, none well outside.",
+        "watch": "Two or more graded measures in the transportation domain are slightly outside their nominal ranges, none well outside.",
+        "attention": "At least one graded measure in the transportation domain is well outside its nominal range.",
+        "none": "Nothing graded — the roll-up is all zero; transportation-none retracts the output to all zero",
+        "mutualExclusivity": "The roll-up is one-hot, so no two sequences fire in the same step"
+      },
+      "localAIPromptHints": {
+        "thriving": "Every transportation measure in scope is in its nominal range.",
+        "balanced": "One transportation measure in scope is slightly outside its nominal range. A gentle nudge is enough.",
+        "watch": "Several transportation measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to the basics.",
+        "attention": "At least one transportation measure in scope is well outside its nominal range. Recommend a check-in."
+      },
+      "sequenceCount": 5,
+      "machineClass": "signal-monitor",
+      "governance": {
+        "schemaVersion": "1.0.0",
+        "ownerTeam": "localaistack",
+        "runbook": "https://runbooks.example.org/localai/transportation-baseline",
+        "escalationPolicy": "slack:#localaistack",
+        "contact": {
+          "primary": "localaistack-primary@example.org",
+          "secondary": "localaistack-secondary@example.org"
+        },
+        "sla": {
+          "ok": null,
+          "info": null,
+          "warning": null,
+          "error": null
+        },
+        "notes": "localAIStack integration machine, registered into the RE at runtime by the reality bridge rather than loaded from the corpus."
+      },
+      "triggerConfig": {
+        "processId": "LOCALAITRANSPORTATIONBASELINE",
+        "processName": "LocalAI Transportation Baseline",
+        "rules": [
+          {
+            "sequenceId": "transportation-thriving",
+            "outputMatches": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Every graded measure in the transportation domain is in its nominal range."
+          },
+          {
+            "sequenceId": "transportation-balanced",
+            "outputMatches": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Exactly one graded measure in the transportation domain is slightly outside its nominal range, none well outside."
+          },
+          {
+            "sequenceId": "transportation-watch",
+            "outputMatches": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Two or more graded measures in the transportation domain are slightly outside their nominal ranges, none well outside."
+          },
+          {
+            "sequenceId": "transportation-attention",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "At least one graded measure in the transportation domain is well outside its nominal range."
+          },
+          {
+            "sequenceId": "transportation-none",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Nothing in the transportation domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites."
+          }
+        ]
+      }
+    },
+    "arbiterRule": "PASSTHROUGH",
+    "matchAlgorithm": "gte",
+    "perceptualMapping": {
+      "input": {
+        "offset": 7712,
+        "length": 4
+      },
+      "output": {
+        "offset": 7716,
+        "length": 4
+      },
+      "bitsPerElement": 8
+    },
+    "sequences": [
+      {
+        "id": "transportation-thriving",
+        "name": "Thriving: roll-up[0] HIGH",
+        "metadata": {
+          "description": "Every graded measure in the transportation domain is in its nominal range.",
+          "output": "[1,0,0,0] — thriving"
+        },
+        "events": [
+          {
+            "id": "transportation-thriving-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "transportation-thriving-out",
+                "vector": [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Every graded measure in the transportation domain is in its nominal range. — thriving",
+                  "state": "thriving",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "Every transportation measure in scope is in its nominal range."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "THRIVING_CHECK",
+              "description": "element[0]: roll-up thriving HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "transportation-balanced",
+        "name": "Balanced: roll-up[1] HIGH",
+        "metadata": {
+          "description": "Exactly one graded measure in the transportation domain is slightly outside its nominal range, none well outside.",
+          "output": "[0,1,0,0] — balanced"
+        },
+        "events": [
+          {
+            "id": "transportation-balanced-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "transportation-balanced-out",
+                "vector": [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Exactly one graded measure in the transportation domain is slightly outside its nominal range, none well outside. — balanced",
+                  "state": "balanced",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "One transportation measure in scope is slightly outside its nominal range. A gentle nudge is enough."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "BALANCED_CHECK",
+              "description": "element[1]: roll-up balanced HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "transportation-watch",
+        "name": "Watch: roll-up[2] HIGH",
+        "metadata": {
+          "description": "Two or more graded measures in the transportation domain are slightly outside their nominal ranges, none well outside.",
+          "output": "[0,0,1,0] — watch"
+        },
+        "events": [
+          {
+            "id": "transportation-watch-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "transportation-watch-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Two or more graded measures in the transportation domain are slightly outside their nominal ranges, none well outside. — watch",
+                  "state": "watch",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "Several transportation measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to the basics."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "WATCH_CHECK",
+              "description": "element[2]: roll-up watch HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "transportation-attention",
+        "name": "Attention: roll-up[3] HIGH",
+        "metadata": {
+          "description": "At least one graded measure in the transportation domain is well outside its nominal range.",
+          "output": "[0,0,0,1] — attention"
+        },
+        "events": [
+          {
+            "id": "transportation-attention-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "transportation-attention-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "metadata": {
+                  "description": "At least one graded measure in the transportation domain is well outside its nominal range. — attention",
+                  "state": "attention",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "At least one transportation measure in scope is well outside its nominal range. Recommend a check-in."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "ATTENTION_CHECK",
+              "description": "element[3]: roll-up attention HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "transportation-none",
+        "name": "None: roll-up all LOW",
+        "metadata": {
+          "description": "Nothing in the transportation domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites.",
+          "output": "[0,0,0,0] — none"
+        },
+        "events": [
+          {
+            "id": "transportation-none-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "transportation-none-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Nothing in the transportation domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites. — none",
+                  "state": "none",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "No current transportation data is in scope."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "NONE_CHECK",
+              "description": "every element LOW (<0.5, gte with value 0): the all-zero roll-up"
+            }
+          }
+        ]
+      }
+    ],
+    "inputSequences": [
+      {
+        "name": "Roll-up thriving",
+        "pattern": "roll-up one-hot [0] → thriving",
+        "description": "localAIStack wrote roll-up state thriving. Should assert thriving [1,0,0,0].",
+        "events": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[1,0,0,0]",
+          "activeSequence": "transportation-thriving"
+        }
+      },
+      {
+        "name": "Roll-up balanced",
+        "pattern": "roll-up one-hot [1] → balanced",
+        "description": "localAIStack wrote roll-up state balanced. Should assert balanced [0,1,0,0].",
+        "events": [
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,1,0,0]",
+          "activeSequence": "transportation-balanced"
+        }
+      },
+      {
+        "name": "Roll-up watch",
+        "pattern": "roll-up one-hot [2] → watch",
+        "description": "localAIStack wrote roll-up state watch. Should assert watch [0,0,1,0].",
+        "events": [
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,1,0]",
+          "activeSequence": "transportation-watch"
+        }
+      },
+      {
+        "name": "Roll-up attention",
+        "pattern": "roll-up one-hot [3] → attention",
+        "description": "localAIStack wrote roll-up state attention. Should assert attention [0,0,0,1].",
+        "events": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,0,1]",
+          "activeSequence": "transportation-attention"
+        }
+      },
+      {
+        "name": "Nothing graded — no state",
+        "pattern": "roll-up all zero → transportation-none retracts the output",
+        "description": "Nothing in the transportation domain is graded. The roll-up is all zero; transportation-none fires and writes [0,0,0,0], so no state is asserted rather than the last one held.",
+        "events": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,0,0]",
+          "activeSequence": "transportation-none"
+        }
+      }
+    ]
+  }
+}

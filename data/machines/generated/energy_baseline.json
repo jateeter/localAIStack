@@ -1,0 +1,511 @@
+{
+  "version": "1.0.0",
+  "machine": {
+    "name": "localai/energy_baseline",
+    "description": "Energy domain state classifier, generated from domains/domain-manifest.json by scripts/generate_domain_machines.py — do not edit by hand. Reads the worst-state-wins roll-up that localAIStack writes at [7680:7684] as a one-hot [thriving, balanced, watch, attention] and asserts the matching state at [7684:7688]. All sequences are isInitial under PASSTHROUGH; the input is one-hot, so at most one fires per step, and an all-zero input (nothing graded) fires energy-none, which retracts the output to all zero.",
+    "metadata": {
+      "category": "energy",
+      "author": "localAIStack domain-machine generator",
+      "created": "2026-10-24T00:00:00Z",
+      "pattern": "domain-state-classifier",
+      "eventSpace": "4D roll-up one-hot at [7680:7684]: [thriving, balanced, watch, attention], written by localAIStack (sensor localai_energy_rollup)",
+      "outputSpace": "4D classification at [7684:7688]: [thriving, balanced, watch, attention]",
+      "tags": [
+        "localai",
+        "domain-baseline",
+        "classifier",
+        "energy"
+      ],
+      "sensorSources": {
+        "localai_energy_rollup": {
+          "region": "[7680:7684]",
+          "description": "Worst-state-wins roll-up over the graded energy measures, one-hot; all zero when nothing is graded. Declared inactive, active on its first value.",
+          "ttlMs": 86400000
+        }
+      },
+      "stateLogic": {
+        "thriving": "Every graded measure in the energy domain is in its nominal range.",
+        "balanced": "Exactly one graded measure in the energy domain is slightly outside its nominal range, none well outside.",
+        "watch": "Two or more graded measures in the energy domain are slightly outside their nominal ranges, none well outside.",
+        "attention": "At least one graded measure in the energy domain is well outside its nominal range.",
+        "none": "Nothing graded — the roll-up is all zero; energy-none retracts the output to all zero",
+        "mutualExclusivity": "The roll-up is one-hot, so no two sequences fire in the same step"
+      },
+      "localAIPromptHints": {
+        "thriving": "Every energy measure in scope is in its nominal range.",
+        "balanced": "One energy measure in scope is slightly outside its nominal range. A gentle nudge is enough.",
+        "watch": "Several energy measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to the basics.",
+        "attention": "At least one energy measure in scope is well outside its nominal range. Recommend a check-in."
+      },
+      "sequenceCount": 5,
+      "machineClass": "signal-monitor",
+      "governance": {
+        "schemaVersion": "1.0.0",
+        "ownerTeam": "localaistack",
+        "runbook": "https://runbooks.example.org/localai/energy-baseline",
+        "escalationPolicy": "slack:#localaistack",
+        "contact": {
+          "primary": "localaistack-primary@example.org",
+          "secondary": "localaistack-secondary@example.org"
+        },
+        "sla": {
+          "ok": null,
+          "info": null,
+          "warning": null,
+          "error": null
+        },
+        "notes": "localAIStack integration machine, registered into the RE at runtime by the reality bridge rather than loaded from the corpus."
+      },
+      "triggerConfig": {
+        "processId": "LOCALAIENERGYBASELINE",
+        "processName": "LocalAI Energy Baseline",
+        "rules": [
+          {
+            "sequenceId": "energy-thriving",
+            "outputMatches": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Every graded measure in the energy domain is in its nominal range."
+          },
+          {
+            "sequenceId": "energy-balanced",
+            "outputMatches": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Exactly one graded measure in the energy domain is slightly outside its nominal range, none well outside."
+          },
+          {
+            "sequenceId": "energy-watch",
+            "outputMatches": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Two or more graded measures in the energy domain are slightly outside their nominal ranges, none well outside."
+          },
+          {
+            "sequenceId": "energy-attention",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "At least one graded measure in the energy domain is well outside its nominal range."
+          },
+          {
+            "sequenceId": "energy-none",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Nothing in the energy domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites."
+          }
+        ]
+      }
+    },
+    "arbiterRule": "PASSTHROUGH",
+    "matchAlgorithm": "gte",
+    "perceptualMapping": {
+      "input": {
+        "offset": 7680,
+        "length": 4
+      },
+      "output": {
+        "offset": 7684,
+        "length": 4
+      },
+      "bitsPerElement": 8
+    },
+    "sequences": [
+      {
+        "id": "energy-thriving",
+        "name": "Thriving: roll-up[0] HIGH",
+        "metadata": {
+          "description": "Every graded measure in the energy domain is in its nominal range.",
+          "output": "[1,0,0,0] — thriving"
+        },
+        "events": [
+          {
+            "id": "energy-thriving-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "energy-thriving-out",
+                "vector": [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Every graded measure in the energy domain is in its nominal range. — thriving",
+                  "state": "thriving",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "Every energy measure in scope is in its nominal range."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "THRIVING_CHECK",
+              "description": "element[0]: roll-up thriving HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "energy-balanced",
+        "name": "Balanced: roll-up[1] HIGH",
+        "metadata": {
+          "description": "Exactly one graded measure in the energy domain is slightly outside its nominal range, none well outside.",
+          "output": "[0,1,0,0] — balanced"
+        },
+        "events": [
+          {
+            "id": "energy-balanced-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "energy-balanced-out",
+                "vector": [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Exactly one graded measure in the energy domain is slightly outside its nominal range, none well outside. — balanced",
+                  "state": "balanced",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "One energy measure in scope is slightly outside its nominal range. A gentle nudge is enough."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "BALANCED_CHECK",
+              "description": "element[1]: roll-up balanced HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "energy-watch",
+        "name": "Watch: roll-up[2] HIGH",
+        "metadata": {
+          "description": "Two or more graded measures in the energy domain are slightly outside their nominal ranges, none well outside.",
+          "output": "[0,0,1,0] — watch"
+        },
+        "events": [
+          {
+            "id": "energy-watch-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "energy-watch-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Two or more graded measures in the energy domain are slightly outside their nominal ranges, none well outside. — watch",
+                  "state": "watch",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "Several energy measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to the basics."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "WATCH_CHECK",
+              "description": "element[2]: roll-up watch HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "energy-attention",
+        "name": "Attention: roll-up[3] HIGH",
+        "metadata": {
+          "description": "At least one graded measure in the energy domain is well outside its nominal range.",
+          "output": "[0,0,0,1] — attention"
+        },
+        "events": [
+          {
+            "id": "energy-attention-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "energy-attention-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "metadata": {
+                  "description": "At least one graded measure in the energy domain is well outside its nominal range. — attention",
+                  "state": "attention",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "At least one energy measure in scope is well outside its nominal range. Recommend a check-in."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "ATTENTION_CHECK",
+              "description": "element[3]: roll-up attention HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "energy-none",
+        "name": "None: roll-up all LOW",
+        "metadata": {
+          "description": "Nothing in the energy domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites.",
+          "output": "[0,0,0,0] — none"
+        },
+        "events": [
+          {
+            "id": "energy-none-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "energy-none-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Nothing in the energy domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites. — none",
+                  "state": "none",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "No current energy data is in scope."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "NONE_CHECK",
+              "description": "every element LOW (<0.5, gte with value 0): the all-zero roll-up"
+            }
+          }
+        ]
+      }
+    ],
+    "inputSequences": [
+      {
+        "name": "Roll-up thriving",
+        "pattern": "roll-up one-hot [0] → thriving",
+        "description": "localAIStack wrote roll-up state thriving. Should assert thriving [1,0,0,0].",
+        "events": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[1,0,0,0]",
+          "activeSequence": "energy-thriving"
+        }
+      },
+      {
+        "name": "Roll-up balanced",
+        "pattern": "roll-up one-hot [1] → balanced",
+        "description": "localAIStack wrote roll-up state balanced. Should assert balanced [0,1,0,0].",
+        "events": [
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,1,0,0]",
+          "activeSequence": "energy-balanced"
+        }
+      },
+      {
+        "name": "Roll-up watch",
+        "pattern": "roll-up one-hot [2] → watch",
+        "description": "localAIStack wrote roll-up state watch. Should assert watch [0,0,1,0].",
+        "events": [
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,1,0]",
+          "activeSequence": "energy-watch"
+        }
+      },
+      {
+        "name": "Roll-up attention",
+        "pattern": "roll-up one-hot [3] → attention",
+        "description": "localAIStack wrote roll-up state attention. Should assert attention [0,0,0,1].",
+        "events": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,0,1]",
+          "activeSequence": "energy-attention"
+        }
+      },
+      {
+        "name": "Nothing graded — no state",
+        "pattern": "roll-up all zero → energy-none retracts the output",
+        "description": "Nothing in the energy domain is graded. The roll-up is all zero; energy-none fires and writes [0,0,0,0], so no state is asserted rather than the last one held.",
+        "events": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,0,0]",
+          "activeSequence": "energy-none"
+        }
+      }
+    ]
+  }
+}

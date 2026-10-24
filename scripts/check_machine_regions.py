@@ -207,7 +207,9 @@ def collect_localai_regions() -> tuple[list[Span], list[Span]]:
     """The (inputs, outputs) declared by this repo's machine definitions."""
     inputs: list[Span] = []
     outputs: list[Span] = []
-    for path in sorted(MACHINE_DIR.glob("*.json")):
+    # Recursive: the generated domain machines live under data/machines/generated/
+    # (scripts/generate_domain_machines.py) and write real cells like any other.
+    for path in sorted(MACHINE_DIR.rglob("*.json")):
         machine = json.loads(path.read_text(encoding="utf-8"))["machine"]
         mapping = machine.get("perceptualMapping", {})
         for key, bucket in (("input", inputs), ("output", outputs)):

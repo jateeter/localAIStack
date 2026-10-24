@@ -132,7 +132,16 @@ jobs:
           MACHINES_DIR: ${{ github.workspace }}/.corpus
         run: ./scripts/check_machine_regions.py
 
-      # The two gates above cover the eight definitions on disk. The runtime
+      # Every accepted domain in the corpus manifest has a generated localAI
+      # machine (or a named hand-written one), and the checked-in files equal a
+      # regeneration (RealityEngine_Machines#219). A new corpus domain fails
+      # here until scripts/generate_domain_machines.py has been run for it.
+      - name: Domain machines cover every accepted domain and match a regeneration
+        env:
+          MACHINES_DIR: ${{ github.workspace }}/.corpus
+        run: ./scripts/generate_domain_machines.py --check
+
+      # The gates above cover the definitions on disk. The runtime
       # topology machines exist only as objects built from the live graphs, so
       # they need the API dependencies importable to be checked at all.
       - name: Install test dependencies

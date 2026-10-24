@@ -1,0 +1,511 @@
+{
+  "version": "1.0.0",
+  "machine": {
+    "name": "localai/digital_logic_baseline",
+    "description": "Digital logic domain state classifier, generated from domains/domain-manifest.json by scripts/generate_domain_machines.py — do not edit by hand. Reads the worst-state-wins roll-up that localAIStack writes at [7672:7676] as a one-hot [thriving, balanced, watch, attention] and asserts the matching state at [7676:7680]. All sequences are isInitial under PASSTHROUGH; the input is one-hot, so at most one fires per step, and an all-zero input (nothing graded) fires digital_logic-none, which retracts the output to all zero.",
+    "metadata": {
+      "category": "digital-logic",
+      "author": "localAIStack domain-machine generator",
+      "created": "2026-10-24T00:00:00Z",
+      "pattern": "domain-state-classifier",
+      "eventSpace": "4D roll-up one-hot at [7672:7676]: [thriving, balanced, watch, attention], written by localAIStack (sensor localai_digital_logic_rollup)",
+      "outputSpace": "4D classification at [7676:7680]: [thriving, balanced, watch, attention]",
+      "tags": [
+        "localai",
+        "domain-baseline",
+        "classifier",
+        "digital-logic"
+      ],
+      "sensorSources": {
+        "localai_digital_logic_rollup": {
+          "region": "[7672:7676]",
+          "description": "Worst-state-wins roll-up over the graded digital logic measures, one-hot; all zero when nothing is graded. Declared inactive, active on its first value.",
+          "ttlMs": 86400000
+        }
+      },
+      "stateLogic": {
+        "thriving": "Every graded measure in the digital logic domain is in its nominal range.",
+        "balanced": "Exactly one graded measure in the digital logic domain is slightly outside its nominal range, none well outside.",
+        "watch": "Two or more graded measures in the digital logic domain are slightly outside their nominal ranges, none well outside.",
+        "attention": "At least one graded measure in the digital logic domain is well outside its nominal range.",
+        "none": "Nothing graded — the roll-up is all zero; digital_logic-none retracts the output to all zero",
+        "mutualExclusivity": "The roll-up is one-hot, so no two sequences fire in the same step"
+      },
+      "localAIPromptHints": {
+        "thriving": "Every digital logic measure in scope is in its nominal range.",
+        "balanced": "One digital logic measure in scope is slightly outside its nominal range. A gentle nudge is enough.",
+        "watch": "Several digital logic measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to the basics.",
+        "attention": "At least one digital logic measure in scope is well outside its nominal range. Recommend a check-in."
+      },
+      "sequenceCount": 5,
+      "machineClass": "signal-monitor",
+      "governance": {
+        "schemaVersion": "1.0.0",
+        "ownerTeam": "localaistack",
+        "runbook": "https://runbooks.example.org/localai/digital-logic-baseline",
+        "escalationPolicy": "slack:#localaistack",
+        "contact": {
+          "primary": "localaistack-primary@example.org",
+          "secondary": "localaistack-secondary@example.org"
+        },
+        "sla": {
+          "ok": null,
+          "info": null,
+          "warning": null,
+          "error": null
+        },
+        "notes": "localAIStack integration machine, registered into the RE at runtime by the reality bridge rather than loaded from the corpus."
+      },
+      "triggerConfig": {
+        "processId": "LOCALAIDIGITALLOGICBASELINE",
+        "processName": "LocalAI Digital Logic Baseline",
+        "rules": [
+          {
+            "sequenceId": "digital_logic-thriving",
+            "outputMatches": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Every graded measure in the digital logic domain is in its nominal range."
+          },
+          {
+            "sequenceId": "digital_logic-balanced",
+            "outputMatches": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Exactly one graded measure in the digital logic domain is slightly outside its nominal range, none well outside."
+          },
+          {
+            "sequenceId": "digital_logic-watch",
+            "outputMatches": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Two or more graded measures in the digital logic domain are slightly outside their nominal ranges, none well outside."
+          },
+          {
+            "sequenceId": "digital_logic-attention",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "At least one graded measure in the digital logic domain is well outside its nominal range."
+          },
+          {
+            "sequenceId": "digital_logic-none",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Nothing in the digital logic domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites."
+          }
+        ]
+      }
+    },
+    "arbiterRule": "PASSTHROUGH",
+    "matchAlgorithm": "gte",
+    "perceptualMapping": {
+      "input": {
+        "offset": 7672,
+        "length": 4
+      },
+      "output": {
+        "offset": 7676,
+        "length": 4
+      },
+      "bitsPerElement": 8
+    },
+    "sequences": [
+      {
+        "id": "digital_logic-thriving",
+        "name": "Thriving: roll-up[0] HIGH",
+        "metadata": {
+          "description": "Every graded measure in the digital logic domain is in its nominal range.",
+          "output": "[1,0,0,0] — thriving"
+        },
+        "events": [
+          {
+            "id": "digital_logic-thriving-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "digital_logic-thriving-out",
+                "vector": [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Every graded measure in the digital logic domain is in its nominal range. — thriving",
+                  "state": "thriving",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "Every digital logic measure in scope is in its nominal range."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "THRIVING_CHECK",
+              "description": "element[0]: roll-up thriving HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "digital_logic-balanced",
+        "name": "Balanced: roll-up[1] HIGH",
+        "metadata": {
+          "description": "Exactly one graded measure in the digital logic domain is slightly outside its nominal range, none well outside.",
+          "output": "[0,1,0,0] — balanced"
+        },
+        "events": [
+          {
+            "id": "digital_logic-balanced-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "digital_logic-balanced-out",
+                "vector": [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Exactly one graded measure in the digital logic domain is slightly outside its nominal range, none well outside. — balanced",
+                  "state": "balanced",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "One digital logic measure in scope is slightly outside its nominal range. A gentle nudge is enough."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "BALANCED_CHECK",
+              "description": "element[1]: roll-up balanced HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "digital_logic-watch",
+        "name": "Watch: roll-up[2] HIGH",
+        "metadata": {
+          "description": "Two or more graded measures in the digital logic domain are slightly outside their nominal ranges, none well outside.",
+          "output": "[0,0,1,0] — watch"
+        },
+        "events": [
+          {
+            "id": "digital_logic-watch-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "digital_logic-watch-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Two or more graded measures in the digital logic domain are slightly outside their nominal ranges, none well outside. — watch",
+                  "state": "watch",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "Several digital logic measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to the basics."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "WATCH_CHECK",
+              "description": "element[2]: roll-up watch HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "digital_logic-attention",
+        "name": "Attention: roll-up[3] HIGH",
+        "metadata": {
+          "description": "At least one graded measure in the digital logic domain is well outside its nominal range.",
+          "output": "[0,0,0,1] — attention"
+        },
+        "events": [
+          {
+            "id": "digital_logic-attention-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "digital_logic-attention-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "metadata": {
+                  "description": "At least one graded measure in the digital logic domain is well outside its nominal range. — attention",
+                  "state": "attention",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "At least one digital logic measure in scope is well outside its nominal range. Recommend a check-in."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "ATTENTION_CHECK",
+              "description": "element[3]: roll-up attention HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "digital_logic-none",
+        "name": "None: roll-up all LOW",
+        "metadata": {
+          "description": "Nothing in the digital logic domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites.",
+          "output": "[0,0,0,0] — none"
+        },
+        "events": [
+          {
+            "id": "digital_logic-none-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "digital_logic-none-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Nothing in the digital logic domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites. — none",
+                  "state": "none",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "No current digital logic data is in scope."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "NONE_CHECK",
+              "description": "every element LOW (<0.5, gte with value 0): the all-zero roll-up"
+            }
+          }
+        ]
+      }
+    ],
+    "inputSequences": [
+      {
+        "name": "Roll-up thriving",
+        "pattern": "roll-up one-hot [0] → thriving",
+        "description": "localAIStack wrote roll-up state thriving. Should assert thriving [1,0,0,0].",
+        "events": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[1,0,0,0]",
+          "activeSequence": "digital_logic-thriving"
+        }
+      },
+      {
+        "name": "Roll-up balanced",
+        "pattern": "roll-up one-hot [1] → balanced",
+        "description": "localAIStack wrote roll-up state balanced. Should assert balanced [0,1,0,0].",
+        "events": [
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,1,0,0]",
+          "activeSequence": "digital_logic-balanced"
+        }
+      },
+      {
+        "name": "Roll-up watch",
+        "pattern": "roll-up one-hot [2] → watch",
+        "description": "localAIStack wrote roll-up state watch. Should assert watch [0,0,1,0].",
+        "events": [
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,1,0]",
+          "activeSequence": "digital_logic-watch"
+        }
+      },
+      {
+        "name": "Roll-up attention",
+        "pattern": "roll-up one-hot [3] → attention",
+        "description": "localAIStack wrote roll-up state attention. Should assert attention [0,0,0,1].",
+        "events": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,0,1]",
+          "activeSequence": "digital_logic-attention"
+        }
+      },
+      {
+        "name": "Nothing graded — no state",
+        "pattern": "roll-up all zero → digital_logic-none retracts the output",
+        "description": "Nothing in the digital logic domain is graded. The roll-up is all zero; digital_logic-none fires and writes [0,0,0,0], so no state is asserted rather than the last one held.",
+        "events": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,0,0]",
+          "activeSequence": "digital_logic-none"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,511 @@
+{
+  "version": "1.0.0",
+  "machine": {
+    "name": "localai/health_services_baseline",
+    "description": "Health services domain state classifier, generated from domains/domain-manifest.json by scripts/generate_domain_machines.py — do not edit by hand. Reads the worst-state-wins roll-up that localAIStack writes at [7688:7692] as a one-hot [thriving, balanced, watch, attention] and asserts the matching state at [7692:7696]. All sequences are isInitial under PASSTHROUGH; the input is one-hot, so at most one fires per step, and an all-zero input (nothing graded) fires health_services-none, which retracts the output to all zero.",
+    "metadata": {
+      "category": "health-services",
+      "author": "localAIStack domain-machine generator",
+      "created": "2026-10-24T00:00:00Z",
+      "pattern": "domain-state-classifier",
+      "eventSpace": "4D roll-up one-hot at [7688:7692]: [thriving, balanced, watch, attention], written by localAIStack (sensor localai_health_services_rollup)",
+      "outputSpace": "4D classification at [7692:7696]: [thriving, balanced, watch, attention]",
+      "tags": [
+        "localai",
+        "domain-baseline",
+        "classifier",
+        "health-services"
+      ],
+      "sensorSources": {
+        "localai_health_services_rollup": {
+          "region": "[7688:7692]",
+          "description": "Worst-state-wins roll-up over the graded health services measures, one-hot; all zero when nothing is graded. Declared inactive, active on its first value.",
+          "ttlMs": 86400000
+        }
+      },
+      "stateLogic": {
+        "thriving": "Every graded measure in the health services domain is in its nominal range.",
+        "balanced": "Exactly one graded measure in the health services domain is slightly outside its nominal range, none well outside.",
+        "watch": "Two or more graded measures in the health services domain are slightly outside their nominal ranges, none well outside.",
+        "attention": "At least one graded measure in the health services domain is well outside its nominal range.",
+        "none": "Nothing graded — the roll-up is all zero; health_services-none retracts the output to all zero",
+        "mutualExclusivity": "The roll-up is one-hot, so no two sequences fire in the same step"
+      },
+      "localAIPromptHints": {
+        "thriving": "Every health services measure in scope is in its nominal range.",
+        "balanced": "One health services measure in scope is slightly outside its nominal range. A gentle nudge is enough.",
+        "watch": "Several health services measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to the basics.",
+        "attention": "At least one health services measure in scope is well outside its nominal range. Recommend a check-in."
+      },
+      "sequenceCount": 5,
+      "machineClass": "signal-monitor",
+      "governance": {
+        "schemaVersion": "1.0.0",
+        "ownerTeam": "localaistack",
+        "runbook": "https://runbooks.example.org/localai/health-services-baseline",
+        "escalationPolicy": "slack:#localaistack",
+        "contact": {
+          "primary": "localaistack-primary@example.org",
+          "secondary": "localaistack-secondary@example.org"
+        },
+        "sla": {
+          "ok": null,
+          "info": null,
+          "warning": null,
+          "error": null
+        },
+        "notes": "localAIStack integration machine, registered into the RE at runtime by the reality bridge rather than loaded from the corpus."
+      },
+      "triggerConfig": {
+        "processId": "LOCALAIHEALTHSERVICESBASELINE",
+        "processName": "LocalAI Health Services Baseline",
+        "rules": [
+          {
+            "sequenceId": "health_services-thriving",
+            "outputMatches": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Every graded measure in the health services domain is in its nominal range."
+          },
+          {
+            "sequenceId": "health_services-balanced",
+            "outputMatches": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Exactly one graded measure in the health services domain is slightly outside its nominal range, none well outside."
+          },
+          {
+            "sequenceId": "health_services-watch",
+            "outputMatches": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Two or more graded measures in the health services domain are slightly outside their nominal ranges, none well outside."
+          },
+          {
+            "sequenceId": "health_services-attention",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "At least one graded measure in the health services domain is well outside its nominal range."
+          },
+          {
+            "sequenceId": "health_services-none",
+            "outputMatches": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "ragStatusCode": "GREEN",
+            "processStatus": "info",
+            "description": "Nothing in the health services domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites."
+          }
+        ]
+      }
+    },
+    "arbiterRule": "PASSTHROUGH",
+    "matchAlgorithm": "gte",
+    "perceptualMapping": {
+      "input": {
+        "offset": 7688,
+        "length": 4
+      },
+      "output": {
+        "offset": 7692,
+        "length": 4
+      },
+      "bitsPerElement": 8
+    },
+    "sequences": [
+      {
+        "id": "health_services-thriving",
+        "name": "Thriving: roll-up[0] HIGH",
+        "metadata": {
+          "description": "Every graded measure in the health services domain is in its nominal range.",
+          "output": "[1,0,0,0] — thriving"
+        },
+        "events": [
+          {
+            "id": "health_services-thriving-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "health_services-thriving-out",
+                "vector": [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Every graded measure in the health services domain is in its nominal range. — thriving",
+                  "state": "thriving",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "Every health services measure in scope is in its nominal range."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "THRIVING_CHECK",
+              "description": "element[0]: roll-up thriving HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "health_services-balanced",
+        "name": "Balanced: roll-up[1] HIGH",
+        "metadata": {
+          "description": "Exactly one graded measure in the health services domain is slightly outside its nominal range, none well outside.",
+          "output": "[0,1,0,0] — balanced"
+        },
+        "events": [
+          {
+            "id": "health_services-balanced-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "health_services-balanced-out",
+                "vector": [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Exactly one graded measure in the health services domain is slightly outside its nominal range, none well outside. — balanced",
+                  "state": "balanced",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "One health services measure in scope is slightly outside its nominal range. A gentle nudge is enough."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "BALANCED_CHECK",
+              "description": "element[1]: roll-up balanced HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "health_services-watch",
+        "name": "Watch: roll-up[2] HIGH",
+        "metadata": {
+          "description": "Two or more graded measures in the health services domain are slightly outside their nominal ranges, none well outside.",
+          "output": "[0,0,1,0] — watch"
+        },
+        "events": [
+          {
+            "id": "health_services-watch-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "health_services-watch-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Two or more graded measures in the health services domain are slightly outside their nominal ranges, none well outside. — watch",
+                  "state": "watch",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "Several health services measures in scope are slightly outside their nominal ranges. Suggest an easier day and attention to the basics."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "WATCH_CHECK",
+              "description": "element[2]: roll-up watch HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "health_services-attention",
+        "name": "Attention: roll-up[3] HIGH",
+        "metadata": {
+          "description": "At least one graded measure in the health services domain is well outside its nominal range.",
+          "output": "[0,0,0,1] — attention"
+        },
+        "events": [
+          {
+            "id": "health_services-attention-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 0.5,
+                "threshold": 0.5,
+                "comparatorType": "threshold"
+              },
+              {
+                "value": 1.0,
+                "threshold": 0.5
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "health_services-attention-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "metadata": {
+                  "description": "At least one graded measure in the health services domain is well outside its nominal range. — attention",
+                  "state": "attention",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "At least one health services measure in scope is well outside its nominal range. Recommend a check-in."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "ATTENTION_CHECK",
+              "description": "element[3]: roll-up attention HIGH (>=0.5); other elements: wildcard (the input is one-hot)"
+            }
+          }
+        ]
+      },
+      {
+        "id": "health_services-none",
+        "name": "None: roll-up all LOW",
+        "metadata": {
+          "description": "Nothing in the health services domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites.",
+          "output": "[0,0,0,0] — none"
+        },
+        "events": [
+          {
+            "id": "health_services-none-check",
+            "isInitial": true,
+            "nextEventIds": [],
+            "elements": [
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              },
+              {
+                "value": 0.0,
+                "threshold": 0.5
+              }
+            ],
+            "outputEvents": [
+              {
+                "id": "health_services-none-out",
+                "vector": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "metadata": {
+                  "description": "Nothing in the health services domain is graded. The roll-up is all zero, so the output is retracted to all zero: no state, rather than the last state held by a region nothing rewrites. — none",
+                  "state": "none",
+                  "ragStatusCode": "GREEN",
+                  "promptHint": "No current health services data is in scope."
+                }
+              }
+            ],
+            "metadata": {
+              "name": "NONE_CHECK",
+              "description": "every element LOW (<0.5, gte with value 0): the all-zero roll-up"
+            }
+          }
+        ]
+      }
+    ],
+    "inputSequences": [
+      {
+        "name": "Roll-up thriving",
+        "pattern": "roll-up one-hot [0] → thriving",
+        "description": "localAIStack wrote roll-up state thriving. Should assert thriving [1,0,0,0].",
+        "events": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[1,0,0,0]",
+          "activeSequence": "health_services-thriving"
+        }
+      },
+      {
+        "name": "Roll-up balanced",
+        "pattern": "roll-up one-hot [1] → balanced",
+        "description": "localAIStack wrote roll-up state balanced. Should assert balanced [0,1,0,0].",
+        "events": [
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,1,0,0]",
+          "activeSequence": "health_services-balanced"
+        }
+      },
+      {
+        "name": "Roll-up watch",
+        "pattern": "roll-up one-hot [2] → watch",
+        "description": "localAIStack wrote roll-up state watch. Should assert watch [0,0,1,0].",
+        "events": [
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,1,0]",
+          "activeSequence": "health_services-watch"
+        }
+      },
+      {
+        "name": "Roll-up attention",
+        "pattern": "roll-up one-hot [3] → attention",
+        "description": "localAIStack wrote roll-up state attention. Should assert attention [0,0,0,1].",
+        "events": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,0,1]",
+          "activeSequence": "health_services-attention"
+        }
+      },
+      {
+        "name": "Nothing graded — no state",
+        "pattern": "roll-up all zero → health_services-none retracts the output",
+        "description": "Nothing in the health services domain is graded. The roll-up is all zero; health_services-none fires and writes [0,0,0,0], so no state is asserted rather than the last one held.",
+        "events": [
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "expectedOutput": "[0,0,0,0]",
+          "activeSequence": "health_services-none"
+        }
+      }
+    ]
+  }
+}
