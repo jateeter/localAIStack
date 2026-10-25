@@ -152,3 +152,10 @@ jobs:
         env:
           MACHINES_DIR: ${{ github.workspace }}/.corpus
         run: pytest tests/test_machine_schema.py -v -rs
+
+      # The minimal unit job has no langgraph and skips this module; here the
+      # API's dependencies are installed, so it runs. It holds the agent
+      # graph's tools node to invoking its ToolNode (a Runnable, not callable).
+      - name: Agent graph tools node
+        working-directory: services/api
+        run: pytest tests/test_agent_graph_tools_node.py -v -rs

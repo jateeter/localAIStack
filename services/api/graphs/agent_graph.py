@@ -18,6 +18,7 @@ from collections.abc import Sequence
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 from langgraph.graph import END, StateGraph
@@ -141,11 +142,16 @@ def _count_activity_metrics(
     return tool_calls, tool_errors, reasoning_steps
 
 
-def _tools_node(state: AgentState) -> dict:
+def _tools_node(state: AgentState, config: RunnableConfig) -> dict:
     from core.reality_bridge import push_agent_activity_signal, push_node_signal
 
     push_node_signal("agent", "tools", 1.0, trigger_push=True)
-    result = _tool_node_instance(state)
+    # A ToolNode is a Runnable, not a callable: under langgraph-prebuilt 1.x
+    # calling it raised "'ToolNode' object is not callable", so every
+    # /graph/agent turn that reached a tool failed with a 500 before
+    # agent_activity was written. The node's config is passed on so the tools
+    # run inside this graph's run (callbacks, run id), not as a detached one.
+    result = _tool_node_instance.invoke(state, config)
     push_node_signal("agent", "tools", 0.0, trigger_push=False)
 
     # Emit the agent-activity signal so agent_activity_classifier can fire on
