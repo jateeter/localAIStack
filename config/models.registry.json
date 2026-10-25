@@ -59,8 +59,8 @@
   },
   "roles": {
     "llm": {
-      "default": "nemotron-3-nano-4b",
-      "_comment": "Matches .env.example LLM_MODEL, setup.sh, docker-compose.yml and config.py's fallback: nemotron-3-nano:4b, the RealityEngine universe model. It calls tools, but Ollama refuses format=json for it, so the PEs omit format for it (RealityEngine_CI docs/OLLAMA_INTEGRATION.md). Switch with `make model-use ID=<id>`. tinyllama-mlx, the development default it replaced, is still registered."
+      "default": "nemotron-3-nano-4b-mlx",
+      "_comment": "Matches .env.example LLM_MODEL, setup.sh, docker-compose.yml and config.py's fallback: nemotron-3-nano:4b-mlx, the RealityEngine universe model and the MLX build of Nemotron 3 Nano 4B (owner rule, RealityEngine_CI#593: a role's default runs on MLX; the GGUF nemotron-3-nano:4b runs on llama.cpp). It calls tools; the PEs omit format for the nemotron-3-nano family (RealityEngine_CI docs/OLLAMA_INTEGRATION.md). Switch with `make model-use ID=<id>`. tinyllama-mlx, the development default it replaced, is still registered."
     },
     "embedding": {
       "default": "embeddinggemma-2-270m",
@@ -183,9 +183,29 @@
       "notes": "Tight instruction-following at small size. No native tool-calling — avoid for /graph/agent."
     },
     {
+      "id": "nemotron-3-nano-4b-mlx",
+      "tag": "nemotron-3-nano:4b-mlx",
+      "runner": "mlx",
+      "name": "NVIDIA Nemotron 3 Nano 4B (MLX)",
+      "publisher": "NVIDIA",
+      "family": "nemotron",
+      "role": "llm",
+      "source": { "kind": "ollama-library", "ref": "library/nemotron-3-nano" },
+      "parameters": "4B",
+      "quantization": "nvfp4",
+      "size_gb": 2.9,
+      "context_length": 262144,
+      "capabilities": ["completion", "tools", "thinking"],
+      "min_ram_gb": 8,
+      "install": "selected",
+      "status": "supported",
+      "license": "NVIDIA Open Model License Agreement",
+      "notes": "Default for the RealityEngine universe: the MLX build (safetensors, nvfp4) of Nemotron 3 Nano 4B, served by Ollama's MLX runner (Ollama 0.40.5+). Measured 2026-10-25 on an M1 Pro, Ollama 0.40.11: 36.4 tokens/s against 25.3 for the GGUF nemotron-3-nano:4b, 3.8 GB of GPU memory against 2.8 GB. 256K context, tools and thinking. The PEs omit format for the nemotron-3-nano family, which Ollama refused before 0.40.11; thinking is on by default."
+    },
+    {
       "id": "nemotron-3-nano-4b",
       "tag": "nemotron-3-nano:4b",
-      "runner": "mlx",
+      "runner": "llamacpp",
       "name": "NVIDIA Nemotron 3 Nano 4B",
       "publisher": "NVIDIA",
       "family": "nemotron",
@@ -197,10 +217,10 @@
       "context_length": 262144,
       "capabilities": ["completion", "tools", "thinking"],
       "min_ram_gb": 8,
-      "install": "selected",
+      "install": "on-demand",
       "status": "supported",
       "license": "NVIDIA Open Model License Agreement",
-      "notes": "Default for the RealityEngine universe. The agentic generator for tool use and reasoning, with a unified reasoning/non-reasoning mode. 256K context at 2.8 GB makes it the best tool-calling fit on a 16 GB host for /graph/agent — it carries far more retrieved context than llama3.1-8b at half the footprint. Languages: en, de, es, fr, it, ja. Ollama refuses format (json and schema) for it with 'structured output is unavailable'; the PEs omit format for this model family, and thinking is on by default."
+      "notes": "The GGUF (Q4_K_M) build of the universe model; it runs on llama.cpp, not MLX, so it is not the default (nemotron-3-nano-4b-mlx is). The agentic generator for tool use and reasoning, with a unified reasoning/non-reasoning mode. 256K context at 2.8 GB makes it the best tool-calling fit on a 16 GB host for /graph/agent — it carries far more retrieved context than llama3.1-8b at half the footprint. Languages: en, de, es, fr, it, ja. Ollama refuses format (json and schema) for it with 'structured output is unavailable'; the PEs omit format for this model family, and thinking is on by default."
     },
     {
       "id": "nemotron-3-nano-30b",

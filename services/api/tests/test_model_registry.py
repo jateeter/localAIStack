@@ -132,9 +132,9 @@ def test_shipped_registry_role_defaults_exist():
 
 def test_nemotron_is_registered():
     reg = mr.load_registry(force_refresh=True)
-    entry = reg.by_id("nemotron-3-nano-4b")
+    entry = reg.by_id("nemotron-3-nano-4b-mlx")
     assert entry is not None, "NVIDIA Nemotron is missing from the registry"
-    assert entry.tag == "nemotron-3-nano:4b"
+    assert entry.tag == "nemotron-3-nano:4b-mlx"
     # The default LLM: setup pulls it.
     assert entry.install == "selected"
     assert entry.publisher == "NVIDIA"
@@ -146,13 +146,23 @@ def test_nemotron_is_registered():
 
 def test_nemotron_is_the_default_llm():
     reg = mr.load_registry(force_refresh=True)
-    entry = reg.by_id("nemotron-3-nano-4b")
-    assert entry is not None, "nemotron-3-nano-4b is missing from the model registry"
-    assert reg.default_for("llm") == "nemotron-3-nano-4b"
-    assert entry.tag == "nemotron-3-nano:4b"
+    entry = reg.by_id("nemotron-3-nano-4b-mlx")
+    assert entry is not None, "nemotron-3-nano-4b-mlx is missing from the model registry"
+    assert reg.default_for("llm") == "nemotron-3-nano-4b-mlx"
+    assert entry.tag == "nemotron-3-nano:4b-mlx"
     assert entry.role == "llm"
     assert entry.source.kind == "ollama-library"
     assert "tools" in entry.capabilities
+
+
+def test_gguf_nemotron_stays_registered_but_is_not_the_default():
+    # The plain :4b tag is the GGUF build and runs on llama.cpp, so it cannot be
+    # a role default (RealityEngine_CI#593); the MLX build is.
+    reg = mr.load_registry(force_refresh=True)
+    entry = reg.by_id("nemotron-3-nano-4b")
+    assert entry is not None
+    assert entry.tag == "nemotron-3-nano:4b"
+    assert reg.default_for("llm") != "nemotron-3-nano-4b"
 
 
 def test_tinyllama_mlx_stays_registered_but_is_not_the_default():
