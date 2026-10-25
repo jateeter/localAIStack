@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     redis_url: str = "redis://localhost:4379"
 
-    llm_model: str = "nemotron-3-nano:4b"
+    llm_model: str = "nemotron-3-nano:4b-mlx"
     # The default embedder runs on MLX (registry role default; owner rule
     # RealityEngine_CI#593). Switch with `make model-use ID=<id>`, then re-embed.
     embed_model: str = "embeddinggemma-2:270m"
