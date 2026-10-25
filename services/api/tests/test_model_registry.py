@@ -324,3 +324,47 @@ def test_resolve_reports_runtime_pin_state(fixture_registry, monkeypatch):
     assert out["runtime"]["pinned_version"] == "0.32.9"
     assert out["runtime"]["running_version"] == "0.32.9"
     assert out["runtime"]["behind_pin"] is False
+
+
+# ── Declared vs loaded runner ─────────────────────────────────────────────────
+# /api/tags declares what Ollama set for the pulled artifact; /api/ps says what
+# runs a model that is in memory. The same tag has been MLX on one host and GGUF
+# on llama.cpp on another, so a loaded model's runner wins and the source is named.
+
+
+def test_a_loaded_runner_beats_the_declared_one():
+    runner, source = mr._runner_with_source(
+        "nemotron-3-nano:4b", {"nemotron-3-nano:4b": "mlx"}, {"nemotron-3-nano:4b": "llamacpp"}
+    )
+    assert (runner, source) == ("llamacpp", "loaded")
+
+
+def test_a_model_that_is_not_loaded_is_declared_not_confirmed():
+    runner, source = mr._runner_with_source("nemotron-3-nano:4b", {"nemotron-3-nano:4b": "mlx"}, {})
+    assert (runner, source) == ("mlx", "declared")
+
+
+def test_an_unknown_model_has_no_runner():
+    assert mr._runner_with_source("nosuch:1b", {}, {}) == (None, None)
+
+
+def test_bare_tags_match_latest_for_loaded_models():
+    runner, source = mr._runner_with_source("embedder", {}, {"embedder:latest": "mlx"})
+    assert (runner, source) == ("mlx", "loaded")
+
+
+def test_resolve_reports_the_runner_source(fixture_registry, monkeypatch):
+    _patch_env(monkeypatch, installed=["small:3b", "embedder:latest"], ram=16.0)
+
+    async def _declared(base_url=None):
+        return {"small:3b": "mlx"}
+
+    async def _loaded(base_url=None):
+        return {"small:3b": "llamacpp"}
+
+    monkeypatch.setattr(mr, "installed_runners", _declared)
+    monkeypatch.setattr(mr, "loaded_runners", _loaded)
+    out = asyncio.run(mr.resolve_models())
+    small = next(m for m in out["models"] if m["id"] == "small")
+    assert small["live_runner"] == "llamacpp"
+    assert small["live_runner_source"] == "loaded"
