@@ -222,11 +222,13 @@ async def installed_tags(base_url: str | None = None) -> tuple[list[str], str]:
 
 
 async def installed_runners(base_url: str | None = None) -> dict[str, str]:
-    """``{tag: runner}`` for every pulled model, from Ollama's own report.
+    """``{tag: runner}`` for every pulled model, as Ollama *declares* it.
 
-    This is the live fact the declared ``runner`` is checked against: the registry
-    says what a model should run on, /api/tags says what it does on this host.
-    Empty when Ollama is unreachable (``installed_tags`` carries the status).
+    /api/tags says what Ollama set for the artifact that was pulled. It is not what
+    runs the model: the same tag has resolved to a safetensors build on MLX on one
+    host and a GGUF on llama.cpp on another. ``loaded_runners`` is the fact for a
+    model that is in memory. Empty when Ollama is unreachable (``installed_tags``
+    carries the status).
     """
     s = get_settings()
     url = base_url or s.ollama_base_url
@@ -241,6 +243,34 @@ async def installed_runners(base_url: str | None = None) -> dict[str, str]:
             }
     except Exception:
         return {}
+
+
+async def loaded_runners(base_url: str | None = None) -> dict[str, str]:
+    """``{tag: runner}`` for the models Ollama has loaded, from /api/ps.
+
+    This is what actually runs them, so it wins over the declared runner. A model
+    that is not loaded is absent; that is not a finding.
+    """
+    s = get_settings()
+    url = base_url or s.ollama_base_url
+    try:
+        async with httpx.AsyncClient(timeout=_TAGS_TIMEOUT_S) as c:
+            r = await c.get(f"{url}/api/ps")
+            r.raise_for_status()
+            return {m["name"]: m["runner"] for m in r.json().get("models", []) if m.get("runner")}
+    except Exception:
+        return {}
+
+
+def _runner_with_source(
+    entry_tag: str, declared: dict[str, str], loaded: dict[str, str]
+) -> tuple[str | None, str | None]:
+    """The runner for a tag and where it came from: ``loaded`` beats ``declared``."""
+    live = _live_runner(entry_tag, loaded)
+    if live is not None:
+        return live, "loaded"
+    live = _live_runner(entry_tag, declared)
+    return live, ("declared" if live is not None else None)
 
 
 def _live_runner(entry_tag: str, runners: dict[str, str]) -> str | None:
@@ -291,14 +321,19 @@ def host_ram_gb() -> float | None:
         return None
 
 
-def _default_runner_report(registry: ModelRegistry, role: str, runners: dict[str, str]) -> dict:
+def _default_runner_report(
+    registry: ModelRegistry, role: str, runners: dict[str, str], loaded: dict[str, str]
+) -> dict:
     entry = registry.by_id(registry.default_for(role) or "")
-    live = _live_runner(entry.tag, runners) if entry else None
+    live, source = _runner_with_source(entry.tag, runners, loaded) if entry else (None, None)
     declared = entry.runner if entry else None
     return {
         "id": entry.id if entry else None,
         "declared": declared,
         "live": live,
+        # "loaded" is what runs the model; "declared" is what Ollama set for the pulled
+        # artifact, which a model that is not loaded cannot confirm.
+        "live_source": source,
         "ok": declared == REQUIRED_DEFAULT_RUNNER and live in (None, REQUIRED_DEFAULT_RUNNER),
     }
 
@@ -307,8 +342,8 @@ async def resolve_models(role: str | None = None) -> dict:
     """Join registry metadata with .env selection and live Ollama state."""
     registry = load_registry()
     s = get_settings()
-    (installed, ollama_status), running_version, runners = await asyncio.gather(
-        installed_tags(), installed_version(), installed_runners()
+    (installed, ollama_status), running_version, runners, loaded = await asyncio.gather(
+        installed_tags(), installed_version(), installed_runners(), loaded_runners()
     )
     ram = host_ram_gb()
 
@@ -318,11 +353,12 @@ async def resolve_models(role: str | None = None) -> dict:
     resolved = []
     for m in entries:
         selected_for = [r for r, tag in selected.items() if registry.by_tag(tag) is m]
-        live = _live_runner(m.tag, runners)
+        live, live_source = _runner_with_source(m.tag, runners, loaded)
         resolved.append(
             {
                 **m.model_dump(),
                 "live_runner": live,
+                "live_runner_source": live_source,
                 # None when either side is unknown; False is the finding.
                 "runner_matches_declared": None
                 if live is None or m.runner is None
@@ -362,7 +398,7 @@ async def resolve_models(role: str | None = None) -> dict:
         "defaults": {r: registry.default_for(r) for r in ("llm", "embedding")},
         # Owner rule: each role's default must run on MLX. Declared and live.
         "default_runners": {
-            r: _default_runner_report(registry, r, runners) for r in ("llm", "embedding")
+            r: _default_runner_report(registry, r, runners, loaded) for r in ("llm", "embedding")
         },
         "default_runner_problems": default_runner_problems(registry) or None,
         "count": len(resolved),

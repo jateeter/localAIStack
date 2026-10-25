@@ -134,7 +134,10 @@ resolves to it, which is why the registry pins explicit `:4b-mlx` / `:4b` / `:30
 
 Owner rule (RealityEngine_CI#593): each role's **default** model must run on
 MLX; any other model may run on MLX or ggml. Each registry entry declares the
-`runner` it was observed on, `GET /models` reports Ollama's live runner beside it,
+`runner` it was observed on, `GET /models` reports Ollama's live runner beside it
+(`live_runner_source` says whether that is `loaded`, from `/api/ps`, which is what
+runs the model, or only `declared`, from `/api/tags`, which is what Ollama set for
+the pulled artifact: the same tag has been MLX on one Mac and llama.cpp on another),
 and a test fails if a role's default does not declare `mlx`. Today: the LLM
 default `nemotron-3-nano:4b-mlx` and the embedding default `embeddinggemma-2:270m`
 run on MLX; `nemotron-3-nano:4b` runs on llama.cpp, and `llama3.1:8b` and
