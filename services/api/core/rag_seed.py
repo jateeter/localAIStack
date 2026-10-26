@@ -14,8 +14,12 @@ them in both collections. It reconciles rather than appends:
 - a chunk already present is left alone, so a restart adds nothing;
 - a seeded chunk no longer produced by the files (a document edited or removed)
   is deleted;
-- nothing else is touched: documents ingested through ``/rag/ingest/*`` carry no
-  seed tag and a source outside the seed set.
+- nothing else is touched. A point is the seed's only if it carries the seed tag, or
+  is an untagged copy with the exact fingerprint the loader gives the default
+  documents (a source ``health/<file>.md`` and the category ``<file>`` with spaces):
+  what the ingest script wrote before the tag existed. A document ingested through
+  ``/rag/ingest/*`` that happens to share a file name is never deleted, even when it
+  matches the seed's sources; it is counted as ``foreign`` and left alone.
 
 The chunking is ``core.health_docs.load_health_documents``, the one
 ``scripts/ingest_health_docs.py`` and ``reembed_cli`` use, so the three cannot
@@ -26,6 +30,7 @@ cut the same files differently. ``RAG_SEED_ON_STARTUP=false`` turns it off;
 from __future__ import annotations
 
 import hashlib
+import pathlib
 import uuid
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -49,6 +54,20 @@ def point_id(key: str) -> str:
     return str(uuid.uuid5(_NAMESPACE, key))
 
 
+def seed_owned(meta: dict, seed_sources: Iterable[str]) -> bool:
+    """Is this point the seed's to delete or replace?
+
+    Provable ownership only: the seed tag, or the loader's exact fingerprint on a
+    source the seed produces (an untagged copy written before the tag existed).
+    """
+    if meta.get("seed") == SEED_TAG:
+        return True
+    src = meta.get("source")
+    if not src or src not in set(seed_sources):
+        return False
+    return meta.get("category") == pathlib.PurePosixPath(str(src)).stem.replace("_", " ")
+
+
 @dataclass
 class SeedResult:
     collection: str
@@ -56,6 +75,7 @@ class SeedResult:
     added: int = 0
     removed: int = 0
     kept: int = 0
+    foreign: int = 0  # same source as the seed, not provably ours: left alone
     sources: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -65,6 +85,7 @@ class SeedResult:
             "added": self.added,
             "removed": self.removed,
             "kept": self.kept,
+            "foreign": self.foreign,
             "sources": self.sources,
         }
 
@@ -82,9 +103,10 @@ def _seed_filter(sources: Iterable[str]):
     )
 
 
-def _existing(client, collection: str, sources: Iterable[str]) -> dict[str, list]:
-    """chunk key -> the ids of every point holding that chunk."""
-    found: dict[str, list] = {}
+def _existing(client, collection: str, sources: Iterable[str]) -> dict[str, list[tuple[Any, bool]]]:
+    """chunk key -> (point id, is it the seed's) for every point holding that chunk."""
+    sources = list(sources)
+    found: dict[str, list[tuple[Any, bool]]] = {}
     offset = None
     while True:
         points, offset = client.scroll(
@@ -99,7 +121,7 @@ def _existing(client, collection: str, sources: Iterable[str]) -> dict[str, list
             payload = p.payload or {}
             meta = payload.get("metadata") or {}
             key = chunk_key(str(meta.get("source", "")), str(payload.get("page_content", "")))
-            found.setdefault(key, []).append(p.id)
+            found.setdefault(key, []).append((p.id, seed_owned(meta, sources)))
         if offset is None:
             return found
 
@@ -119,10 +141,13 @@ def reconcile(client, collection: str, chunks: list, embedder: Embedder) -> Seed
     res = SeedResult(collection, expected=len(wanted), sources=sources)
     have = _existing(client, collection, sources)
 
-    # Stale chunks, and every copy beyond the first of a wanted one.
+    # Stale chunks, and every copy beyond the first of a wanted one, but only the
+    # seed's own: a point that merely shares a source stays (counted as foreign).
     doomed: list = []
-    for key, ids in have.items():
-        doomed.extend(ids if key not in wanted else ids[1:])
+    for key, pts in have.items():
+        extra = pts if key not in wanted else pts[1:]
+        doomed.extend(pid for pid, owned in extra if owned)
+        res.foreign += sum(1 for _, owned in extra if not owned)
     if doomed:
         client.delete(collection, points_selector=PointIdsList(points=doomed))
     res.removed = len(doomed)

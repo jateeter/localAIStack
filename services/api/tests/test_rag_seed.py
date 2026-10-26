@@ -54,7 +54,14 @@ def _client():
 
 
 def _chunks(*pairs):
-    return [Doc(text, {"source": f"health/{name}", "category": name}) for name, text in pairs]
+    # The loader's fingerprint: source health/<file>.md and category <file stem, spaces>.
+    return [
+        Doc(
+            text,
+            {"source": f"health/{name}", "category": name.removesuffix(".md").replace("_", " ")},
+        )
+        for name, text in pairs
+    ]
 
 
 def _all(client):
@@ -120,6 +127,49 @@ def test_documents_ingested_by_hand_are_never_touched():
     assert ("notes.md", "my own notes") in _all(client)
 
 
+def _point(i, source, text, **meta):
+    return PointStruct(
+        id=i,
+        vector=FakeEmbedder._vec(text),
+        payload={"page_content": text, "metadata": {"source": source, **meta}},
+    )
+
+
+def test_a_hand_ingested_document_sharing_a_seed_file_name_is_never_deleted():
+    # Same source name as a seeded file, different text, no seed tag and not the
+    # loader's category: someone ingested their own "health/hrv.md".
+    client, emb = _client(), FakeEmbedder()
+    client.upsert(COLL, [_point(900, "health/hrv.md", "My own HRV notes.")])
+    res = rag_seed.reconcile(client, COLL, _chunks(*SEED), emb)
+    assert ("health/hrv.md", "My own HRV notes.") in _all(client)
+    assert res.foreign == 1 and res.removed == 0
+    # and a later change to the seed still leaves it alone
+    res = rag_seed.reconcile(client, COLL, _chunks(SEED[0]), emb)
+    assert ("health/hrv.md", "My own HRV notes.") in _all(client)
+
+
+def test_an_untagged_copy_with_the_loaders_fingerprint_is_the_seeds_to_replace():
+    # What scripts/ingest_health_docs.py wrote before the seed tag existed.
+    client, emb = _client(), FakeEmbedder()
+    client.upsert(COLL, [_point(1, "health/hrv.md", "Old loader text for HRV.", category="hrv")])
+    res = rag_seed.reconcile(client, COLL, _chunks(*SEED), emb)
+    assert ("health/hrv.md", "Old loader text for HRV.") not in _all(client)
+    assert res.removed == 1 and res.foreign == 0
+
+
+def test_seed_ownership_is_the_tag_or_the_exact_fingerprint():
+    src = ["health/hrv_interpretation.md"]
+    assert rag_seed.seed_owned({"seed": rag_seed.SEED_TAG}, src)
+    assert rag_seed.seed_owned(
+        {"source": "health/hrv_interpretation.md", "category": "hrv interpretation"}, src
+    )
+    assert not rag_seed.seed_owned({"source": "health/hrv_interpretation.md"}, src)
+    assert not rag_seed.seed_owned(
+        {"source": "health/hrv_interpretation.md", "category": "mine"}, src
+    )
+    assert not rag_seed.seed_owned({"source": "notes.md", "category": "notes"}, src)
+
+
 def test_a_reembed_copy_counts_and_duplicates_collapse():
     # reembed._upsert rebuilds health_docs with integer ids and no seed tag.
     client, emb = _client(), FakeEmbedder()
@@ -127,7 +177,13 @@ def test_a_reembed_copy_counts_and_duplicates_collapse():
         PointStruct(
             id=i,
             vector=FakeEmbedder._vec(text),
-            payload={"page_content": text, "metadata": {"source": f"health/{name}"}},
+            payload={
+                "page_content": text,
+                "metadata": {
+                    "source": f"health/{name}",
+                    "category": name.removesuffix(".md").replace("_", " "),
+                },
+            },
         )
         for i, (name, text) in enumerate([SEED[0], SEED[0], SEED[1]], start=1)
     ]

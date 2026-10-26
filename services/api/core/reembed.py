@@ -33,6 +33,7 @@ from typing import Any, Protocol
 from qdrant_client import QdrantClient
 
 from core import collections as qc
+from core.rag_seed import chunk_key, seed_owned
 
 MIN_RECALL = 0.8  # absolute floor on the new collection's recall@k
 TOLERANCE = 0.1  # how far below the old collection's recall the new one may fall
@@ -121,6 +122,63 @@ def recall_at_k(
     return hits / len(queries)
 
 
+@dataclass
+class Chunk:
+    """A point's text and metadata, read back from the collection it lives in."""
+
+    page_content: str
+    metadata: dict
+
+
+def payload_chunks(client: QdrantClient, collection: str) -> tuple[list[Chunk], int]:
+    """Every point of ``collection`` as a chunk, and how many had no text.
+
+    langchain-qdrant stores a chunk's text in the point payload, so a collection can
+    be rebuilt under another embedder from itself. This is how a collection with no
+    source documents (hand-ingested content) survives an embedder change.
+    """
+    chunks: list[Chunk] = []
+    skipped = 0
+    offset = None
+    while True:
+        points, offset = client.scroll(
+            collection, with_payload=True, with_vectors=False, limit=256, offset=offset
+        )
+        for p in points:
+            payload = p.payload or {}
+            text = payload.get("page_content")
+            if isinstance(text, str) and text.strip():
+                chunks.append(Chunk(text, dict(payload.get("metadata") or {})))
+            else:
+                skipped += 1
+        if offset is None:
+            return chunks, skipped
+
+
+def rebuild_set(
+    client: QdrantClient, logical: str, sources: list[Any] | None
+) -> tuple[list[Any], int, int]:
+    """What to put in the new collection: (chunks, carried over, points with no text).
+
+    Without source documents, the collection's own payloads. With them, the sources
+    (they are authoritative for what they cover and pick up edited files) plus every
+    point the seed does not own and the sources do not already contain, so a
+    hand-ingested document survives the rebuild instead of vanishing.
+    """
+    existing, skipped = payload_chunks(client, logical)
+    if sources is None:
+        return existing, len(existing), skipped
+    names = {str((c.metadata or {}).get("source", "")) for c in sources}
+    have = {chunk_key(str((c.metadata or {}).get("source", "")), c.page_content) for c in sources}
+    carried = [
+        c
+        for c in existing
+        if not seed_owned(c.metadata, names)
+        and chunk_key(str(c.metadata.get("source", "")), c.page_content) not in have
+    ]
+    return [*sources, *carried], len(carried), skipped
+
+
 def _upsert(client: QdrantClient, collection: str, embedder: Embedder, chunks: list[Any]) -> int:
     from qdrant_client.models import PointStruct
 
@@ -165,13 +223,16 @@ def run(
         res.action, res.points = "up-to-date", cur.points
         return res
 
-    if chunks is None:
-        if cur.points and not allow_data_loss:
+    if cur.points:
+        chunks, carried, skipped = rebuild_set(client, logical, chunks)
+        if skipped and not allow_data_loss:
             res.detail = (
-                f"'{logical}' holds {cur.points} points and has no source documents to rebuild from. "
-                "Re-run with --allow-data-loss to replace it with an empty collection."
+                f"'{logical}' has {skipped} of {cur.points} points with no stored text, which "
+                "cannot be re-embedded. Re-run with --allow-data-loss to leave them out."
             )
             return res
+        res.notes.append(f"{carried} chunk(s) re-embedded from the collection's own payloads")
+    elif chunks is None:
         chunks = []
 
     if client.collection_exists(target):  # an earlier build that never switched

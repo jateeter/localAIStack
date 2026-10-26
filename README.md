@@ -184,10 +184,18 @@ collection says which model filled it, and changing the model is a migration:
   (recall@k of each document's title) against the old collection, switches the
   alias in one atomic call, and keeps the old collection. `rollback` is a second
   switch; `drop-old` deletes the rest; `status` shows every collection.
-  `health_docs` is rebuilt from `data/health/documents/`. A populated collection
-  with no source documents is refused unless you pass `--allow-data-loss`; for
-  `localai_docs` that drops hand-ingested documents, and the default corpus
-  returns at the next API start.
+  `health_docs` is rebuilt from `data/health/documents/` plus every point in it
+  the default corpus does not own, so a document ingested by hand survives.
+  `localai_docs` has no source directory and is rebuilt from its own points (the
+  text is in each payload), so nothing in it is lost either. Only points with no
+  stored text cannot be re-embedded; they are refused unless you pass
+  `--allow-data-loss` to leave them out.
+- **The startup seed deletes only what is provably its own.** A point is the
+  seed's if it carries the `seed` tag (every chunk of the default corpus does,
+  whichever path wrote it) or is an untagged copy with the loader's exact
+  fingerprint (source `health/<file>.md`, category `<file>` with spaces). A
+  document someone ingested under a seed file name is left alone and counted as
+  `foreign` in the `rag_default_corpus` log line.
 - **A pre-existing (legacy) collection** cannot hold an alias of its own name, so
   it is snapshotted, deleted, and replaced; `rollback` restores it from the
   snapshot into `<name>__legacy`. Use `--old-model <tag>` to compare retrieval

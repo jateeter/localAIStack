@@ -19,7 +19,7 @@ settings already point at Qdrant (`realityengine reembed` does that).
 Options:
   --qdrant-host/--qdrant-port   default: the settings (QDRANT_HOST / QDRANT_PORT)
   --embed-model TAG             default: .env / config.py (the registry default)
-  --allow-data-loss             replace a populated collection that has no source documents
+  --allow-data-loss             leave out points that store no text (they cannot be re-embedded)
   --old-model TAG               the model that filled a legacy collection, to compare retrieval with
   --docs-dir DIR                health documents (default: LOCALAI_HEALTH_DOCS_DIR, else data/health/documents)
 

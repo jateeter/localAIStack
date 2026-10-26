@@ -61,13 +61,26 @@ def _client() -> QdrantClient:
     return QdrantClient(":memory:")
 
 
-def _legacy(client: QdrantClient, name: str, points: int, dim: int = DIM) -> None:
+def _legacy(
+    client: QdrantClient, name: str, points: int, dim: int = DIM, *, text: bool = True
+) -> None:
+    """A bare collection from before aliases. Its points carry langchain-qdrant's payload
+    (the text and its metadata) unless ``text=False``: points with nothing to re-embed."""
     client.create_collection(name, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
     if points:
         client.upsert(
             name,
             [
-                PointStruct(id=i, vector=[1.0] + [0.0] * (dim - 1), payload={})
+                PointStruct(
+                    id=i,
+                    vector=[1.0] + [0.0] * (dim - 1),
+                    payload={
+                        "page_content": f"# Legacy chunk {i}\n\nText {i}.",
+                        "metadata": {"source": f"legacy/{i}.md"},
+                    }
+                    if text
+                    else {},
+                )
                 for i in range(1, points + 1)
             ],
         )
@@ -230,11 +243,11 @@ def test_a_migration_that_retrieves_worse_is_not_switched():
     assert not res.ok
 
 
-def test_a_populated_collection_with_no_source_documents_is_refused():
+def test_points_with_no_stored_text_cannot_be_reembedded_and_are_refused():
     c = _client()
-    _legacy(c, "docs", points=5)
+    _legacy(c, "docs", points=5, text=False)  # nothing to re-embed from
     res = rb.run(c, "docs", "model-b", FakeEmbedder("B"), chunks=None)
-    assert res.action == "refused" and "no source documents" in res.detail
+    assert res.action == "refused" and "no stored text" in res.detail
     assert qc.resolve(c, "docs").kind == "legacy" and qc.resolve(c, "docs").points == 5
 
     class Snap:
@@ -243,6 +256,65 @@ def test_a_populated_collection_with_no_source_documents_is_refused():
     c.create_snapshot = lambda collection_name: Snap()  # the in-memory client cannot snapshot
     res = rb.run(c, "docs", "model-b", FakeEmbedder("B"), chunks=None, allow_data_loss=True)
     assert res.action == "migrated"  # the caller said so
+
+
+def _hand_ingested(c, collection, source, text, embedder, point_id=900):
+    c.upsert(
+        collection,
+        [
+            PointStruct(
+                id=point_id,
+                vector=embedder.embed_query(text),
+                payload={"page_content": text, "metadata": {"source": source}},
+            )
+        ],
+    )
+
+
+def _texts(c, collection):
+    pts, _ = c.scroll(collection, limit=1000, with_payload=True)
+    return sorted((p.payload["metadata"].get("source"), p.payload["page_content"]) for p in pts)
+
+
+def test_a_collection_with_no_source_documents_is_rebuilt_from_its_own_payloads():
+    # localai_docs has no source directory; what the seed or a person put in it
+    # must come through an embedder change.
+    c = _client()
+    a, b = FakeEmbedder("A"), FakeEmbedder("B")
+    rb.run(c, "docs", "model-a", a, chunks=_docs())
+    _hand_ingested(c, "docs", "notes.md", "My own notes about sleep.", a)
+    before = _texts(c, "docs")
+
+    res = rb.run(c, "docs", "model-b", b, chunks=None, old_embedder=a)
+    assert res.action == "migrated" and res.points == len(before)
+    assert qc.resolve(c, "docs").physical == "docs__model-b"
+    assert _texts(c, "docs") == before, "every chunk, hand-ingested included, was carried over"
+
+
+def test_a_rebuild_from_sources_keeps_what_was_ingested_by_hand():
+    c = _client()
+    a, b = FakeEmbedder("A"), FakeEmbedder("B")
+    docs = _docs()
+    rb.run(c, "health", "model-a", a, chunks=docs)
+    _hand_ingested(c, "health", "notes.md", "My own notes about sleep.", a)
+
+    res = rb.run(c, "health", "model-b", b, chunks=docs, old_embedder=a)
+    assert res.action == "migrated" and res.points == len(docs) + 1
+    assert ("notes.md", "My own notes about sleep.") in _texts(c, "health")
+
+
+def test_a_rebuild_from_sources_replaces_the_seeds_own_stale_chunks():
+    c = _client()
+    a, b = FakeEmbedder("A"), FakeEmbedder("B")
+    docs = _docs()
+    old = Document(
+        page_content="# Stale\n\nAn edited-away chunk.",
+        metadata={"source": "health/sleep.md", "seed": "data/health/documents"},
+    )
+    rb.run(c, "health", "model-a", a, chunks=[*docs, old])
+    res = rb.run(c, "health", "model-b", b, chunks=docs, old_embedder=a)
+    assert res.action == "migrated" and res.points == len(docs)
+    assert ("health/sleep.md", old.page_content) not in _texts(c, "health")
 
 
 def test_a_legacy_collection_is_snapshotted_before_it_is_replaced(monkeypatch):
