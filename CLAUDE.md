@@ -34,8 +34,11 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
 - `data/<domain>/`: everything domain-specific, one directory per domain.
   JSON (tables, config) at its top level and RAG knowledge documents in
   `data/<domain>/documents/`, all git tracked. Today: `data/health/`
-  (`health_bands.json`; `documents/` is the curated health corpus loaded by
-  `scripts/ingest_health_docs.py`). New domains follow the same shape, e.g.
+  (`health_bands.json`; `documents/` is the curated health corpus and the
+  **default RAG corpus**: `core/rag_seed.py` reconciles it into `localai_docs`
+  and `health_docs` at every API start, keyed by source and text hash, so a
+  restart adds nothing and hand-ingested documents are never touched;
+  `RAG_SEED_ON_STARTUP=false` turns it off). New domains follow the same shape, e.g.
   `data/communityServices/*.json` and `data/communityServices/documents/*`.
 - `data/machines/`: localAI's machine definitions (contracted here, not in the corpus).
   `data/machines/generated/` holds one `localai/<domain>_baseline` per accepted domain,

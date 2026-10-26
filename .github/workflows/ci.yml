@@ -153,9 +153,10 @@ jobs:
           MACHINES_DIR: ${{ github.workspace }}/.corpus
         run: pytest tests/test_machine_schema.py -v -rs
 
-      # The minimal unit job has no langgraph and skips this module; here the
-      # API's dependencies are installed, so it runs. It holds the agent
-      # graph's tools node to invoking its ToolNode (a Runnable, not callable).
-      - name: Agent graph tools node
+      # The minimal unit job has no langgraph or Qdrant client and skips these
+      # modules; here the API's dependencies are installed, so they run. They
+      # hold the agent graph's tools node to invoking its ToolNode (a Runnable,
+      # not callable) and the default RAG corpus to a reconcile, not an append.
+      - name: Agent graph tools node, default RAG corpus
         working-directory: services/api
-        run: pytest tests/test_agent_graph_tools_node.py -v -rs
+        run: pytest tests/test_agent_graph_tools_node.py tests/test_rag_seed.py -v -rs

@@ -56,6 +56,16 @@ async def lifespan(app: FastAPI):
             log.error("collection_embedder_mismatch", error=str(e))
     except Exception as e:
         log.warning("Vector store not ready at startup", error=str(e))
+    # The default RAG corpus (data/health/documents) into both collections the
+    # graphs read; a reconcile, so a restart re-adds nothing (core/rag_seed.py).
+    if s.rag_seed_on_startup:
+        try:
+            from core.rag_seed import seed_default_corpus
+
+            for r in await asyncio.to_thread(seed_default_corpus):
+                log.info("rag_default_corpus", **r.as_dict())
+        except Exception as e:
+            log.warning("rag_default_corpus_not_seeded", error=str(e))
     # Register Reality Engine sensor sources (graceful — PE may not be running)
     try:
         from core.reality_bridge import (

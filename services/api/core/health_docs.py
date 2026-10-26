@@ -2,18 +2,35 @@
 
 One definition shared by ``scripts/ingest_health_docs.py`` (first ingestion) and
 ``reembed_cli`` (rebuilding the collection under a new embedding model), so the
-two cannot chunk the same files differently. The documents are git-tracked under
+two cannot chunk the same files differently, and by ``core.rag_seed``, which
+makes them the default RAG corpus at startup. The documents are git-tracked under
 ``data/health/documents/`` and baked into the API image at ``/app/data/health``.
+
+They are read as text. ``UnstructuredMarkdownLoader`` parsed them through an
+NLP pipeline whose spaCy model is not in the image: the first load downloaded
+and pip-installed ``en_core_web_sm`` into the running container (and hung where
+it could not), then took ~18 s for nine files. A startup seed cannot depend on
+that, and plain Markdown needs no parser: the leading front matter is dropped,
+the ``#`` headings stay (``reembed.derive_queries`` queries by them), and the
+same splitter cuts the text.
 """
 
 from __future__ import annotations
 
 import os
 import pathlib
+import re
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+
+_FRONT_MATTER = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.S)
+
+
+def read_markdown(md_path: pathlib.Path) -> str:
+    """A document's text: UTF-8, without its leading YAML front matter."""
+    return _FRONT_MATTER.sub("", md_path.read_text(encoding="utf-8"), count=1).strip()
 
 
 def default_docs_dir() -> pathlib.Path:
@@ -31,7 +48,7 @@ def default_docs_dir() -> pathlib.Path:
 
 
 def load_health_documents(docs_dir: pathlib.Path, *, verbose: bool = True) -> list:
-    from langchain_community.document_loaders import UnstructuredMarkdownLoader
+    from langchain_core.documents import Document
 
     docs: list = []
     md_files = sorted(docs_dir.glob("*.md"))
@@ -44,10 +61,15 @@ def load_health_documents(docs_dir: pathlib.Path, *, verbose: bool = True) -> li
         if verbose:
             print(f"  Loading: {md_path.name}")
         try:
-            loaded = UnstructuredMarkdownLoader(str(md_path)).load()
-            for d in loaded:
-                d.metadata["source"] = f"health/{md_path.name}"
-                d.metadata["category"] = md_path.stem.replace("_", " ")
+            loaded = [
+                Document(
+                    page_content=read_markdown(md_path),
+                    metadata={
+                        "source": f"health/{md_path.name}",
+                        "category": md_path.stem.replace("_", " "),
+                    },
+                )
+            ]
             chunks = SPLITTER.split_documents(loaded)
             docs.extend(chunks)
             if verbose:
