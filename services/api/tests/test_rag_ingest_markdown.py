@@ -16,6 +16,7 @@ pytest.importorskip("langchain_text_splitters")
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from core.document_loaders import MarkdownLoader  # noqa: E402
 from routers import rag  # noqa: E402
 
 DOC = """---
@@ -72,5 +73,5 @@ def test_markdown_upload_runs_no_nlp_pipeline(monkeypatch):
     r = client.post("/rag/ingest/file", files={"file": ("a.md", b"# A\n\nbody\n", "text/markdown")})
     assert r.status_code == 200, r.text
     loaded = {m.split(".")[0] for m in set(sys.modules) - before}
-    assert not loaded & {"unstructured", "spacy", "nltk"}, loaded
-    assert rag.LOADERS[".md"] is rag.MarkdownLoader
+    assert not loaded & {"unstructured", "spacy", "nltk", "langchain_community"}, loaded
+    assert rag.LOADERS[".md"] is MarkdownLoader

@@ -157,7 +157,7 @@ jobs:
       # modules; here the API's dependencies are installed, so they run. They
       # hold the agent graph's tools node to invoking its ToolNode (a Runnable,
       # not callable), the default RAG corpus to a reconcile, not an append, and
-      # a Markdown upload to the text reader the corpus uses.
-      - name: Agent graph tools node, default RAG corpus, Markdown upload
+      # uploads to core/document_loaders (no langchain-community).
+      - name: Agent graph tools node, default RAG corpus, upload loaders
         working-directory: services/api
-        run: pytest tests/test_agent_graph_tools_node.py tests/test_rag_seed.py tests/test_rag_ingest_markdown.py -v -rs
+        run: pytest tests/test_agent_graph_tools_node.py tests/test_rag_seed.py tests/test_rag_ingest_markdown.py tests/test_document_loaders.py -v -rs
