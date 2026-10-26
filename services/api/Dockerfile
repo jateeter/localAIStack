@@ -8,22 +8,38 @@
 #
 # The development compose still mounts the source over /app and adds --reload.
 
-# Keep the runtime on Python 3.11 until the document-loader dependency set
-# supports Python 3.14. In particular, unstructured==0.25.2 declares <3.14.
-FROM python:3.11-slim
+# The latest Python. It sat on 3.11 while unstructured (<3.14) was the Markdown
+# loader; Markdown is now read as text (core/health_docs.py) and nothing else
+# needed it.
+#
+# Wheels are built in a stage of their own. Two dependencies publish no cp315
+# wheel yet (PyYAML 6.0.3, and zstandard 0.25.0 via langchain-core -> langsmith)
+# and need a C compiler to build from source; the compiler stays in this stage,
+# out of the runtime image. Where a cp315 wheel exists it is downloaded, not
+# built, so this stage shrinks to a download as upstream catches up.
+FROM python:3.15-slim AS wheels
 
-WORKDIR /app
-
-# System deps for unstructured + document parsing
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    libmagic1 \
-    poppler-utils \
-    tesseract-ocr \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY services/api/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
+
+FROM python:3.15-slim
+
+WORKDIR /app
+
+# curl for the compose healthcheck. The loaders left (pypdf, docx2txt, text)
+# are pure Python; libmagic1, poppler-utils and tesseract-ocr were unstructured's.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY services/api/requirements.txt .
+# --no-index: the runtime installs exactly what the wheels stage resolved.
+RUN --mount=type=bind,from=wheels,source=/wheels,target=/wheels \
+    pip install --no-cache-dir --no-index --find-links /wheels -r requirements.txt
 
 COPY services/api/ .
 COPY data/machines/ /app/data/machines/

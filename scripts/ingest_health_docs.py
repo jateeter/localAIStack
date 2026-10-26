@@ -48,7 +48,10 @@ try:
     from langchain_qdrant import QdrantVectorStore
     from qdrant_client import QdrantClient
 
-    from core.health_docs import SPLITTER, load_health_documents  # noqa: F401  (shared with reembed_cli)
+    from core.health_docs import (  # noqa: F401  (shared with reembed_cli)
+        SPLITTER,
+        load_health_documents,
+    )
 except ImportError as exc:
     print(f"[error] Missing dependency: {exc}")
     print("  Run: cd services/api && pip install -r requirements.txt")
