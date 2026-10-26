@@ -133,7 +133,9 @@ def test_a_reembed_copy_counts_and_duplicates_collapse():
     ]
     client.upsert(COLL, copy)
     res = rag_seed.reconcile(client, COLL, _chunks(*SEED), emb)
-    assert (res.added, res.kept, res.removed) == (0, 2, 1), "the duplicate goes, nothing is re-added"
+    assert (res.added, res.kept, res.removed) == (0, 2, 1), (
+        "the duplicate goes, nothing is re-added"
+    )
     assert sorted(_all(client)) == sorted(
         [("health/sleep_quality.md", SEED[0][1]), ("health/hrv.md", SEED[1][1])]
     )
@@ -149,5 +151,9 @@ def test_the_real_health_documents_load_as_the_seed():
     assert sources == {f"health/{p.name}" for p in docs_dir.glob("*.md")}
     client, emb = _client(), FakeEmbedder()
     res = rag_seed.reconcile(client, COLL, chunks, emb)
-    assert res.added == res.expected == len({rag_seed.chunk_key(c.metadata["source"], c.page_content) for c in chunks})
+    assert (
+        res.added
+        == res.expected
+        == len({rag_seed.chunk_key(c.metadata["source"], c.page_content) for c in chunks})
+    )
     assert rag_seed.reconcile(client, COLL, chunks, emb).added == 0

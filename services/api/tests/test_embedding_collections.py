@@ -345,4 +345,6 @@ def test_the_shared_loader_chunks_the_tracked_health_corpus():
     assert not any(q.startswith(("category:", "source:", "---")) for q, _ in queries)
     # The front matter is metadata, not text. A `---` inside the body is a
     # section rule and stays.
-    assert not any("source: health/" in c.page_content for c in chunks), "front matter is not indexed"
+    assert not any("source: health/" in c.page_content for c in chunks), (
+        "front matter is not indexed"
+    )
