@@ -23,6 +23,8 @@ import re
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from core.rag_seed import SEED_TAG
+
 SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
 
 _FRONT_MATTER = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.S)
@@ -50,6 +52,10 @@ def default_docs_dir() -> pathlib.Path:
 def load_health_documents(docs_dir: pathlib.Path, *, verbose: bool = True) -> list:
     from langchain_core.documents import Document
 
+    # Chunks of the default corpus carry the seed tag, whichever path writes them
+    # (the startup seed, the ingest script, a re-embed), so the seed can tell its own
+    # points from a document someone ingested by hand. Another directory is not ours.
+    ours = docs_dir.resolve() == default_docs_dir().resolve()
     docs: list = []
     md_files = sorted(docs_dir.glob("*.md"))
     if not md_files:
@@ -71,6 +77,9 @@ def load_health_documents(docs_dir: pathlib.Path, *, verbose: bool = True) -> li
                 )
             ]
             chunks = SPLITTER.split_documents(loaded)
+            if ours:
+                for c in chunks:
+                    c.metadata["seed"] = SEED_TAG
             docs.extend(chunks)
             if verbose:
                 print(f"    → {len(loaded)} document(s), {len(chunks)} chunk(s)")
