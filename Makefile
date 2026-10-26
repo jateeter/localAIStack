@@ -1,4 +1,4 @@
-.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-use model-info reembed reembed-status provider-conformance clean
+.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-use model-info reembed reembed-status provider-conformance qdrant-rebuild clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -89,6 +89,15 @@ agent:
 		-d '{"messages": [{"role": "user", "content": "$(Q)"}]}' | python3 -m json.tool
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
+# Empty Qdrant and let the API's startup seed refill the default corpus
+# (core/rag_seed.py). For a volume an older Qdrant wrote that the pinned one
+# cannot open. Documents ingested by hand through /rag/ingest are lost.
+qdrant-rebuild:
+	@docker compose stop api qdrant
+	@rm -rf volumes/qdrant/*
+	@docker compose up -d --wait qdrant api
+	@echo "Qdrant rebuilt; the default corpus was seeded at API start."
+
 clean:
 	@docker compose down -v
 	@rm -rf volumes/qdrant/* volumes/redis/* volumes/open-webui/*

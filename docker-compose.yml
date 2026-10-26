@@ -90,7 +90,12 @@ services:
   #                     read or write Qdrant; nothing creates this collection now.
   # Engines connect via host.docker.internal:4333 from their Docker network.
   qdrant:
-    image: qdrant/qdrant:v1.14.1
+    # The server tracks qdrant-client (services/api/requirements.txt): the client
+    # refuses to vouch for a server more than one minor away and warned on every
+    # connection while this was v1.14.1 against client 1.19.1. A volume written
+    # by 1.14 cannot be opened by 1.19 (it panics loading the shard); rebuild it
+    # with `make qdrant-rebuild`, and the startup seed refills the corpus.
+    image: qdrant/qdrant:v1.19.2
     container_name: localai_qdrant
     restart: unless-stopped
     ports:

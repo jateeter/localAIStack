@@ -27,7 +27,7 @@ deterministic builds:
 
 | Service | Image | Pinned version |
 |---|---|---|
-| Qdrant | `qdrant/qdrant` | `v1.14.1` |
+| Qdrant | `qdrant/qdrant` | `v1.19.2` |
 | Loki | `grafana/loki` | `3.4.2` |
 | Grafana | `grafana/grafana` | `11.6.1` |
 | Prometheus | `prom/prometheus` | `v2.53.4` (LTS) |
@@ -170,8 +170,8 @@ collection says which model filled it, and changing the model is a migration:
 - **Names.** The application uses a logical name, `localai_docs` or
   `health_docs`, which is a Qdrant alias onto `<name>__<model>`
   (`localai_docs__embeddinggemma-2-270m`). The model is readable from the name and
-  the vector size from the collection's own config. (Qdrant 1.14 has no collection
-  metadata.)
+  the vector size from the collection's own config. (This was designed on Qdrant 1.14,
+  which has no collection metadata.)
 - **Loud, not silent.** At startup the API probes the model's real output
   dimension (`ollama show embeddinggemma-2:270m` says 512; the model returns 768)
   and logs `embedding_dimension_mismatch` if it differs from `EMBED_DIM`. A

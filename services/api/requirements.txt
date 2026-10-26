@@ -7,6 +7,10 @@ pydantic-settings==2.16.0
 
 # LangChain + LangGraph
 langgraph==1.2.15
+# ToolNode lives here, not in langgraph; it moved to a Runnable in 1.1, which
+# graphs/agent_graph.py's tools node depends on (localAIStack#145). langgraph
+# 1.2.15 accepts >=1.1.0,<1.2.0, so it floated until pinned.
+langgraph-prebuilt==1.1.1
 langchain==1.4.6
 langchain-core==1.6.11
 langchain-ollama==1.1.0
