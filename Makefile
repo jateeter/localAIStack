@@ -1,4 +1,4 @@
-.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-use model-info reembed reembed-status provider-conformance clean
+.PHONY: setup start stop up down logs health query ingest models models-installed ollama-check model-pull model-use model-info reembed reembed-status provider-conformance qdrant-rebuild clean
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 setup:
@@ -89,7 +89,17 @@ agent:
 		-d '{"messages": [{"role": "user", "content": "$(Q)"}]}' | python3 -m json.tool
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
+# Empty Qdrant and let the API's startup seed refill the default corpus
+# (core/rag_seed.py). Documents ingested by hand through /rag/ingest are lost.
+QDRANT_VOLUME ?= $(or $(LOCALAI_QDRANT_VOLUME),localaistack-qdrant)
+qdrant-rebuild:
+	@docker compose stop api qdrant
+	@docker compose rm -f qdrant
+	@docker volume rm $(QDRANT_VOLUME)
+	@docker compose up -d --wait qdrant api
+	@echo "Qdrant rebuilt; the default corpus was seeded at API start."
+
 clean:
 	@docker compose down -v
-	@rm -rf volumes/qdrant/* volumes/redis/* volumes/open-webui/*
+	@rm -rf volumes/redis/* volumes/open-webui/*
 	@echo "Volumes cleared. Run 'make setup' to reinitialize."

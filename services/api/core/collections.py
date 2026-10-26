@@ -5,7 +5,7 @@ scores are meaningless, and a query embedded by one model against a collection
 embedded by another returns plausible-looking wrong answers with no error. So a
 collection must say what filled it, and a model change must be loud.
 
-Qdrant 1.14 (the version this stack pins) has no collection metadata, so the
+Qdrant 1.14 (the version this was designed on) has no collection metadata, so the
 model is recorded in the **physical name** and the application talks to a
 **logical name** that is an alias:
 
