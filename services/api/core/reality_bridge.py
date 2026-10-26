@@ -508,7 +508,7 @@ def verify_machine_offsets() -> list[str]:
 
 
 def _register_sensor_list(
-    client: "httpx.Client", sensors: list, existing: dict, pe_url: str | None = None
+    client: httpx.Client, sensors: list, existing: dict, pe_url: str | None = None
 ) -> None:
     """Register a list of sensor defs; idempotent (skips existing sensorIds).
 
@@ -595,7 +595,7 @@ def register_sensors() -> bool:
     return overall
 
 
-def _remove_legacy_health_sensors(client: "httpx.Client", existing: dict, pe_url: str) -> None:
+def _remove_legacy_health_sensors(client: httpx.Client, existing: dict, pe_url: str) -> None:
     """Delete the pre-roll-up health sensors from a PE: absent, not zero."""
     for sid in _LEGACY_HEALTH_SENSOR_IDS:
         source = existing.get(sid)

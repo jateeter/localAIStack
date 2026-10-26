@@ -53,7 +53,7 @@ def state_path() -> pathlib.Path:
 def _history() -> list[dict]:
     try:
         return json.loads(state_path().read_text())["history"]
-    except (OSError, ValueError, KeyError):
+    except OSError, ValueError, KeyError:
         return []
 
 

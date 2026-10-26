@@ -82,7 +82,7 @@ def _overlaps(a: dict, b: dict) -> bool:
     try:
         a0, a1 = int(a["offset"]), int(a["offset"]) + int(a.get("length", 1))
         b0, b1 = int(b["offset"]), int(b["offset"]) + int(b.get("length", 1))
-    except (KeyError, TypeError, ValueError):
+    except KeyError, TypeError, ValueError:
         return False
     return a0 < b1 and b0 < a1
 

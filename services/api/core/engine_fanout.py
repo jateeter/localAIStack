@@ -48,7 +48,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 import structlog
 
@@ -57,7 +57,6 @@ from core.registry_resolver import resolve_all_bridge_targets
 
 log = structlog.get_logger()
 
-T = TypeVar("T")
 
 # Enumerating engines probes each one's health. An interaction makes several
 # fan-out calls in a row, so the enumeration is cached briefly; the instance
@@ -120,7 +119,7 @@ def interaction_targets() -> list[dict]:
     return _all_healthy_targets()
 
 
-def fan_out(fn: Callable[[dict], T]) -> list[tuple[str | None, T]]:
+def fan_out[T](fn: Callable[[dict], T]) -> list[tuple[str | None, T]]:
     """Run ``fn(target)`` against every addressed engine, in registry order."""
     return [(t.get("instance"), fn(t)) for t in interaction_targets()]
 
@@ -174,7 +173,7 @@ def _record_difference(label: str, value: float) -> None:
     entry["max"] = max(entry["max"], value)
 
 
-def agree(label: str, results: list[tuple[str | None, T]], default: T) -> T:
+def agree[T](label: str, results: list[tuple[str | None, T]], default: T) -> T:
     """Reduce per-engine readings of one interaction to a single answer.
 
     Every engine agreeing returns the shared reading. A disagreement is

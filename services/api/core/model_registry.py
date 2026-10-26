@@ -317,7 +317,7 @@ def host_ram_gb() -> float | None:
             return None
     try:
         return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024**3)
-    except (ValueError, OSError, AttributeError):
+    except ValueError, OSError, AttributeError:
         return None
 
 
