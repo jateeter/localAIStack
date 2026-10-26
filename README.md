@@ -27,7 +27,7 @@ deterministic builds:
 
 | Service | Image | Pinned version |
 |---|---|---|
-| Qdrant | `qdrant/qdrant` | `v1.19.2` |
+| Qdrant | `qdrant/qdrant` | `v1.20.0` |
 | Loki | `grafana/loki` | `3.4.2` |
 | Grafana | `grafana/grafana` | `11.6.1` |
 | Prometheus | `prom/prometheus` | `v2.53.4` (LTS) |

@@ -95,7 +95,9 @@ services:
     # connection while this was v1.14.1 against client 1.19.1. 1.19 cannot open
     # storage 1.14 wrote (it panics loading the shard); the named volume below
     # starts empty, and the startup seed refills the corpus (core/rag_seed.py).
-    image: qdrant/qdrant:v1.19.2
+    # Move it with the client one minor at a time: Qdrant opens storage written
+    # by the previous minor only (1.19 -> 1.20 is fine; 1.14 -> 1.19 was not).
+    image: qdrant/qdrant:v1.20.0
     container_name: localai_qdrant
     restart: unless-stopped
     ports:
