@@ -24,7 +24,7 @@ qdrant-client==1.19.1
 redis==8.1.0
 
 # Document loaders
-pypdf==6.21.0
+pypdf==6.21.2
 # .docx uploads (core/document_loaders.DocxLoader). Docx2txtLoader needed it
 # and it was never installed, so every .docx upload failed.
 docx2txt==0.9
