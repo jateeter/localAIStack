@@ -192,7 +192,7 @@ def collect_corpus_machine_regions(corpus_root: pathlib.Path) -> tuple[list[Span
     for path in sorted((corpus_root / "machines").rglob("*.json")):
         try:
             machine = json.loads(path.read_text(encoding="utf-8"))["machine"]
-        except (ValueError, KeyError, TypeError):
+        except ValueError, KeyError, TypeError:
             continue  # not a machine file; the corpus gate owns that judgement
         mapping = machine.get("perceptualMapping") or {}
         for key, bucket in (("input", inputs), ("output", outputs)):
