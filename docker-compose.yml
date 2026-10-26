@@ -242,6 +242,14 @@ services:
     environment:
       OLLAMA_BASE_URL: "http://host.docker.internal:11434"
       WEBUI_SECRET_KEY: "${WEBUI_SECRET_KEY:-changeme-local-dev}"
+      # Embed through the host Ollama with localAI's own embedder, as
+      # localOpenClawStack#78 and the release bundle (RealityEngine_CI#590) do.
+      # The default engine downloads sentence-transformers/all-MiniLM-L6-v2 from
+      # Hugging Face on a fresh volumes/open-webui, unauthenticated, and the
+      # health check fails until it finishes; offline it never does
+      # (local-clean-20261025c, 2026-10-25).
+      RAG_EMBEDDING_ENGINE: ollama
+      RAG_EMBEDDING_MODEL: "${EMBED_MODEL:-embeddinggemma-2:270m}"
     volumes:
       - ./volumes/open-webui:/app/backend/data
     extra_hosts:
