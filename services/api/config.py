@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # collection's vector size (core.collections.verify).
     embed_dim: int = 768
     collection_name: str = "localai_docs"
+    # Reconcile data/health/documents into collection_name and
+    # health_collection_name at startup, so a fresh install answers from a
+    # corpus rather than an empty index (core/rag_seed.py).
+    rag_seed_on_startup: bool = True
 
     # Model registry (config/models.registry.json). Empty = auto-resolve; see
     # core.model_registry.registry_path for the search order.

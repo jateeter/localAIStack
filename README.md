@@ -143,6 +143,25 @@ default `nemotron-3-nano:4b-mlx` and the embedding default `embeddinggemma-2:270
 run on MLX; `nemotron-3-nano:4b` runs on llama.cpp, and `llama3.1:8b` and
 `nomic-embed-text` on ggml, so none of them is a default.
 
+### The default RAG corpus
+
+The API answers from a corpus out of the box. At every start it reconciles the
+git-tracked `data/health/documents/*.md` into both collections the graphs read:
+`localai_docs` (`/rag/query`, `/graph/rag`, the agent's `rag_search`) and
+`health_docs` (the agent's `health_search`). It logs one `rag_default_corpus`
+line per collection with what it expected, added, kept and removed.
+
+- **A reconcile, not an append.** A chunk is identified by its source and a hash
+  of its text, so a restart re-embeds nothing, an edited document replaces its
+  old chunks, and a removed one leaves the index.
+- **Your documents stay yours.** Anything ingested through `/rag/ingest/text` or
+  `/rag/ingest/file` is never touched.
+- **Read as text.** The documents are plain Markdown: front matter is dropped,
+  headings are kept, and the same splitter as `scripts/ingest_health_docs.py`
+  and `make reembed` cuts them (`core/health_docs.py`).
+- `RAG_SEED_ON_STARTUP=false` turns it off; `LOCALAI_HEALTH_DOCS_DIR` points it
+  at another directory.
+
 ### Changing the embedding model
 
 Vectors from two embedding models do not mix, even at the same dimension. So a
@@ -166,7 +185,9 @@ collection says which model filled it, and changing the model is a migration:
   alias in one atomic call, and keeps the old collection. `rollback` is a second
   switch; `drop-old` deletes the rest; `status` shows every collection.
   `health_docs` is rebuilt from `data/health/documents/`. A populated collection
-  with no source documents is refused unless you pass `--allow-data-loss`.
+  with no source documents is refused unless you pass `--allow-data-loss`; for
+  `localai_docs` that drops hand-ingested documents, and the default corpus
+  returns at the next API start.
 - **A pre-existing (legacy) collection** cannot hold an alias of its own name, so
   it is snapshotted, deleted, and replaced; `rollback` restores it from the
   snapshot into `<name>__legacy`. Use `--old-model <tag>` to compare retrieval

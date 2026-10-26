@@ -327,8 +327,8 @@ def test_derived_queries_are_each_documents_title():
 
 
 def test_the_shared_loader_chunks_the_tracked_health_corpus():
-    """scripts/ingest_health_docs.py and reembed_cli must chunk the same files the same way."""
-    pytest.importorskip("unstructured")
+    """scripts/ingest_health_docs.py, reembed_cli and rag_seed chunk the same files the same way."""
+    pytest.importorskip("langchain_text_splitters")
     from core import health_docs
 
     docs_dir = health_docs.default_docs_dir()
@@ -338,5 +338,11 @@ def test_the_shared_loader_chunks_the_tracked_health_corpus():
     assert {c.metadata["source"] for c in chunks} == {
         f"health/{p.name}" for p in docs_dir.glob("*.md")
     }
-    # every document yields a title the verification can query by
-    assert len(rb.derive_queries(chunks)) == len(list(docs_dir.glob("*.md")))
+    # every document yields a title the verification can query by: its own
+    # heading, not a front-matter line
+    queries = rb.derive_queries(chunks)
+    assert len(queries) == len(list(docs_dir.glob("*.md")))
+    assert not any(q.startswith(("category:", "source:", "---")) for q, _ in queries)
+    # The front matter is metadata, not text. A `---` inside the body is a
+    # section rule and stays.
+    assert not any("source: health/" in c.page_content for c in chunks), "front matter is not indexed"
