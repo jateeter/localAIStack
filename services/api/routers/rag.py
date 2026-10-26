@@ -1,52 +1,19 @@
 import os
-import pathlib
 import tempfile
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from langchain_community.document_loaders import (
-    Docx2txtLoader,
-    PyPDFLoader,
-    TextLoader,
-)
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel
 
 from core import llm_drift
-from core.health_docs import read_markdown
+from core.document_loaders import LOADERS
 from core.vector_store import get_vector_store
 from graphs.rag_graph import get_rag_graph
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
 SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
-
-
-class MarkdownLoader:
-    """An uploaded Markdown file read as text, as the default corpus is.
-
-    ``UnstructuredMarkdownLoader`` ran it through an NLP pipeline whose spaCy
-    model is not in the image, so the first upload pip-installed
-    ``en_core_web_sm`` into the running container, or hung where it could not
-    (core/health_docs.py). The same reader the seed uses keeps an upload and a
-    seeded document chunked alike.
-    """
-
-    def __init__(self, path: str):
-        self.path = pathlib.Path(path)
-
-    def load(self) -> list[Document]:
-        return [
-            Document(page_content=read_markdown(self.path), metadata={"source": str(self.path)})
-        ]
-
-
-LOADERS = {
-    ".pdf": PyPDFLoader,
-    ".txt": TextLoader,
-    ".md": MarkdownLoader,
-    ".docx": Docx2txtLoader,
-}
 
 
 class IngestTextRequest(BaseModel):

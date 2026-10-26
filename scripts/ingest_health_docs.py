@@ -64,14 +64,9 @@ def get_embeddings(model_name: str):
     import os
 
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    try:
-        from langchain_ollama import OllamaEmbeddings
+    from langchain_ollama import OllamaEmbeddings
 
-        return OllamaEmbeddings(model=model_name, base_url=base_url)
-    except ImportError:
-        from langchain_community.embeddings import OllamaEmbeddings  # type: ignore
-
-        return OllamaEmbeddings(model=model_name, base_url=base_url)
+    return OllamaEmbeddings(model=model_name, base_url=base_url)
 
 
 def main() -> None:
