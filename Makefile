@@ -90,15 +90,16 @@ agent:
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 # Empty Qdrant and let the API's startup seed refill the default corpus
-# (core/rag_seed.py). For a volume an older Qdrant wrote that the pinned one
-# cannot open. Documents ingested by hand through /rag/ingest are lost.
+# (core/rag_seed.py). Documents ingested by hand through /rag/ingest are lost.
+QDRANT_VOLUME ?= $(or $(LOCALAI_QDRANT_VOLUME),localaistack-qdrant)
 qdrant-rebuild:
 	@docker compose stop api qdrant
-	@rm -rf volumes/qdrant/*
+	@docker compose rm -f qdrant
+	@docker volume rm $(QDRANT_VOLUME)
 	@docker compose up -d --wait qdrant api
 	@echo "Qdrant rebuilt; the default corpus was seeded at API start."
 
 clean:
 	@docker compose down -v
-	@rm -rf volumes/qdrant/* volumes/redis/* volumes/open-webui/*
+	@rm -rf volumes/redis/* volumes/open-webui/*
 	@echo "Volumes cleared. Run 'make setup' to reinitialize."

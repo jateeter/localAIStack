@@ -92,17 +92,20 @@ services:
   qdrant:
     # The server tracks qdrant-client (services/api/requirements.txt): the client
     # refuses to vouch for a server more than one minor away and warned on every
-    # connection while this was v1.14.1 against client 1.19.1. A volume written
-    # by 1.14 cannot be opened by 1.19 (it panics loading the shard); rebuild it
-    # with `make qdrant-rebuild`, and the startup seed refills the corpus.
+    # connection while this was v1.14.1 against client 1.19.1. 1.19 cannot open
+    # storage 1.14 wrote (it panics loading the shard); the named volume below
+    # starts empty, and the startup seed refills the corpus (core/rag_seed.py).
     image: qdrant/qdrant:v1.19.2
     container_name: localai_qdrant
     restart: unless-stopped
     ports:
       - "4333:6333"   # REST API
       - "4334:6334"   # gRPC
+    # A named volume, not a bind mount: on Docker Desktop a bind mount is a FUSE
+    # (virtiofs) filesystem, and Qdrant 1.19 refuses to vouch for it at startup
+    # ("FUSE filesystems may cause data corruption due to caching issues").
     volumes:
-      - ./volumes/qdrant:/qdrant/storage
+      - qdrant-data:/qdrant/storage
     environment:
       QDRANT__SERVICE__GRPC_PORT: "6334"
     logging:
@@ -274,3 +277,11 @@ services:
 networks:
   default:
     name: localai_net
+
+volumes:
+  qdrant-data:
+    # Every checkout of this repo is the same compose project (localaistack), a
+    # regression run's worktree included, so a fixed name would be one store for
+    # all of them. RealityEngine_CI's harness sets a per-run name and removes it
+    # with the run; a developer checkout keeps the default.
+    name: ${LOCALAI_QDRANT_VOLUME:-localaistack-qdrant}
