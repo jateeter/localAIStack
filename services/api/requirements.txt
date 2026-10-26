@@ -30,7 +30,7 @@ pypdf==6.21.2
 docx2txt==0.9
 
 # GraphQL (machine trigger receiver)
-strawberry-graphql[fastapi]==0.335.0
+strawberry-graphql[fastapi]==0.336.2
 
 # Utilities
 httpx==0.28.1
