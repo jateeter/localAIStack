@@ -45,10 +45,15 @@ COPY services/api/ .
 COPY data/machines/ /app/data/machines/
 COPY data/health/ /app/data/health/
 COPY config/models.registry.json /app/config/models.registry.json
+# The index of the generated per-domain machines (data/machines/generated/). The
+# bridge imports them only through it: without it the image ran 11 fewer localAI
+# machines than the compose stack, which mounts config/ (RealityEngine_CI rc3 E1).
+COPY config/domain-machines.index.json /app/config/domain-machines.index.json
 
 ENV LOCALAI_MACHINES_DIR=/app/data/machines \
     LOCALAI_STATE_DIR=/app/state \
-    MODELS_REGISTRY_PATH=/app/config/models.registry.json
+    MODELS_REGISTRY_PATH=/app/config/models.registry.json \
+    LOCALAI_DOMAIN_MACHINES_INDEX=/app/config/domain-machines.index.json
 
 # Unprivileged. The state directory is the only thing the API writes; it exists
 # here owned by the app user, so a fresh named volume mounted on it is created
