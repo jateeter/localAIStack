@@ -21,6 +21,7 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
   bands slots in `[7600:7632]` and writes the roll-up to `[7574:7578]`.
 - `services/api/core/embeddings.py`: embedding support, and `probe_dimension()` (the model's real output size; metadata is not trusted).
 - `services/api/core/vector_store.py`: vector store behavior.
+- IFRS candidate: `core/domain_evidence.py`, `core/entity_evidence.py` and `routers/domain_evidence.py` implement opt-in authenticated observational source receipts and canonical-checked entity projections. `docs/IFRS_EVIDENCE.md` documents the private manifest/state boundaries. Canonical document heads belong to the OpenClaw document sidecar, not this projection. Explicit synthetic evidence remains isolated from actual entity evidence.
 - `services/api/core/collections.py`, `core/reembed.py`, `scripts/reembed.py`: a logical collection is an alias onto `<name>__<model>`, so a collection knows which embedder filled it; changing the model is a lossless migration (build beside, verify retrieval, switch the alias, keep the old). See the README, "Changing the embedding model".
 - `services/api/core/topology_builder.py`: topology/graph construction.
 - `services/api/core/model_registry.py`: model registry loader; joins model registry
