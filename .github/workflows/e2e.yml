@@ -104,9 +104,10 @@ jobs:
         with:
           python-version: "3.15"
 
-      - name: Install minimal test deps
-        run: |
-          pip install pytest httpx pydantic pydantic-settings structlog
+      # Route tests import the API framework and Qdrant in-memory client.
+      # Use the pinned API/test dependencies, rather than a drifting partial list.
+      - name: Install API and test dependencies
+        run: pip install -r services/api/requirements.txt -r services/api/requirements-dev.txt
 
       - name: Run unit tests
         working-directory: services/api

@@ -5,13 +5,15 @@ Uses the real configured embedder and a persistent local Qdrant collection when
 IFRS_QDRANT_PATH is explicit. No legacy engine routes or startup seed are run.
 This is a connector verification surface, not composed-universe acceptance.
 """
+
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "services/api"))
-from fastapi import FastAPI
 import uvicorn
+from fastapi import FastAPI
+
 from routers import domain_evidence
 
 app = FastAPI(title="IFRS evidence connector verification")

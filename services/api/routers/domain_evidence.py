@@ -1,15 +1,16 @@
 """Authenticated, opt-in evidence tools; independent of legacy signal routes."""
-from functools import lru_cache
+
 import hmac
-import os
 import json
+import os
 import uuid
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.domain_evidence import EvidenceIndex, Unresolved, EDITION
+from core.domain_evidence import EDITION, EvidenceIndex, Unresolved
 
 router = APIRouter(prefix="/rag/evidence", tags=["domain-evidence"])
 
@@ -26,17 +27,21 @@ def authorize(authorization: str = Header(default="")):
 def index():
     from config import get_settings
     from core.embeddings import get_embeddings
-    from core.vector_store import get_qdrant_client, ensure_collection
+    from core.vector_store import ensure_collection, get_qdrant_client
+
     settings = get_settings()
     state = os.environ.get("IFRS_EVIDENCE_STATE_DIR")
     if not state:
         raise HTTPException(503, "IFRS_EVIDENCE_STATE_DIR is required outside Git")
     if os.environ.get("IFRS_QDRANT_PATH"):
         from qdrant_client import QdrantClient
+
         client = QdrantClient(path=os.environ["IFRS_QDRANT_PATH"])
     else:
         client = get_qdrant_client()
-    return EvidenceIndex(state, client, get_embeddings(), settings.embed_model, settings.embed_dim, ensure_collection)
+    return EvidenceIndex(
+        state, client, get_embeddings(), settings.embed_model, settings.embed_dim, ensure_collection
+    )
 
 
 class PassageRequest(BaseModel):
@@ -78,13 +83,27 @@ def retrieve(req: PassageRequest):
 @router.post("/query", dependencies=[Depends(authorize)])
 def query(req: PassageRequest):
     import httpx
+
     from config import get_settings
+
     settings = get_settings()
+
     def generate(messages):
-        response = httpx.post(settings.ollama_base_url.rstrip("/") + "/api/chat", json={"model": settings.llm_model, "messages": messages, "stream": False}, timeout=180)
+        response = httpx.post(
+            settings.ollama_base_url.rstrip("/") + "/api/chat",
+            json={"model": settings.llm_model, "messages": messages, "stream": False},
+            timeout=180,
+        )
         response.raise_for_status()
         return response.json()["message"]["content"]
-    return guarded(lambda: index().generate(req.model_dump(exclude_none=True), generate, {"provider": "ollama", "model": settings.llm_model}))
+
+    return guarded(
+        lambda: index().generate(
+            req.model_dump(exclude_none=True),
+            generate,
+            {"provider": "ollama", "model": settings.llm_model},
+        )
+    )
 
 
 @router.get("/receipts/{interaction_id}", dependencies=[Depends(authorize)])
@@ -109,17 +128,30 @@ def entity_config():
 
 def projection():
     from core.entity_evidence import EntityProjection
+
     state = os.environ.get("IFRS_EVIDENCE_STATE_DIR")
     if not state:
         raise HTTPException(503, "IFRS_EVIDENCE_STATE_DIR is required")
     config = entity_config()
-    return EntityProjection(config.get("stateDirectory", state), evidence_class=config.get("evidenceClass", "actual"))
+    return EntityProjection(
+        config.get("stateDirectory", state), evidence_class=config.get("evidenceClass", "actual")
+    )
 
 
 def canonical_call(config, scope, operation, args):
     import httpx
-    response = httpx.post(config["url"].rstrip("/") + "/tools/execute", headers={"Authorization": "Bearer " + config["token"]},
-                          json={"dispatchId": str(uuid.uuid4()), "operation": operation, "context": scope, "arguments": args}, timeout=60)
+
+    response = httpx.post(
+        config["url"].rstrip("/") + "/tools/execute",
+        headers={"Authorization": "Bearer " + config["token"]},
+        json={
+            "dispatchId": str(uuid.uuid4()),
+            "operation": operation,
+            "context": scope,
+            "arguments": args,
+        },
+        timeout=60,
+    )
     response.raise_for_status()
     return response.json()
 
@@ -142,14 +174,26 @@ def reconcile_entities():
 @router.post("/entity/retrieve", dependencies=[Depends(authorize)])
 def retrieve_entity(req: EntityRequest):
     from core.entity_evidence import ProjectionLag
+
     config = entity_config()
-    scope = next((s for s in config["scopes"] if s["entityId"] == req.entityId and s["period"] == req.period), None)
+    scope = next(
+        (
+            s
+            for s in config["scopes"]
+            if s["entityId"] == req.entityId and s["period"] == req.period
+        ),
+        None,
+    )
     if scope is None:
         raise HTTPException(403, "Entity/period is outside configured connector scope")
     try:
         if req.revision is not None:
             return projection().historical(req.entityId, req.period, req.assetTypeId, req.revision)
-        return projection().current(req.entityId, req.period, req.assetTypeId,
-                                    lambda e, p, a: canonical_call(config, scope, "inspect", {"assetTypeId": a}))
+        return projection().current(
+            req.entityId,
+            req.period,
+            req.assetTypeId,
+            lambda e, p, a: canonical_call(config, scope, "inspect", {"assetTypeId": a}),
+        )
     except ProjectionLag as exc:
         raise HTTPException(409, str(exc)) from exc

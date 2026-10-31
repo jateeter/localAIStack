@@ -6,6 +6,7 @@ the release image lost the generated per-domain machines: their index,
 config/domain-machines.index.json, was never copied, and the bridge skipped all
 eleven with a warning (RealityEngine_CI rc3 E1 vs E2).
 """
+
 from __future__ import annotations
 
 import json
@@ -40,7 +41,9 @@ def _env() -> dict[str, str]:
 
 def test_domain_machine_index_is_in_the_image():
     copies = _copies()
-    assert copies.get("/app/config/domain-machines.index.json") == "config/domain-machines.index.json"
+    assert (
+        copies.get("/app/config/domain-machines.index.json") == "config/domain-machines.index.json"
+    )
     assert _env().get("LOCALAI_DOMAIN_MACHINES_INDEX") == "/app/config/domain-machines.index.json"
 
 

@@ -7,8 +7,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
 from core.bridge_binding import EngineAffinityMiddleware
-from routers import chat, graph, health, models, observations, patient_wellness, rag
-from routers import domain_evidence
+from routers import (
+    chat,
+    domain_evidence,
+    graph,
+    health,
+    models,
+    observations,
+    patient_wellness,
+    rag,
+)
 from routers.graphql_endpoint import events_router as graphql_events_router
 from routers.graphql_endpoint import graphql_app
 
