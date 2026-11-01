@@ -24,10 +24,8 @@ FIXTURE = {
     "version": "9.9",
     "runtime": {
         "name": "ollama",
-        "pinned_version": "0.32.9",
-        "latest_known": "0.32.9",
-        "checked_at": "2026-08-13",
-        "release_feed": "https://api.github.com/repos/ollama/ollama/releases/latest",
+        "min_version": "0.40.13",
+        "latest_from": "https://api.github.com/repos/ollama/ollama/releases/latest",
         "download_url": "https://ollama.com/download",
     },
     "roles": {"llm": {"default": "big"}, "embedding": {"default": "embedder"}},
@@ -96,7 +94,8 @@ def test_shipped_registry_loads():
     reg = mr.load_registry(force_refresh=True)
     assert reg.models, "registry ships with no models"
     assert reg.runtime.name == "ollama"
-    assert reg.runtime.pinned_version
+    assert reg.runtime.min_version
+    assert reg.runtime.latest_from
 
 
 def test_shipped_registry_ids_and_tags_are_unique():
@@ -243,7 +242,7 @@ def _patch_env(monkeypatch, installed, ram, llm="small:3b", embed="embedder"):
         return installed, "ok"
 
     async def _version(base_url=None):
-        return "0.32.9"
+        return "0.40.13"
 
     monkeypatch.setattr(mr, "installed_tags", _tags)
     monkeypatch.setattr(mr, "installed_version", _version)
@@ -316,14 +315,26 @@ def test_unreachable_ollama_is_reported_not_raised(fixture_registry, monkeypatch
     assert all(m["installed"] is False for m in out["models"])
 
 
-def test_resolve_reports_runtime_pin_state(fixture_registry, monkeypatch):
+def test_resolve_reports_runtime_floor_state(fixture_registry, monkeypatch):
     _patch_env(monkeypatch, installed=[], ram=16.0)
 
     out = asyncio.run(mr.resolve_models())
     assert out["runtime"]["name"] == "ollama"
-    assert out["runtime"]["pinned_version"] == "0.32.9"
-    assert out["runtime"]["running_version"] == "0.32.9"
-    assert out["runtime"]["behind_pin"] is False
+    assert out["runtime"]["min_version"] == "0.40.13"
+    assert out["runtime"]["running_version"] == "0.40.13"
+    assert out["runtime"]["below_min"] is False
+    assert "pinned_version" not in out["runtime"]
+
+
+def test_resolve_flags_a_host_below_the_floor(fixture_registry, monkeypatch):
+    _patch_env(monkeypatch, installed=[], ram=16.0)
+
+    async def _old(base_url=None):
+        return "0.40.6"
+
+    monkeypatch.setattr(mr, "installed_version", _old)
+    out = asyncio.run(mr.resolve_models())
+    assert out["runtime"]["below_min"] is True
 
 
 # ── Declared vs loaded runner ─────────────────────────────────────────────────
