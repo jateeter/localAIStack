@@ -93,17 +93,16 @@ class ModelEntry(BaseModel):
 
 
 class RuntimeSpec(BaseModel):
-    """The local AI runtime this registry targets, and the version it pins.
+    """The local AI runtime this registry targets.
 
-    ``pinned_version`` is a floor, not an equality — see the runtime block in
+    Ollama is not pinned: hosts follow the latest release from ``latest_from``.
+    ``min_version`` is the floor the stack needs — see the runtime block in
     config/models.registry.json and scripts/lib/ollama_guard.sh.
     """
 
     name: str = "ollama"
-    pinned_version: str | None = None
-    latest_known: str | None = None
-    checked_at: str | None = None
-    release_feed: str | None = None
+    min_version: str | None = None
+    latest_from: str | None = None
     download_url: str | None = None
 
 
@@ -374,13 +373,13 @@ async def resolve_models(role: str | None = None) -> dict:
     # this endpoint exists to catch — surface it rather than silently omitting.
     unregistered = {r: tag for r, tag in selected.items() if registry.by_tag(tag) is None}
 
-    # The pin is a floor: a host ahead of it is fine, a host behind it is the
-    # thing worth reporting, since that is what setup.sh will act on.
-    pinned = registry.runtime.pinned_version
-    behind_pin = (
+    # The floor is what the stack cannot run below; a host under it is the
+    # thing worth reporting, since setup.sh / start.sh will refuse or upgrade.
+    floor = registry.runtime.min_version
+    below_min = (
         None
-        if running_version is None or pinned is None
-        else version_tuple(running_version) < version_tuple(pinned)
+        if running_version is None or floor is None
+        else version_tuple(running_version) < version_tuple(floor)
     )
 
     return {
@@ -389,7 +388,7 @@ async def resolve_models(role: str | None = None) -> dict:
         "runtime": {
             **registry.runtime.model_dump(),
             "running_version": running_version,
-            "behind_pin": behind_pin,
+            "below_min": below_min,
         },
         "ollama": {"status": ollama_status, "base_url": s.ollama_base_url},
         "host_ram_gb": None if ram is None else round(ram, 1),

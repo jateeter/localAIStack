@@ -13,7 +13,7 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$ROOT_DIR"
 source "$SCRIPT_DIR/lib/ollama_guard.sh"
 source "$SCRIPT_DIR/lib/models_registry.sh"
-ensure_ollama_pinned_version
+ensure_ollama_current
 
 # ── Prerequisites ──────────────────────────────────────────────────────────────
 info "Checking prerequisites..."

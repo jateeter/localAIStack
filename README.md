@@ -45,11 +45,15 @@ deterministic builds:
 up the compose stack — the qdrant, redis, api, and open-webui containers all
 use the Loki log driver and will fail to start without it.
 
-Both `setup.sh` and `start.sh` (plus `make up`) enforce a pinned Ollama version:
-**v0.32.0**. They parse `ollama --version` output (including formats like
-`ollama version is 0.32.0`) and will auto-install/upgrade to v0.32.0 on
-macOS/Linux via the official installer when needed. If automatic install is not
-possible, they fail with a concise manual-install instruction.
+Ollama is not pinned. `setup.sh` and `start.sh` (plus `make up`) keep the host
+on the latest Ollama release: they read the release feed, and a host that is
+missing Ollama or behind the latest release is installed or upgraded through the
+official installer. The stack's minimum is `runtime.min_version` in
+`config/models.registry.json`. Below it nothing starts. If the upgrade cannot
+bring the host up to the minimum, the scripts stop with a manual-install
+instruction. `make ollama-check` reports minimum, installed and latest without
+installing anything. `OLLAMA_FOLLOW_LATEST=0` leaves a host that clears the
+minimum where it is (offline work).
 
 ## Model registry
 
