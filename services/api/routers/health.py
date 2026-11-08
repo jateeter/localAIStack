@@ -1,5 +1,5 @@
 import asyncio
-import os
+import ssl
 
 import httpx
 import redis as redis_lib
@@ -7,13 +7,13 @@ from fastapi import APIRouter
 from qdrant_client import QdrantClient
 
 from config import get_settings
-from core import engine_fanout
+from core import engine_fanout, lane_tls
 from core.registry_resolver import resolve_bridge_targets
 
 router = APIRouter()
 
 
-async def _check_pe(pe_url: str, ssl_verify: bool | str) -> dict:
+async def _check_pe(pe_url: str, ssl_verify: ssl.SSLContext | bool) -> dict:
     """Probe the Perception Engine: source list + health sensor count."""
     try:
         async with httpx.AsyncClient(timeout=3.0, verify=ssl_verify) as c:
@@ -47,7 +47,7 @@ async def _check_pe(pe_url: str, ssl_verify: bool | str) -> dict:
         return {"status": "unreachable", "error": str(exc)[:200]}
 
 
-async def _check_re(re_url: str, ssl_verify: bool | str) -> dict:
+async def _check_re(re_url: str, ssl_verify: ssl.SSLContext | bool) -> dict:
     """Probe the Reality Engine: perceptual space + machine count + current health state."""
     try:
         async with httpx.AsyncClient(timeout=3.0, verify=ssl_verify) as c:
@@ -81,8 +81,8 @@ async def _check_re(re_url: str, ssl_verify: bool | str) -> dict:
 @router.get("/health")
 async def health():
     s = get_settings()
-    # RE_SSL_VERIFY mirrors the env var used by reality_bridge.py
-    ssl_verify: bool | str = os.getenv("RE_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
+    # The lane's mTLS when RE_TLS_CERT is set, else RE_SSL_VERIFY (core/lane_tls.py).
+    ssl_verify = lane_tls.httpx_verify()
 
     services: dict = {
         "api": "ok",
@@ -97,7 +97,7 @@ async def health():
 
     async def _check_ollama() -> None:
         try:
-            async with httpx.AsyncClient(timeout=3.0) as c:
+            async with httpx.AsyncClient(timeout=3.0, **lane_tls.ollama_client_kwargs()) as c:
                 r = await c.get(f"{s.ollama_base_url}/api/tags")
                 models = [m["name"] for m in r.json().get("models", [])]
             services["ollama"] = "ok"
@@ -107,7 +107,9 @@ async def health():
 
     def _check_qdrant() -> None:
         try:
-            qc = QdrantClient(host=s.qdrant_host, port=s.qdrant_port, timeout=3)
+            qc = QdrantClient(
+                host=s.qdrant_host, port=s.qdrant_port, timeout=3, **lane_tls.qdrant_kwargs()
+            )
             collections = [c.name for c in qc.get_collections().collections]
             services["qdrant"] = "ok"
             services["qdrant_collections"] = collections
@@ -129,7 +131,9 @@ async def health():
 
     def _check_redis() -> None:
         try:
-            rc = redis_lib.from_url(s.redis_url, socket_timeout=3)
+            rc = redis_lib.from_url(
+                lane_tls.redis_url(s.redis_url), socket_timeout=3, **lane_tls.redis_kwargs()
+            )
             rc.ping()
             services["redis"] = "ok"
         except Exception as exc:
@@ -169,7 +173,7 @@ async def _attach_pe_re(
     services: dict,
     pe_url: str,
     re_url: str,
-    ssl_verify: bool | str,
+    ssl_verify: ssl.SSLContext | bool,
 ) -> None:
     pe_result, re_result = await asyncio.gather(
         _check_pe(pe_url, ssl_verify),

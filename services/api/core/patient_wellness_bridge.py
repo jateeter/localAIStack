@@ -8,14 +8,13 @@ This module owns the localAI side of the PatientWellness alert-decline e2e:
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 import structlog
 
-from core import engine_fanout
+from core import engine_fanout, lane_tls
 from core.pe_sources import (
     activate_sensor_source,
     get_sensor_sources,
@@ -24,11 +23,6 @@ from core.pe_sources import (
 
 log = structlog.get_logger()
 
-_SSL_VERIFY: bool | str = os.getenv("RE_SSL_VERIFY", "true").lower() not in (
-    "false",
-    "0",
-    "no",
-)
 
 _SENSOR_TIMEOUT = httpx.Timeout(3.0)
 _PUSH_TIMEOUT = httpx.Timeout(10.0)
@@ -124,7 +118,7 @@ def register_patient_wellness_sources() -> bool:
 
 def _register_on(pe_url: str) -> bool:
     try:
-        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
+        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
             existing = get_sensor_sources(client, pe_url)
             for source in _PATIENT_WELLNESS_SOURCES:
                 sid = source["sensorId"]
@@ -274,7 +268,7 @@ def _run_alert_decline(pe_url: str) -> dict[str, Any]:
     push_results: list[dict[str, Any]] = []
     patient_wellness_output: list[float] = []
 
-    with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+    with httpx.Client(timeout=_PUSH_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
         for step in ALERT_DECLINE_STEPS:
             vector = [float(v) for v in step["vector"]]
             _write_sensor(client, pe_url, PATIENT_WELLNESS_ASSESSMENT_SOURCE_ID, vector)

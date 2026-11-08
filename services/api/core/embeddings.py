@@ -1,6 +1,7 @@
 from langchain_ollama import OllamaEmbeddings
 
 from config import get_settings
+from core import lane_tls
 
 _embeddings: OllamaEmbeddings | None = None
 
@@ -12,6 +13,7 @@ def get_embeddings() -> OllamaEmbeddings:
         _embeddings = OllamaEmbeddings(
             base_url=s.ollama_base_url,
             model=s.embed_model,
+            client_kwargs=lane_tls.ollama_client_kwargs(),
         )
     return _embeddings
 

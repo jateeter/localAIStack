@@ -220,6 +220,36 @@ For live Ollama probing, omit `--stub`. Native mode calls `/api/chat`; OpenAI
 compatible mode calls `/v1/chat/completions`. Omit `--dry-run` to POST the
 validated completion body to `$PE_URL/api/integrations/completions`.
 
+## Lane TLS
+
+Every link of the stack runs on TLS 1.3 with mTLS when its lane is on
+(localAIStack#172, RealityEngine_CI#668; the profile and runtime contract are
+RealityEngine_CI `docs/TRANSPORT_SECURITY.md`). `RealityEngine_CI/startUniverse.sh`
+turns it on with `RE_TLS=on`; nothing changes while it is off.
+
+| Link | On the lane |
+| --- | --- |
+| engines → API, API → engines and the instance registry | TLS 1.3 + mTLS, the lane CA only (`core/lane_tls.py`; `RE_SSL_VERIFY` is ignored) |
+| API → Redis | `rediss://`, Redis restricted to TLS 1.3 and the profile's suites, client certificate required |
+| API → Qdrant | Qdrant's own TLS with client-certificate verification. Qdrant cannot be restricted (it also accepts TLS 1.2 and AES-128, no PQ group): an accepted deficiency, compensated by a client that offers only the profile and loopback-only host ports |
+| API, engines, OpenClaw → Ollama | Ollama's TLS front, `scripts/ollama_tls_front.py` (TLS 1.3 + mTLS, PQ group where OpenSSL has it); the front reaches Ollama on 127.0.0.1, the accepted `ollama-front-to-ollama` deficiency |
+
+The overlay `docker-compose.tls.yml` carries it, with the certificates the lane
+CA issued linked into `LOCALAI_TLS_DIR` (layout in the file's header):
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.tls.yml \
+LOCALAI_TLS_DIR=<dir> LOCALAI_OLLAMA_URL=https://host.docker.internal:11443 \
+  docker compose up -d qdrant redis api
+RE_TLS_CERT=... RE_TLS_KEY=... RE_TLS_CA=... RE_TLS_CRL=... \
+  python3 scripts/ollama_tls_front.py --port 11443
+```
+
+The API is started by `services/api/serve.py` (uvicorn with the profile's
+context) and checked by `healthcheck.py`, both of which follow `RE_TLS_CERT`.
+Open WebUI is not on the lane: it reaches Ollama in plaintext with no client
+certificate, so the overlay leaves it out.
+
 ## Logging (Loki + Grafana)
 
 All containerised services ship logs to Loki via the Docker `loki` log driver

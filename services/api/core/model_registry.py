@@ -29,6 +29,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from config import get_settings
+from core import lane_tls
 
 _CACHE_TTL_S = 30.0
 _cache: dict = {"at": 0.0, "registry": None, "path": None}
@@ -212,7 +213,9 @@ async def installed_tags(base_url: str | None = None) -> tuple[list[str], str]:
     s = get_settings()
     url = base_url or s.ollama_base_url
     try:
-        async with httpx.AsyncClient(timeout=_TAGS_TIMEOUT_S) as c:
+        async with httpx.AsyncClient(
+            timeout=_TAGS_TIMEOUT_S, **lane_tls.ollama_client_kwargs()
+        ) as c:
             r = await c.get(f"{url}/api/tags")
             r.raise_for_status()
             return [m["name"] for m in r.json().get("models", [])], "ok"
@@ -232,7 +235,9 @@ async def installed_runners(base_url: str | None = None) -> dict[str, str]:
     s = get_settings()
     url = base_url or s.ollama_base_url
     try:
-        async with httpx.AsyncClient(timeout=_TAGS_TIMEOUT_S) as c:
+        async with httpx.AsyncClient(
+            timeout=_TAGS_TIMEOUT_S, **lane_tls.ollama_client_kwargs()
+        ) as c:
             r = await c.get(f"{url}/api/tags")
             r.raise_for_status()
             return {
@@ -253,7 +258,9 @@ async def loaded_runners(base_url: str | None = None) -> dict[str, str]:
     s = get_settings()
     url = base_url or s.ollama_base_url
     try:
-        async with httpx.AsyncClient(timeout=_TAGS_TIMEOUT_S) as c:
+        async with httpx.AsyncClient(
+            timeout=_TAGS_TIMEOUT_S, **lane_tls.ollama_client_kwargs()
+        ) as c:
             r = await c.get(f"{url}/api/ps")
             r.raise_for_status()
             return {m["name"]: m["runner"] for m in r.json().get("models", []) if m.get("runner")}
@@ -282,7 +289,9 @@ async def installed_version(base_url: str | None = None) -> str | None:
     s = get_settings()
     url = base_url or s.ollama_base_url
     try:
-        async with httpx.AsyncClient(timeout=_TAGS_TIMEOUT_S) as c:
+        async with httpx.AsyncClient(
+            timeout=_TAGS_TIMEOUT_S, **lane_tls.ollama_client_kwargs()
+        ) as c:
             r = await c.get(f"{url}/api/version")
             r.raise_for_status()
             return r.json().get("version")

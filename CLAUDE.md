@@ -1,6 +1,6 @@
 # localAIStack Guidance
 
-Last reviewed: 2026-11-04
+Last reviewed: 2026-11-08
 
 See `/Users/johnt/workspace/GitHub/CLAUDE.md` for the integrated application map. Update both this file and the root map when local AI provider responsibilities, bridge endpoints, or runtime composition changes.
 
@@ -10,7 +10,8 @@ This repo provides local AI/RAG/vector services and a RealityEngine bridge. It s
 
 ## Codebase Map
 
-- `services/api/main.py`: FastAPI entrypoint.
+- `services/api/main.py`: FastAPI entrypoint; `serve.py` runs it (uvicorn, TLS when the lane is on) and `healthcheck.py` checks it.
+- `services/api/core/lane_tls.py`: the transport profile for every link (README "Lane TLS").
 - `services/api/config.py`: runtime configuration.
 - `services/api/core/reality_bridge.py`: RE/PE bridge.
 - `services/api/core/health_bands.py`, `data/health/health_bands.json`: grade
@@ -128,6 +129,13 @@ make model-pull ID=<model-id>  # pull a registered model
   measures. A removed measure is absent, not zero. localAI may request a
   resync through the PE; the pod workflow does not. Contract:
   `localHealthkitBridge/docs/INGEST_CONTRACT.md` "Scope and resync".
+- **Lane TLS (localAIStack#172, RealityEngine_CI#668).** `RE_TLS_CERT` set means
+  the lane is on: the API serves TLS 1.3 with mTLS (`serve.py`), and every link it
+  opens (engines, instance registry, Qdrant, Redis, Ollama's TLS front) is TLS 1.3
+  presenting its certificate. All of it goes through `core/lane_tls.py`; add no
+  client that bypasses it. `docker-compose.tls.yml` is the overlay and
+  `scripts/ollama_tls_front.py` the front. Qdrant's laxity (TLS 1.2, AES-128 also
+  accepted) is an accepted deficiency (owner, 2026-11-08). README "Lane TLS".
 - **One interaction, one engine.** `X-RE-Instance: <instance registry id>`
   names the initiating engine; `core/bridge_binding.py` pins it for the whole
   request, so the sensor write, the push, and the perceptual space the response
