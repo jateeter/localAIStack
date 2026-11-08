@@ -274,3 +274,37 @@ def test_front_relays_over_mtls_to_a_plain_upstream(lane_on):
     reply, refused = asyncio.run(scenario())
     assert reply.startswith(b"HTTP/1.1 200 OK") and reply.endswith(b"streamed:/api/tags")
     assert refused, "the front answered a client without a certificate"
+
+
+def test_front_stops_on_sigterm_with_a_keepalive_client_open(lane_on, tmp_path):
+    """A pooled client connection must not hold the front open past SIGTERM."""
+    import os
+    import signal
+    import subprocess
+    import time
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    env = dict(os.environ)
+    proc = subprocess.Popen(
+        [sys.executable, str(_FRONT), "--port", str(port), "--upstream", "127.0.0.1:9"],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    try:
+        assert proc.stdout is not None
+        proc.stdout.readline()  # the ready line
+        raw = socket.create_connection(("127.0.0.1", port), timeout=5)
+        tls_sock = lane_tls.client_context().wrap_socket(raw, server_hostname="localhost")
+        tls_sock.sendall(b"x")  # held open, as a pooled client does
+        start = time.monotonic()
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=8)
+        assert time.monotonic() - start < 6
+        tls_sock.close()
+    finally:
+        if proc.poll() is None:
+            proc.kill()
