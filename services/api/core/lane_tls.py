@@ -130,17 +130,6 @@ def httpx_verify() -> ssl.SSLContext | bool:
     return client_context() if enabled() else _legacy_verify()
 
 
-def urllib_context() -> ssl.SSLContext:
-    """``context=`` for urllib to an engine or the instance registry."""
-    if enabled():
-        return client_context()
-    ctx = ssl.create_default_context()
-    if not _legacy_verify():
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-    return ctx
-
-
 def qdrant_kwargs() -> dict:
     """Extra QdrantClient arguments: https with the lane context when on.
 

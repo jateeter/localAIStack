@@ -46,10 +46,22 @@ _cache: dict = {"at": 0.0, "targets": None}
 _PROBE_TIMEOUT_S = 2.0
 
 
+# Self-signed dev certs are the norm for the RE tls-proxy; mirror the
+# RE_SSL_VERIFY contract used by reality_bridge. That is the plaintext lane's
+# contract only: on the lane (RE_TLS_CERT set) the context is core/lane_tls's,
+# which verifies against the lane CA and presents this service's certificate.
+_SSL_VERIFY = os.getenv("RE_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
+
+
 def _ssl_context() -> ssl.SSLContext:
-    """The lane's mTLS when RE_TLS_CERT is set, else the RE_SSL_VERIFY contract
-    (core/lane_tls.py, localAIStack#172)."""
-    return lane_tls.urllib_context()
+    if lane_tls.enabled():
+        return lane_tls.client_context()
+    if _SSL_VERIFY:
+        return ssl.create_default_context()
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 def _probe_health(base_url: str) -> bool:

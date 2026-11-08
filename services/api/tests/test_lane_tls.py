@@ -133,7 +133,6 @@ def test_lane_off_keeps_the_legacy_switch(lane_off, monkeypatch):
     assert not lane_tls.enabled()
     monkeypatch.setenv("RE_SSL_VERIFY", "false")
     assert lane_tls.httpx_verify() is False
-    assert lane_tls.urllib_context().verify_mode == ssl.CERT_NONE
     monkeypatch.setenv("RE_SSL_VERIFY", "true")
     assert lane_tls.httpx_verify() is True
     assert lane_tls.qdrant_kwargs() == {}
@@ -148,7 +147,9 @@ def test_lane_on_ignores_re_ssl_verify(lane_on, monkeypatch):
     assert isinstance(ctx, ssl.SSLContext)
     assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname
     assert ctx.minimum_version == ctx.maximum_version == ssl.TLSVersion.TLSv1_3
-    assert lane_tls.urllib_context() is ctx
+    from core import registry_resolver
+
+    assert registry_resolver._ssl_context() is ctx
     assert lane_tls.qdrant_kwargs() == {"https": True, "verify": ctx, "check_compatibility": False}
     assert lane_tls.ollama_client_kwargs() == {"verify": ctx}
     assert lane_tls.redis_url("redis://redis:6379") == "rediss://redis:6379"

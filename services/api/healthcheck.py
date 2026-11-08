@@ -14,10 +14,11 @@ from core import lane_tls
 
 
 def main(port: int = 8000) -> int:
-    if lane_tls.enabled():
-        url, ctx = f"https://localhost:{port}/health", lane_tls.client_context()
-    else:
-        url, ctx = f"http://127.0.0.1:{port}/health", None
+    # The lane's scheme, as serve.py chose it; localhost is in the lane certificate.
+    on = lane_tls.enabled()
+    scheme = "https" if on else "http"
+    url = f"{scheme}://localhost:{port}/health"
+    ctx = lane_tls.client_context() if on else None
     try:
         with urllib.request.urlopen(url, timeout=5, context=ctx) as r:
             return 0 if 200 <= r.status < 300 else 1

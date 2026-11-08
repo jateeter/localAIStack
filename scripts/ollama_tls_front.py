@@ -104,8 +104,8 @@ async def serve(bind: str, port: int, upstream: tuple[str, int]) -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
     print(
-        f"ollama-tls-front: https://{bind}:{port} -> http://{upstream[0]}:{upstream[1]} "
-        f"(TLS 1.3, mTLS, {lane_tls.PROFILE_ID})",
+        f"ollama-tls-front: https://{bind}:{port} -> Ollama on {upstream[0]}:{upstream[1]} "
+        f"(TLS 1.3, mTLS, {lane_tls.PROFILE_ID}; the loopback hop is the accepted deficiency)",
         flush=True,
     )
     async with server:
