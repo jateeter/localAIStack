@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import ipaddress
 import os
 import signal
@@ -97,9 +98,21 @@ async def serve(bind: str, port: int, upstream: tuple[str, int]) -> None:
     ctx = lane_tls.server_context()
     loop = asyncio.get_running_loop()
     loop.set_exception_handler(_quiet_refusals)
-    server = await asyncio.start_server(
-        lambda r, w: _relay(r, w, upstream), bind, port, ssl=ctx, ssl_handshake_timeout=10
-    )
+    # Open client connections, so a stop can close them: asyncio's server waits
+    # for every connection to finish, and the engines and the gateway keep
+    # pooled keep-alive connections open indefinitely, so a SIGTERM was ignored
+    # until stopUniverse.sh fell back to SIGKILL (RealityEngine_CI run
+    # tls-lane-20261108c).
+    clients: set[asyncio.StreamWriter] = set()
+
+    async def handle(r: asyncio.StreamReader, w: asyncio.StreamWriter) -> None:
+        clients.add(w)
+        try:
+            await _relay(r, w, upstream)
+        finally:
+            clients.discard(w)
+
+    server = await asyncio.start_server(handle, bind, port, ssl=ctx, ssl_handshake_timeout=10)
     stop = asyncio.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
@@ -108,8 +121,12 @@ async def serve(bind: str, port: int, upstream: tuple[str, int]) -> None:
         f"(TLS 1.3, mTLS, {lane_tls.PROFILE_ID}; the loopback hop is the accepted deficiency)",
         flush=True,
     )
-    async with server:
-        await stop.wait()
+    await stop.wait()
+    server.close()
+    for w in list(clients):
+        w.transport.abort()
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(server.wait_closed(), 5)
 
 
 def main(argv: list[str] | None = None) -> int:
