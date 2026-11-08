@@ -1,0 +1,105 @@
+# Lane TLS overlay (localAIStack#172, RealityEngine_CI#668): every link of this
+# stack on TLS 1.3 with mTLS. Used on top of docker-compose.yml, never alone:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.tls.yml \
+#   LOCALAI_TLS_DIR=<dir> LOCALAI_OLLAMA_URL=https://host.docker.internal:11443 \
+#   docker compose up -d qdrant redis api
+#
+# RealityEngine_CI's startUniverse.sh does this when its lane is on (RE_TLS=on).
+# LOCALAI_TLS_DIR holds what the lane CA issued, as links into its PKI (keys stay
+# in the PKI's own files; the CA directory, which holds the CA key, is never
+# mounted):
+#
+#   api/     chain.pem key.pem   localai-api: serves and calls (DNS api, localai_api,
+#                                localhost, host.docker.internal)
+#   qdrant/  chain.pem key.pem   Qdrant (DNS qdrant, localhost)
+#   redis/   chain.pem key.pem   Redis (DNS redis, localhost)
+#   ca.crt   ca.crl              the lane CA and its revocation list
+#
+# Each certificate serves and calls (both purposes), so a service's own
+# healthcheck can present it. Open WebUI is not part of the lane: it reaches
+# Ollama in plaintext and has no client certificate, so the lane does not start
+# it (localOpenClawStack's Open WebUI is the universe's).
+
+services:
+  qdrant:
+    # Qdrant (rustls) takes mTLS but cannot be restricted: it also accepts TLS
+    # 1.2 and TLS_AES_128_GCM_SHA256 and offers no PQ group. Accepted deficiency
+    # (owner, 2026-11-08; RealityEngine_CI transport-inventory localai-to-qdrant):
+    # its only client, localai-api, offers TLS 1.3 and the profile's suites
+    # alone, and the host ports are loopback only.
+    ports: !override
+      - "127.0.0.1:4333:6333"
+      - "127.0.0.1:4334:6334"
+    environment:
+      QDRANT__SERVICE__ENABLE_TLS: "true"
+      QDRANT__SERVICE__VERIFY_HTTPS_CLIENT_CERTIFICATE: "true"
+      QDRANT__TLS__CERT: /run/re-tls/service/chain.pem
+      QDRANT__TLS__KEY: /run/re-tls/service/key.pem
+      QDRANT__TLS__CA_CERT: /run/re-tls/ca.crt
+    volumes:
+      - ${LOCALAI_TLS_DIR:?set LOCALAI_TLS_DIR to the lane TLS directory}/qdrant:/run/re-tls/service:ro
+      - ${LOCALAI_TLS_DIR}/ca.crt:/run/re-tls/ca.crt:ro
+
+  redis:
+    ports: !override
+      - "127.0.0.1:4379:6379"
+    command: !override
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --port
+      - "0"
+      - --tls-port
+      - "6379"
+      - --tls-cert-file
+      - /run/re-tls/service/chain.pem
+      - --tls-key-file
+      - /run/re-tls/service/key.pem
+      - --tls-ca-cert-file
+      - /run/re-tls/ca.crt
+      - --tls-auth-clients
+      - "yes"
+      - --tls-protocols
+      - TLSv1.3
+      - --tls-ciphersuites
+      - TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+    volumes:
+      - ${LOCALAI_TLS_DIR}/redis:/run/re-tls/service:ro
+      - ${LOCALAI_TLS_DIR}/ca.crt:/run/re-tls/ca.crt:ro
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - --tls
+        - --cacert
+        - /run/re-tls/ca.crt
+        - --cert
+        - /run/re-tls/service/chain.pem
+        - --key
+        - /run/re-tls/service/key.pem
+        - -h
+        - localhost
+        - ping
+
+  api:
+    environment:
+      RE_TLS_CERT: /run/re-tls/service/chain.pem
+      RE_TLS_KEY: /run/re-tls/service/key.pem
+      RE_TLS_CA: /run/re-tls/ca.crt
+      RE_TLS_CRL: /run/re-tls/ca.crl
+      QDRANT_HOST: qdrant
+      REDIS_URL: rediss://redis:6379
+      # Ollama's TLS front on the host (scripts/ollama_tls_front.py).
+      OLLAMA_BASE_URL: ${LOCALAI_OLLAMA_URL:?set LOCALAI_OLLAMA_URL to Ollama's TLS front}
+    volumes:
+      - ${LOCALAI_TLS_DIR}/api:/run/re-tls/service:ro
+      - ${LOCALAI_TLS_DIR}/ca.crt:/run/re-tls/ca.crt:ro
+      - ${LOCALAI_TLS_DIR}/ca.crl:/run/re-tls/ca.crl:ro
+
+  open-webui:
+    profiles: ["plaintext-lane"]

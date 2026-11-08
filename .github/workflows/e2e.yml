@@ -47,7 +47,7 @@ jobs:
             up -d qdrant redis api
 
       # Poll until the API container's Docker health check reports healthy.
-      # The API health check is: curl -f http://localhost:8000/health
+      # The API health check is: python healthcheck.py (http while the lane is off)
       # We wait up to 90 s (18 × 5 s) for startup.
       - name: Wait for API to be healthy
         run: |

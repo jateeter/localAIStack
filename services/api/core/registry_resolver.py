@@ -38,18 +38,24 @@ import time
 import urllib.request
 
 from config import get_settings
+from core import lane_tls
 
 _CACHE_TTL_S = 30.0
 _cache: dict = {"at": 0.0, "targets": None}
 
 _PROBE_TIMEOUT_S = 2.0
 
+
 # Self-signed dev certs are the norm for the RE tls-proxy; mirror the
-# RE_SSL_VERIFY contract used by reality_bridge.
+# RE_SSL_VERIFY contract used by reality_bridge. That is the plaintext lane's
+# contract only: on the lane (RE_TLS_CERT set) the context is core/lane_tls's,
+# which verifies against the lane CA and presents this service's certificate.
 _SSL_VERIFY = os.getenv("RE_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
 
 
 def _ssl_context() -> ssl.SSLContext:
+    if lane_tls.enabled():
+        return lane_tls.client_context()
     if _SSL_VERIFY:
         return ssl.create_default_context()
     ctx = ssl.create_default_context()

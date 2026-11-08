@@ -26,6 +26,7 @@ from langchain_ollama import ChatOllama
 from langgraph.graph import END, StateGraph
 
 from config import get_settings
+from core import lane_tls
 from core.vector_store import get_vector_store
 
 # ── State ─────────────────────────────────────────────────────────────────────
@@ -96,7 +97,12 @@ def grade_documents(state: RAGState) -> dict:
 
 def generate(state: RAGState) -> dict:
     s = get_settings()
-    llm = ChatOllama(base_url=s.ollama_base_url, model=s.llm_model, temperature=0.1)
+    llm = ChatOllama(
+        base_url=s.ollama_base_url,
+        model=s.llm_model,
+        temperature=0.1,
+        client_kwargs=lane_tls.ollama_client_kwargs(),
+    )
 
     context = "\n\n---\n\n".join(d.page_content for d in state["documents"])
     messages = [
@@ -116,7 +122,12 @@ def generate(state: RAGState) -> dict:
 
 def rewrite_query(state: RAGState) -> dict:
     s = get_settings()
-    llm = ChatOllama(base_url=s.ollama_base_url, model=s.llm_model, temperature=0.3)
+    llm = ChatOllama(
+        base_url=s.ollama_base_url,
+        model=s.llm_model,
+        temperature=0.3,
+        client_kwargs=lane_tls.ollama_client_kwargs(),
+    )
 
     messages = [
         SystemMessage(

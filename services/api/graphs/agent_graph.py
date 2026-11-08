@@ -25,6 +25,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from config import get_settings
+from core import lane_tls
 from core.vector_store import get_health_vector_store, get_vector_store
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ def agent_node(state: AgentState) -> dict:
         base_url=s.ollama_base_url,
         model=s.llm_model,
         temperature=0.1,
+        client_kwargs=lane_tls.ollama_client_kwargs(),
     ).bind_tools(TOOLS)
 
     system = state.get("system_prompt") or (

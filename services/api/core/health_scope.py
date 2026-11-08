@@ -28,7 +28,7 @@ import threading
 import httpx
 import structlog
 
-from core import source_observations
+from core import lane_tls, source_observations
 from core.health_bands import (
     GRADE_VALUE,
     BandTable,
@@ -102,9 +102,7 @@ def reconcile(
     try:
         table = table or _table()
         if client is None:
-            from core.reality_bridge import _SSL_VERIFY  # late: reality_bridge imports this
-
-            with httpx.Client(timeout=_TIMEOUT, verify=_SSL_VERIFY) as own:
+            with httpx.Client(timeout=_TIMEOUT, verify=lane_tls.httpx_verify()) as own:
                 return _reconcile(pe_url, own, table)
         return _reconcile(pe_url, client, table)
     except Exception as exc:

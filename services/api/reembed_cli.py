@@ -41,6 +41,7 @@ try:
 
     from config import get_settings
     from core import collections as qc
+    from core import lane_tls
     from core import reembed as rb
     from core.health_docs import default_docs_dir, load_health_documents
     from core.model_registry import load_registry
@@ -57,7 +58,9 @@ def _health_chunks(docs_dir: pathlib.Path):
 
 def _embedder(tag: str):
     return OllamaEmbeddings(
-        model=tag, base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        model=tag,
+        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        client_kwargs=lane_tls.ollama_client_kwargs(),
     )
 
 
@@ -92,7 +95,11 @@ def main(argv: list[str] | None = None) -> int:
 
     s = get_settings()
     model = a.embed_model or s.embed_model
-    client = QdrantClient(host=a.qdrant_host or s.qdrant_host, port=a.qdrant_port or s.qdrant_port)
+    client = QdrantClient(
+        host=a.qdrant_host or s.qdrant_host,
+        port=a.qdrant_port or s.qdrant_port,
+        **lane_tls.qdrant_kwargs(),
+    )
     default_logicals = [s.collection_name, s.health_collection_name]
     logicals = a.logicals or default_logicals
     out: list[dict] = []

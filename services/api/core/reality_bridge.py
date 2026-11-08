@@ -62,7 +62,7 @@ import pathlib
 import httpx
 import structlog
 
-from core import engine_fanout, health_bands, health_scope, source_observations
+from core import engine_fanout, health_bands, health_scope, lane_tls, source_observations
 from core.bridge_binding import bind
 from core.pe_sources import (
     activate_sensor_source,
@@ -75,9 +75,8 @@ from core.registry_resolver import resolve_all_bridge_targets, resolve_bridge_ta
 
 log = structlog.get_logger()
 
-# SSL verification for RE/PE calls.  Set RE_SSL_VERIFY=false in docker-compose
-# when the stack uses a self-signed certificate (the default dev setup).
-_SSL_VERIFY: bool | str = os.getenv("RE_SSL_VERIFY", "true").lower() not in ("false", "0", "no")
+# TLS for RE/PE calls: the lane's mTLS when RE_TLS_CERT is set, otherwise the
+# plaintext lane's RE_SSL_VERIFY (core/lane_tls.py, localAIStack#172).
 
 # ── localAI sensor definitions ────────────────────────────────────────────────
 # RAG/agent PE sensors:
@@ -569,7 +568,7 @@ def register_sensors() -> bool:
         pe_url = target["pe_url"]
         instance = target.get("instance") or "env"
         try:
-            with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
+            with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
                 existing = get_sensor_sources(client, pe_url)
                 _register_sensor_list(client, _RAG_SENSORS, existing, pe_url)
                 _register_sensor_list(client, _HEALTH_SENSORS, existing, pe_url)
@@ -886,7 +885,7 @@ def get_current_health_state(re_url: str | None = None) -> str | None:
     None when the RE is unreachable or no health push has occurred in this RE session.
     """
     try:
-        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
+        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
             r = client.get(f"{re_url or _re_url()}/api/perceptual-simulation/state")
             r.raise_for_status()
             ps = r.json().get("state", {}).get("perceptualSpace", [])
@@ -953,7 +952,7 @@ def push_health_signal(
     # (core.engine_fanout); each engine's decoded state is held to parity.
     def one(target: dict) -> str:
         try:
-            with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
+            with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
                 health_scope.write_rollup(client, target["pe_url"], state)
         except Exception as exc:
             log.debug(
@@ -985,7 +984,7 @@ def _trigger_push_and_read_health(target: dict | None = None) -> str:
     if target is None:
         return "watch"
     try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
             deactivate_lapsed(client, target["pe_url"])
             r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
@@ -1044,7 +1043,7 @@ def _trigger_push_and_read_carekit(target: dict | None = None) -> str:
     if target is None:
         return "partial"
     try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
             deactivate_lapsed(client, target["pe_url"])
             r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
@@ -1089,7 +1088,7 @@ def bind_graph_topology() -> bool:
 
     # Register PE sensors for every node in every graph
     try:
-        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as pe_client:
+        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=lane_tls.httpx_verify()) as pe_client:
             node_infos = [
                 node_info
                 for graph_binding in bindings.values()
@@ -1386,7 +1385,7 @@ def import_machines_everywhere(machines: list[tuple[str, dict]], label: str) -> 
         instance = target.get("instance") or "env"
         imported = skipped = replaced = failed = 0
         try:
-            with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            with httpx.Client(timeout=_PUSH_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
                 existing = _get_existing_machines(client, re_url)
                 if existing is None:
                     # Not knowing what is registered is a reason to do nothing,
@@ -1486,7 +1485,7 @@ def _write_sensor(sensor_id: str, values: list[float], target: dict | None = Non
         return
     pe_url = target["pe_url"]
     try:
-        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=_SSL_VERIFY) as client:
+        with httpx.Client(timeout=_SENSOR_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
             r = client.post(
                 f"{pe_url}/api/sensors/{sensor_id}",
                 json={"values": values},
@@ -1519,7 +1518,7 @@ def _trigger_push_and_read_routing(target: dict | None = None) -> str:
     if target is None:
         return "rewrite"
     try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
             deactivate_lapsed(client, target["pe_url"])
             r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()
@@ -1567,7 +1566,7 @@ def _trigger_push_and_read_session(target: dict | None = None) -> dict:
     target = target or bind()
     if target is not None:
         try:
-            with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+            with httpx.Client(timeout=_PUSH_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
                 deactivate_lapsed(client, target["pe_url"])
                 r = client.post(f"{target['pe_url']}/api/push")
                 r.raise_for_status()
@@ -1604,7 +1603,7 @@ def _trigger_push_fire_and_forget(target: dict | None = None) -> None:
     if target is None:
         return
     try:
-        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=_SSL_VERIFY) as client:
+        with httpx.Client(timeout=_PUSH_TIMEOUT, verify=lane_tls.httpx_verify()) as client:
             deactivate_lapsed(client, target["pe_url"])
             r = client.post(f"{target['pe_url']}/api/push")
             r.raise_for_status()

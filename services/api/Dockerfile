@@ -66,7 +66,9 @@ USER appuser
 
 EXPOSE 8000
 
+# serve.py is uvicorn, serving TLS 1.3 with mTLS when RE_TLS_CERT is set
+# (core/lane_tls.py, localAIStack#172); healthcheck.py follows the same switch.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
-  CMD curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1
+  CMD python healthcheck.py 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "serve.py", "--host", "0.0.0.0", "--port", "8000"]

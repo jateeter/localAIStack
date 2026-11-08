@@ -5,7 +5,7 @@ from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 
 from config import get_settings
-from core import llm_drift
+from core import lane_tls, llm_drift
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -73,6 +73,7 @@ async def chat(
         base_url=s.ollama_base_url,
         model=model,
         temperature=req.temperature,
+        client_kwargs=lane_tls.ollama_client_kwargs(),
     )
     lc_messages = _to_lc_messages(req.messages)
 
