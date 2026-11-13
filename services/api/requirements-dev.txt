@@ -1,6 +1,6 @@
 # Test-only dependencies. Install with:
 #   pip install -r requirements.txt -r requirements-dev.txt
-pytest==9.1.1
+pytest==9.2.0
 # Canonical machine-schema validation of data/machines and the runtime
 # topology machines (tests/test_machine_schema.py, #38).
 jsonschema==4.26.0
