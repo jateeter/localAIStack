@@ -45,13 +45,13 @@ models-installed:
 ollama-check:
 	@bash scripts/lib/ollama_guard.sh --check
 
-# Usage: make model-pull ID=nemotron-3-nano-4b
+# Usage: make model-pull ID=nemotron-3-nano-4b-mlx
 model-pull:
 	@bash scripts/lib/models_registry.sh --pull $(ID)
 
 # Switch the selected model on command: validates against the registry, pulls,
 # writes LLM_MODEL (or EMBED_MODEL) to .env. Restart afterwards.
-# Usage: make model-use ID=nemotron-3-nano-4b
+# Usage: make model-use ID=nemotron-3-nano-4b-mlx
 model-use:
 	@bash scripts/lib/models_registry.sh --use $(ID)
 
@@ -64,7 +64,7 @@ reembed:
 reembed-status:
 	@python3 scripts/reembed.py status $(ARGS)
 
-# Usage: make model-info ID=nemotron-3-nano-4b   (requires the API to be up)
+# Usage: make model-info ID=nemotron-3-nano-4b-mlx   (requires the API to be up)
 model-info:
 	@curl -s http://localhost:4000/models/$(ID) | python3 -m json.tool
 

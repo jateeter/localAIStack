@@ -30,7 +30,7 @@ else
 fi
 
 source .env
-LLM_MODEL="${LLM_MODEL:-nemotron-3-nano:4b}"
+LLM_MODEL="${LLM_MODEL:-nemotron-3-nano:4b-mlx}"
 EMBED_MODEL="${EMBED_MODEL:-embeddinggemma-2:270m}"
 
 # ── Registry check ────────────────────────────────────────────────────────────
