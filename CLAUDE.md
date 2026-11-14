@@ -87,11 +87,11 @@ make model-pull ID=<model-id>  # pull a registered model
   `/health`. It is the training corpus for difference-net / near-miss learning
   (RealityEngine_CI#518).
 - Verify environment values against the live instance registry, not just static `.env` defaults.
-- The default LLM is `nemotron-3-nano:4b-mlx` (registry id
-  `nemotron-3-nano-4b-mlx`), the RealityEngine universe model: the MLX build of
-  Nemotron 3 Nano 4B, pulled from the Ollama library (`ollama pull
-  nemotron-3-nano:4b-mlx`, Ollama 0.40.5+). The plain `nemotron-3-nano:4b` is the
-  GGUF build, runs on llama.cpp and stays registered as `nemotron-3-nano-4b`. It
+- The default LLM is `nemotron-3-nano:4b` (registry id
+  `nemotron-3-nano-4b`), the RealityEngine universe model: Nemotron 3 Nano 4B,
+  pulled from the Ollama library (`ollama pull nemotron-3-nano:4b`), which
+  Ollama runs on MLX where it is available. The separate `:4b-mlx` tag is not
+  registered, used or tested (owner, 2026-11-13). It
   calls tools (the agent graph's `bind_tools` works) and thinks by default.
   Ollama refused `format=json` for the family before 0.40.11, so any call of
   ours that needs structured output puts the requirement in the prompt, and

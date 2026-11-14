@@ -69,8 +69,8 @@ download it. Three separate facts get joined at read time:
 
 ```bash
 make models                              # registry table, * marks installed
-make model-pull ID=nemotron-3-nano-4b-mlx    # pull a registered model
-make model-info ID=nemotron-3-nano-4b-mlx    # full entry (API must be up)
+make model-pull ID=nemotron-3-nano-4b    # pull a registered model
+make model-info ID=nemotron-3-nano-4b    # full entry (API must be up)
 curl -s localhost:4000/models | python3 -m json.tool
 curl -s 'localhost:4000/models?role=embedding' | python3 -m json.tool
 ```
@@ -91,18 +91,18 @@ registry is legitimate while testing.
 | `llama3.2-3b` | `llama3.2:3b` | llm | 2.0 GB | 128K | Fast smoke tests |
 | `mistral-7b` | `mistral:7b-instruct-q4_K_M` | llm | 4.4 GB | 32K | RAG grading A/B |
 | `phi3.5-mini` | `phi3.5:3.8b` | llm | 2.2 GB | 128K | No tool-calling |
-| `nemotron-3-nano-4b-mlx` | `nemotron-3-nano:4b-mlx` | llm | 2.9 GB | 256K | **Default** — RealityEngine universe model on **MLX**; tools + thinking |
-| `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.8 GB | 256K | The same model as GGUF; runs on llama.cpp |
+| `nemotron-3-nano-4b` | `nemotron-3-nano:4b` | llm | 2.9 GB | 256K | **Default** — RealityEngine universe model, on **MLX** where available; tools + thinking |
 | `nemotron-3-nano-30b` | `nemotron-3-nano:30b` | llm | 24 GB | 1M | Needs ≥48 GB RAM |
 | `embeddinggemma-2-270m` | `embeddinggemma-2:270m` | embedding | 378 MB | 256K | **Default** embedder — runs on **MLX**, 768-dim |
 | `nomic-embed-text` | `nomic-embed-text` | embedding | 274 MB | 2K | Previous default; runs on ggml, 768-dim |
 | `ternary-bonsai-4b` | `ternary-bonsai:4` | embedding | 546 MB | 32K | **broken** — see known issue below |
 
-**NVIDIA Nemotron 3 Nano 4B**, in its MLX build (`nemotron-3-nano-4b-mlx`), is the default LLM for
+**NVIDIA Nemotron 3 Nano 4B** (`nemotron-3-nano-4b`) is the default LLM for
 RealityEngine development and testing: hybrid Mamba-2/MoE, native tool-calling
-and reasoning modes, and a 256K context at 2.9 GB. On an M1 Pro (Ollama 0.40.11)
-the MLX build generates about 36 tokens/s against 25 for the GGUF
-`nemotron-3-nano:4b`. The agent graph (`bind_tools`) works against it. Ollama
+and reasoning modes, and a 256K context at 2.9 GB. Ollama runs
+`nemotron-3-nano:4b` on MLX where MLX is available, so the separate `:4b-mlx`
+tag is not used (owner, 2026-11-13); on an M1 Pro (Ollama 0.40.11) the MLX
+build generated about 36 tokens/s against 25 for the GGUF build. The agent graph (`bind_tools`) works against it. Ollama
 refused `format` (`json` and schema) for the family before 0.40.11 with
 `structured output is unavailable`, so the PEs omit `format` for it
 (RealityEngine_CI `docs/OLLAMA_INTEGRATION.md`).
@@ -115,17 +115,17 @@ Switch the model on command — this validates the id against the model registry
 pulls (or builds) it, and writes the selection to `.env`:
 
 ```bash
-make model-use ID=nemotron-3-nano-4b-mlx  # or nemotron-3-nano-4b, llama3.1-8b, ...
+make model-use ID=nemotron-3-nano-4b  # or llama3.1-8b, ...
 make stop && make start                  # restart so the API and PEs pick it up
 make model-use ID=nomic-embed-text       # an embedding model sets EMBED_MODEL
 ```
 
 One run can also override without touching `.env`: `LLM_MODEL=llama3.1:8b make start`.
 
-Fresh `.env` files select `LLM_MODEL=nemotron-3-nano:4b-mlx`, and `setup.sh` pulls it
+Fresh `.env` files select `LLM_MODEL=nemotron-3-nano:4b`, and `setup.sh` pulls it
 through the model registry (an existing `.env` keeps whatever it selects). The
 30B variant is registered but not for this baseline: `nemotron-3-nano:latest`
-resolves to it, which is why the registry pins explicit `:4b-mlx` / `:4b` / `:30b` tags.
+resolves to it, which is why the registry pins explicit `:4b` / `:30b` tags.
 
 ### Adding a model
 
@@ -143,9 +143,9 @@ MLX; any other model may run on MLX or ggml. Each registry entry declares the
 runs the model, or only `declared`, from `/api/tags`, which is what Ollama set for
 the pulled artifact: the same tag has been MLX on one Mac and llama.cpp on another),
 and a test fails if a role's default does not declare `mlx`. Today: the LLM
-default `nemotron-3-nano:4b-mlx` and the embedding default `embeddinggemma-2:270m`
-run on MLX; `nemotron-3-nano:4b` runs on llama.cpp, and `llama3.1:8b` and
-`nomic-embed-text` on ggml, so none of them is a default.
+default `nemotron-3-nano:4b` and the embedding default `embeddinggemma-2:270m`
+run on MLX; `llama3.1:8b` and `nomic-embed-text` run on ggml, so neither is a
+default.
 
 ### The default RAG corpus
 
