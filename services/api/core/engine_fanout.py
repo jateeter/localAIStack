@@ -121,7 +121,24 @@ def interaction_targets() -> list[dict]:
 
 def fan_out[T](fn: Callable[[dict], T]) -> list[tuple[str | None, T]]:
     """Run ``fn(target)`` against every addressed engine, in registry order."""
-    return [(t.get("instance"), fn(t)) for t in interaction_targets()]
+    return [(t.get("instance"), _timed(fn, t)) for t in interaction_targets()]
+
+
+def _timed[T](fn: Callable[[dict], T], target: dict) -> T:
+    """One engine's call, counted and timed by instance (core/metrics.py)."""
+    from core import metrics
+
+    instance = str(target.get("instance") or "unregistered")
+    start = time.perf_counter()
+    try:
+        value = fn(target)
+    except Exception:
+        metrics.inc("localai_engine_calls_total", {"instance": instance, "outcome": "error"})
+        metrics.observe("localai_engine_call_duration_seconds", time.perf_counter() - start, {"instance": instance})
+        raise
+    metrics.inc("localai_engine_calls_total", {"instance": instance, "outcome": "ok"})
+    metrics.observe("localai_engine_call_duration_seconds", time.perf_counter() - start, {"instance": instance})
+    return value
 
 
 def difference(a: Any, b: Any) -> float:
@@ -187,12 +204,14 @@ def agree[T](label: str, results: list[tuple[str | None, T]], default: T) -> T:
     if len(results) == 1:
         with _record_lock:
             _counts["single"] += 1
+        _count_interaction("single")
         return first
     measured = spread([value for _, value in results])
     if all(value == first for _, value in results[1:]):
         with _record_lock:
             _counts["agreed"] += 1
             _record_difference(label, measured)
+        _count_interaction("agreed")
         return first
     record = {
         "label": label,
@@ -205,6 +224,7 @@ def agree[T](label: str, results: list[tuple[str | None, T]], default: T) -> T:
         _counts["diverged"] += 1
         _record_difference(label, measured)
         _divergences.append(record)
+    _count_interaction("diverged")
     # The same corpus as engine-initiated LLM drift: both are near-misses the
     # difference-net is trained on, and the in-memory deque keeps only 50.
     from core import llm_drift
@@ -218,6 +238,12 @@ def agree[T](label: str, results: list[tuple[str | None, T]], default: T) -> T:
         proceeded_with=record["proceededWith"],
     )
     return first
+
+
+def _count_interaction(result: str) -> None:
+    from core import metrics
+
+    metrics.inc("localai_engine_interactions_total", {"result": result})
 
 
 def parity_report() -> dict[str, Any]:
