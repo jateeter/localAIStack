@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
 from core.bridge_binding import EngineAffinityMiddleware
+from core.metrics import MetricsMiddleware
 from routers import (
     chat,
     domain_evidence,
@@ -17,6 +18,7 @@ from routers import (
     patient_wellness,
     rag,
 )
+from routers import metrics as metrics_router
 from routers.graphql_endpoint import events_router as graphql_events_router
 from routers.graphql_endpoint import graphql_app
 
@@ -161,8 +163,11 @@ app.add_middleware(
 # whole interaction — sensor writes, the push, and the perceptual space it is
 # normalized from — stays on one engine.
 app.add_middleware(EngineAffinityMiddleware)
+# Outermost: times every request, by route template (core/metrics.py).
+app.add_middleware(MetricsMiddleware)
 
 app.include_router(health.router)
+app.include_router(metrics_router.router)
 app.include_router(chat.router)
 app.include_router(models.router)
 app.include_router(rag.router)

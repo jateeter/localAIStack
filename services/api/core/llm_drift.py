@@ -72,6 +72,9 @@ def request_key(label: str, request: Any) -> str:
 
 
 def _append(record: dict) -> None:
+    from core import metrics
+
+    metrics.inc("localai_llm_drift_records_total", {"event": str(record.get("event", "unknown"))})
     line = json.dumps(record, sort_keys=True, default=str)
     _recent.append(record)
     path = _path()
