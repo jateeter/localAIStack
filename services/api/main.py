@@ -18,9 +18,9 @@ from routers import (
     patient_wellness,
     rag,
 )
+from routers import metrics as metrics_router
 from routers.graphql_endpoint import events_router as graphql_events_router
 from routers.graphql_endpoint import graphql_app
-from routers import metrics as metrics_router
 
 log = structlog.get_logger()
 

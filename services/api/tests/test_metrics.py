@@ -46,9 +46,13 @@ def _value(text: str, series: str) -> float:
 
 def test_requests_are_counted_by_route_template_not_path():
     c = TestClient(_app())
-    c.get("/items/1"); c.get("/items/2")
+    c.get("/items/1")
+    c.get("/items/2")
     text = c.get("/metrics").text
-    assert _value(text, 'localai_requests_total{method="GET",route="/items/{item_id}",status="200"}') == 2
+    assert (
+        _value(text, 'localai_requests_total{method="GET",route="/items/{item_id}",status="200"}')
+        == 2
+    )
     assert "/items/1" not in text and "/items/2" not in text
 
 
@@ -85,7 +89,9 @@ def test_histogram_buckets_are_cumulative():
 def test_fan_out_calls_and_interactions_are_counted(monkeypatch):
     from core import engine_fanout
 
-    monkeypatch.setattr(engine_fanout, "interaction_targets", lambda: [{"instance": "cpp-1"}, {"instance": "lsp-1"}])
+    monkeypatch.setattr(
+        engine_fanout, "interaction_targets", lambda: [{"instance": "cpp-1"}, {"instance": "lsp-1"}]
+    )
     results = engine_fanout.fan_out(lambda t: 1)
     engine_fanout.agree("t", results, 0)
     text = metrics.render()
@@ -95,6 +101,10 @@ def test_fan_out_calls_and_interactions_are_counted(monkeypatch):
 
     def boom(t):
         raise RuntimeError("down")
+
     with pytest.raises(RuntimeError):
         engine_fanout.fan_out(boom)
-    assert _value(metrics.render(), 'localai_engine_calls_total{instance="cpp-1",outcome="error"}') == 1
+    assert (
+        _value(metrics.render(), 'localai_engine_calls_total{instance="cpp-1",outcome="error"}')
+        == 1
+    )

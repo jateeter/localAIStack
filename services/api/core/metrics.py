@@ -35,9 +35,18 @@ _HELP = {
     "localai_rag_queries_total": ("counter", "RAG queries (/rag/query, /graph/rag) by outcome."),
     "localai_agent_turns_total": ("counter", "Agent turns (/graph/agent) by outcome."),
     "localai_agent_turn_duration_seconds": ("histogram", "Agent turn (/graph/agent) duration."),
-    "localai_engine_calls_total": ("counter", "Per-engine calls of an engine fan-out by instance and outcome."),
-    "localai_engine_call_duration_seconds": ("histogram", "Per-engine fan-out call duration by instance."),
-    "localai_engine_interactions_total": ("counter", "Multi-engine interactions by result: agreed, diverged, single."),
+    "localai_engine_calls_total": (
+        "counter",
+        "Per-engine calls of an engine fan-out by instance and outcome.",
+    ),
+    "localai_engine_call_duration_seconds": (
+        "histogram",
+        "Per-engine fan-out call duration by instance.",
+    ),
+    "localai_engine_interactions_total": (
+        "counter",
+        "Multi-engine interactions by result: agreed, diverged, single.",
+    ),
     "localai_llm_drift_records_total": ("counter", "LLM drift records written, by event."),
 }
 
@@ -101,7 +110,7 @@ def render() -> str:
             lines.append(f"# TYPE {name} {kind}")
             if kind == "histogram":
                 for labels, (buckets, total, count) in sorted(_hists.get(name, {}).items()):
-                    for b, n in zip(_BUCKETS, buckets):
+                    for b, n in zip(_BUCKETS, buckets, strict=True):
                         lines.append(f"{name}_bucket{_fmt(labels, (('le', repr(b)),))} {n}")
                     lines.append(f"{name}_bucket{_fmt(labels, (('le', '+Inf'),))} {count}")
                     lines.append(f"{name}_sum{_fmt(labels)} {total}")
@@ -146,4 +155,9 @@ class MetricsMiddleware:
             route = scope.get("route")
             template = getattr(route, "path", None) or "unmatched"
             if template != "/metrics":
-                record_request(template, scope.get("method", "GET"), status["code"], time.perf_counter() - start)
+                record_request(
+                    template,
+                    scope.get("method", "GET"),
+                    status["code"],
+                    time.perf_counter() - start,
+                )

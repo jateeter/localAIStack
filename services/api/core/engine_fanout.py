@@ -134,10 +134,16 @@ def _timed[T](fn: Callable[[dict], T], target: dict) -> T:
         value = fn(target)
     except Exception:
         metrics.inc("localai_engine_calls_total", {"instance": instance, "outcome": "error"})
-        metrics.observe("localai_engine_call_duration_seconds", time.perf_counter() - start, {"instance": instance})
+        metrics.observe(
+            "localai_engine_call_duration_seconds",
+            time.perf_counter() - start,
+            {"instance": instance},
+        )
         raise
     metrics.inc("localai_engine_calls_total", {"instance": instance, "outcome": "ok"})
-    metrics.observe("localai_engine_call_duration_seconds", time.perf_counter() - start, {"instance": instance})
+    metrics.observe(
+        "localai_engine_call_duration_seconds", time.perf_counter() - start, {"instance": instance}
+    )
     return value
 
 
