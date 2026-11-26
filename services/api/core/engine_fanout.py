@@ -40,6 +40,15 @@ initiate their own LLM call, the generations may drift, and that drift is kept:
 it is the raw material for difference-net training in the near-miss learning
 cycles (RealityEngine_CI#518). Memoizing a response per request and engine step
 would erase exactly the signal those cycles need.
+
+**One origin event per broadcast** (localAIStack#140, RealityEngine_CI#600).
+An interaction no engine initiated is an origin event of localAI's clock
+(``core/participant_clock.py``); each engine write it makes is a send stamped
+with ``RE-Clock``, and each engine's reply a receive. The writes share that
+origin as their ``causedBy``, so the engines' receipts are causally siblings.
+``causal_report()`` keeps the recent broadcasts: the origin and, per engine, the
+lamport sent and the engine's reply, which a conforming engine answers past
+``sent + 1`` (its receive, then its send).
 """
 
 from __future__ import annotations
@@ -72,6 +81,8 @@ _counts = {"agreed": 0, "diverged": 0, "single": 0}
 # difference summed and at its largest (see difference()).
 _differences: dict[str, dict[str, float]] = {}
 _record_lock = threading.Lock()
+_MAX_CAUSAL = 50
+_causal: deque[dict] = deque(maxlen=_MAX_CAUSAL)
 
 
 def _all_healthy_targets() -> list[dict]:
@@ -120,8 +131,37 @@ def interaction_targets() -> list[dict]:
 
 
 def fan_out[T](fn: Callable[[dict], T]) -> list[tuple[str | None, T]]:
-    """Run ``fn(target)`` against every addressed engine, in registry order."""
-    return [(t.get("instance"), _timed(fn, t)) for t in interaction_targets()]
+    """Run ``fn(target)`` against every addressed engine, in registry order.
+
+    A broadcast (no initiating engine) is one origin event of localAI's clock,
+    and every engine write it makes is recorded against it (``causal_report``).
+    """
+    from core import participant_clock
+
+    targets = interaction_targets()
+    if initiating_instance() or participant_clock.interaction.get() is not None:
+        return [(t.get("instance"), _timed(fn, t)) for t in targets]
+    record = {"origin": participant_clock.clock().origin(), "sends": []}
+    token = participant_clock.interaction.set(record)
+    try:
+        out = []
+        for t in targets:
+            before = len(record["sends"])
+            value = _timed(fn, t)
+            for send in record["sends"][before:]:
+                send["engine"] = t.get("instance")
+            out.append((t.get("instance"), value))
+        return out
+    finally:
+        participant_clock.interaction.reset(token)
+        with _record_lock:
+            _causal.append(record)
+
+
+def causal_report() -> list[dict]:
+    """The recent broadcasts: each origin and its engine sends, oldest first."""
+    with _record_lock:
+        return list(_causal)
 
 
 def _timed[T](fn: Callable[[dict], T], target: dict) -> T:
@@ -271,6 +311,7 @@ def parity_report() -> dict[str, Any]:
             },
             "recentDivergences": list(_divergences),
             "llmDrift": _llm_drift_report(),
+            "causal": list(_causal)[-10:],
         }
 
 
@@ -284,6 +325,7 @@ def reset_parity_report() -> None:
     with _record_lock:
         _divergences.clear()
         _differences.clear()
+        _causal.clear()
         for key in _counts:
             _counts[key] = 0
     from core import llm_drift

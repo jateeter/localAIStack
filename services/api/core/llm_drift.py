@@ -111,6 +111,9 @@ def observe(label: str, request: Any, reading: Any, instance: str | None = None)
             group = {"opened": now, "label": label, "readings": {}}
             _groups[key] = group
         group["readings"][instance] = reading
+        from core import participant_clock
+
+        group.setdefault("clocks", {})[instance] = participant_clock.presented.get()
         if len(group["readings"]) < 2:
             return None
         readings = dict(sorted(group["readings"].items()))
@@ -125,6 +128,9 @@ def observe(label: str, request: Any, reading: Any, instance: str | None = None)
             "engines": list(readings),
             "difference": measured,
             "readings": readings,
+            # Each engine's request clock and localAI's at its receipt
+            # (localAIStack#140): drift kept for learning keeps its causal order.
+            "clocks": dict(sorted(group.get("clocks", {}).items())),
         }
         entry = _stats.setdefault(label, {"comparisons": 0, "sum": 0.0, "max": 0.0, "drifted": 0})
         entry["comparisons"] += 1

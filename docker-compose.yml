@@ -198,6 +198,11 @@ services:
       # fixed-port fallback rather than the address.
       RE_REGISTRY_URL: "${RE_REGISTRY_URL:-http://host.docker.internal:5999/re-registry.json}"
       LOCALAI_STATE_DIR: "/app/state"
+      # localAI's Lamport clock participant UUID, allocated by RealityEngine_CI
+      # (instance_uuids.py, <lane>/localai; localAIStack#140). Its lock and marks
+      # live in /app/state/clock, on the state bind mount. Unset, the clock is
+      # minted per process and not persisted.
+      LOCALAI_INSTANCE_UUID: "${LOCALAI_INSTANCE_UUID:-}"
       RE_SSL_VERIFY: "false"
       # This stack's own machines, not the RealityEngine_Machines corpus.
       # MACHINES_DIR is deliberately not set here: it means the corpus repo

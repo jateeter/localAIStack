@@ -86,6 +86,21 @@ make model-pull ID=<model-id>  # pull a registered model
   with `GET /observations/drift`; summarised under `engine_parity.llmDrift` on
   `/health`. It is the training corpus for difference-net / near-miss learning
   (RealityEngine_CI#518).
+- **localAI is a Lamport clock participant** (`core/participant_clock.py`,
+  localAIStack#140, RealityEngine_CI#600 SURFACE_SPEC "The instance clock").
+  - Its UUID is `LOCALAI_INSTANCE_UUID`, allocated by CI. Its lock and marks are
+    in `$LOCALAI_STATE_DIR/clock`. Unset, the clock is minted per process and
+    not persisted.
+  - `ClockMiddleware` makes every inbound request a receive and stamps every
+    response with `RE-Clock`. A malformed header gets 400.
+  - Every engine call goes through `participant_clock.engine_client` /
+    `async_engine_client`, which stamp the request and receive the reply. Use
+    them for any new engine call. Ollama, Qdrant and Redis are not participants.
+  - A broadcast in `engine_fanout.fan_out` is one origin event, which ticks
+    `commit`. `engine_parity.causal` on `/health` shows each origin and every
+    engine's send and reply.
+  - Drift records carry each engine's request clock (`clocks`). `/health`
+    reports `clock`.
 - Verify environment values against the live instance registry, not just static `.env` defaults.
 - The default LLM is `nemotron-3-nano:4b-mlx` (registry id
   `nemotron-3-nano-4b-mlx`), the RealityEngine universe model: the MLX build of

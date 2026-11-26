@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from core.bridge_binding import EngineAffinityMiddleware
 from core.metrics import MetricsMiddleware
+from core.participant_clock import ClockMiddleware, clock
 from routers import (
     chat,
     domain_evidence,
@@ -28,6 +29,9 @@ log = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
+    # Boot the Lamport clock first: a clock that is locked by another process,
+    # or cannot be read or written, refuses the boot (localAIStack#140).
+    clock()
     log.info(
         "localAIStack API starting",
         llm_model=s.llm_model,
@@ -163,6 +167,10 @@ app.add_middleware(
 # whole interaction — sensor writes, the push, and the perceptual space it is
 # normalized from — stays on one engine.
 app.add_middleware(EngineAffinityMiddleware)
+# Every inbound request is a receive of localAI's Lamport clock, and every
+# response a send stamped RE-Clock; a malformed header is refused with 400
+# (core/participant_clock.py, localAIStack#140).
+app.add_middleware(ClockMiddleware)
 # Outermost: times every request, by route template (core/metrics.py).
 app.add_middleware(MetricsMiddleware)
 

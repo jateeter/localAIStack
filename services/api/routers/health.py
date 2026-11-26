@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from qdrant_client import QdrantClient
 
 from config import get_settings
-from core import engine_fanout, lane_tls
+from core import engine_fanout, lane_tls, participant_clock
 from core.registry_resolver import resolve_bridge_targets
 
 router = APIRouter()
@@ -16,7 +16,7 @@ router = APIRouter()
 async def _check_pe(pe_url: str, ssl_verify: ssl.SSLContext | bool) -> dict:
     """Probe the Perception Engine: source list + health sensor count."""
     try:
-        async with httpx.AsyncClient(timeout=3.0, verify=ssl_verify) as c:
+        async with participant_clock.async_engine_client(timeout=3.0, verify=ssl_verify) as c:
             r = await c.get(f"{pe_url}/api/sources")
             r.raise_for_status()
             sources = r.json().get("sources", [])
@@ -50,7 +50,7 @@ async def _check_pe(pe_url: str, ssl_verify: ssl.SSLContext | bool) -> dict:
 async def _check_re(re_url: str, ssl_verify: ssl.SSLContext | bool) -> dict:
     """Probe the Reality Engine: perceptual space + machine count + current health state."""
     try:
-        async with httpx.AsyncClient(timeout=3.0, verify=ssl_verify) as c:
+        async with participant_clock.async_engine_client(timeout=3.0, verify=ssl_verify) as c:
             # Fan out: state and machine list in parallel
             state_coro = c.get(f"{re_url}/api/perceptual-simulation/state")
             machines_coro = c.get(f"{re_url}/api/machines")
@@ -165,6 +165,8 @@ async def health():
         "bridge_engines": [t.get("instance") or t["pe_url"] for t in bridge_engines],
         # Whether engines given identical localAI input answered alike.
         "engine_parity": engine_fanout.parity_report(),
+        # localAI's own Lamport clock and its inbound RE-Clock counts (#140).
+        "clock": participant_clock.clock().json(),
         "services": services,
     }
 
